@@ -1,0 +1,47 @@
+[
+  {
+    "id": "beaker",
+    "name": "烧杯",
+    "category": "容器",
+    "description": "标准实验烧杯轮廓，适合化学与生物示意图。",
+    "prompt": "a laboratory beaker with clean vector-style outlines",
+    "tags": ["烧杯", "beaker", "chemistry", "glassware"],
+    "file_name": "beaker.svg"
+  },
+  {
+    "id": "test-tube",
+    "name": "试管",
+    "category": "容器",
+    "description": "细长试管，适合插入实验流程或反应装置图。",
+    "prompt": "a clean scientific illustration of a test tube",
+    "tags": ["试管", "test tube", "biology", "chemistry"],
+    "file_name": "test-tube.svg"
+  },
+  {
+    "id": "petri-dish",
+    "name": "培养皿",
+    "category": "培养器皿",
+    "description": "带浅色培养基的培养皿，可用于微生物或细胞实验图。",
+    "prompt": "a petri dish in a scientific illustration style",
+    "tags": ["培养皿", "petri dish", "cell", "biology"],
+    "file_name": "petri-dish.svg"
+  },
+  {
+    "id": "syringe",
+    "name": "注射器",
+    "category": "给液工具",
+    "description": "注射器素材，适合药物输送、取样和流体示意。",
+    "prompt": "a scientific illustration of a syringe",
+    "tags": ["注射器", "syringe", "inject", "medicine"],
+    "file_name": "syringe.svg"
+  },
+  {
+    "id": "arrow",
+    "name": "流程箭头",
+    "category": "标注",
+    "description": "深色流程箭头，用于强调方向关系。",
+    "prompt": "a clean dark arrow annotation for a scientific diagram",
+    "tags": ["箭头", "arrow", "flow", "annotation"],
+    "file_name": "arrow.svg"
+  }
+]

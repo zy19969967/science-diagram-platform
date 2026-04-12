@@ -1,0 +1,115 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PUBLIC_PORT:-5173}:80"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  gateway:
+    build:
+      context: .
+      dockerfile: backend/gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      PLANNER_URL: http://planner:8001
+      SEGMENTER_URL: http://segmenter:8003
+      POWERPAINT_URL: http://powerpaint:8002
+      RUNS_DIR: /app/data/runs
+      ASSETS_DIR: /app/assets
+    volumes:
+      - ./data/runs:/app/data/runs
+    ports:
+      - "${GATEWAY_BIND_HOST:-127.0.0.1}:${GATEWAY_PUBLIC_PORT:-8000}:8000"
+    depends_on:
+      planner:
+        condition: service_healthy
+      segmenter:
+        condition: service_healthy
+      powerpaint:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  planner:
+    build:
+      context: .
+      dockerfile: backend/planner/Dockerfile
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  segmenter:
+    build:
+      context: .
+      dockerfile: backend/segmenter/Dockerfile
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  powerpaint:
+    build:
+      context: .
+      dockerfile: backend/powerpaint_service/Dockerfile
+      args:
+        POWERPAINT_GIT_REF: ${POWERPAINT_GIT_REF:-main}
+    restart: unless-stopped
+    environment:
+      POWERPAINT_MODEL_REPO: ${POWERPAINT_MODEL_REPO:-JunhaoZhuang/PowerPaint-v1}
+      POWERPAINT_VERSION: ${POWERPAINT_VERSION:-ppt-v1}
+      POWERPAINT_CHECKPOINT_DIR: /models/powerpaint/${POWERPAINT_MODEL_DIR_NAME:-ppt-v1}
+      POWERPAINT_WEIGHT_DTYPE: ${POWERPAINT_WEIGHT_DTYPE:-float16}
+      POWERPAINT_LOCAL_FILES_ONLY: ${POWERPAINT_LOCAL_FILES_ONLY:-false}
+      CUDA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-0}
+      NVIDIA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-0}
+      HF_HOME: /models/huggingface
+    volumes:
+      - ./models:/models
+    gpus: all
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health').read()"]
+      interval: 60s
+      timeout: 15s
+      retries: 10
+      start_period: 300s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:
