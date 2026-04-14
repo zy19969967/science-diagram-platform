@@ -306,16 +306,21 @@ function App() {
   async function analyzePlan() {
     setError("");
     try {
+      const maskPayload = sourceImage ? await buildMaskPayload() : { dataUrl: "", pixelCount: 0 };
       const response = await fetch(apiPath("/api/plan"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          source_image: sourceImage || null,
           instruction,
           preferred_task: task,
           selected_asset_id: selectedAssetId || null,
           canvas_hints: {
-            has_mask: Boolean(sourceImage),
+            has_mask: maskPayload.pixelCount > 0,
             has_asset: Boolean(assetPlacement),
+            has_source_image: Boolean(sourceImage),
+            image_width: naturalSize.width || null,
+            image_height: naturalSize.height || null,
           },
         }),
       });
