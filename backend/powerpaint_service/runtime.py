@@ -40,6 +40,11 @@ class PowerPaintRuntime:
     def startup(self) -> None:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         if not any(self.checkpoint_dir.iterdir()):
+            if self.local_files_only:
+                raise FileNotFoundError(
+                    "PowerPaint weights are missing while POWERPAINT_LOCAL_FILES_ONLY=true. "
+                    f"Expected cached weights under {self.checkpoint_dir}."
+                )
             snapshot_download(
                 repo_id=self.model_repo,
                 local_dir=str(self.checkpoint_dir),
