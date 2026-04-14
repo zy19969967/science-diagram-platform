@@ -5,13 +5,13 @@
 ## 推荐 GPU 集合
 
 ```text
-2,3,6,7
+4,5,6,7
 ```
 
 ## 推荐分配
 
-- GPU 2：`powerpaint_service`
-- GPU 3：`planner`
+- GPU 4：`powerpaint_service`
+- GPU 5：`planner`
 - GPU 6：`segmenter`
 - GPU 7：备用卡
 
@@ -21,30 +21,12 @@
 - `planner` 和 `segmenter` 都支持惰性加载，单独分卡后问题定位更容易
 - 保留 1 张备用卡，便于后续临时调试、导出模型或替换更大的规划模型
 
-## 当前 Compose 的实际行为
+## 当前模板对应关系
 
-- `planner`、`segmenter`、`powerpaint` 都启用了 GPU 能力
-- 容器内通过 `CUDA_VISIBLE_DEVICES` 与 `NVIDIA_VISIBLE_DEVICES` 限制可见 GPU
-- 模型缓存统一挂载到 `./models`
-- `AUX_CUDA_VISIBLE_DEVICES` 只是预留变量，当前没有容器自动消费它
+- Docker 模式：看 `.env.server.example`
+- 无 Docker 模式：看 `.env.nodocker.example`
 
-## 对应的 `.env.server.example`
-
-```bash
-PROJECT_GPU_POOL=2,3,6,7
-POWERPAINT_CUDA_VISIBLE_DEVICES=2
-PLANNER_CUDA_VISIBLE_DEVICES=3
-SEGMENTER_CUDA_VISIBLE_DEVICES=6
-AUX_CUDA_VISIBLE_DEVICES=7
-```
-
-## 什么时候需要调整
-
-如果 `nvidia-smi` 显示 GPU 2、3、6 已经被别的任务大量占用，可以把 `.env` 改成别的空闲卡组合。改完后重新执行：
-
-```bash
-sudo docker compose --env-file .env up -d --build
-```
+这两个模板现在都按 `4,5,6,7` 这组卡来示例。
 
 ## 当前仍未做的事
 

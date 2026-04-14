@@ -36,14 +36,14 @@ docker-compose.yml      服务编排文件
 /home/common/yzhu_2025/science-diagram-platform
 ```
 
-推荐 4 卡分配：
+当前模板示例的 4 卡分配：
 
-- GPU 2：`powerpaint_service`
-- GPU 3：`planner`
+- GPU 4：`powerpaint_service`
+- GPU 5：`planner`
 - GPU 6：`segmenter`
 - GPU 7：备用
 
-最短部署路径如下：
+如果服务器可用 Docker，最短部署路径如下：
 
 ```bash
 mkdir -p /home/common/yzhu_2025
@@ -54,6 +54,8 @@ cp .env.server.example .env
 sudo docker compose --env-file .env build
 sudo docker compose --env-file .env up -d
 ```
+
+如果服务器不能使用 Docker，请改看无 Docker 文档，并使用 `scripts/setup_venvs.sh` 和 `scripts/run_*.sh` 这组脚本。
 
 浏览器访问：
 
@@ -84,10 +86,12 @@ bash scripts/server-preflight.sh
 - `/api/segment` 和 `/api/generate` 会把原图一起发给 `segmenter`，让 SAM-2 用粗选区外接框做精细分割
 - 如果用户只是拖了素材位置、并没有明确选中图中对象，`segmenter` 会自动回退到几何 mask
 - 前端反向代理已经调大 `/api` 超时，降低模型冷启动时的前端超时概率
+- 对于无 Docker 场景，仓库已经补齐多 `venv` 安装脚本、启动脚本和部署文档
 
 ## 相关文档
 
 - [服务器部署 README](docs/server-deploy.md)
+- [无 Docker 服务器部署 README](docs/server-venv-deploy.md)
 - [4 卡部署说明](docs/server-4gpu-notes.md)
 - [已知问题与后续缺口](docs/known-issues.md)
 - [系统架构说明](docs/architecture.md)

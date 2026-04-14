@@ -1,5 +1,9 @@
 # 服务器部署 README
 
+如果你的服务器不能使用 Docker，请改看：
+
+- [无 Docker 服务器部署 README](server-venv-deploy.md)
+
 这份文档面向“本机开发、服务器运行”的部署方式，默认目标环境是 Ubuntu 22.04 + Docker Compose + NVIDIA GPU 服务器。当前仓库已经接入真实模型优先的运行链路：
 
 - `planner`：优先调用 `Qwen/Qwen3.5-4B`
@@ -19,10 +23,10 @@
 - 至少 3 张可用 GPU
 - 足够的磁盘空间保存 Docker 镜像和模型缓存
 
-如果你使用的正是当前这台 8 x RTX 3090 服务器，推荐仍按 4 卡方式部署：
+如果你使用的正是当前这台 8 x RTX 3090 服务器，当前模板示例按 4 卡方式部署：
 
-- GPU 2：`powerpaint_service`
-- GPU 3：`planner`
+- GPU 4：`powerpaint_service`
+- GPU 5：`planner`
 - GPU 6：`segmenter`
 - GPU 7：备用卡
 
@@ -61,15 +65,15 @@ cd science-diagram-platform
 cp .env.server.example .env
 ```
 
-当前模板已经按 4 卡服务器写好了默认值，最少确认下面这些项：
+当前模板已经写好了真实模型配置，最少确认下面这些项：
 
 ```bash
 FRONTEND_PUBLIC_PORT=8080
 GATEWAY_BIND_HOST=127.0.0.1
 GATEWAY_PUBLIC_PORT=8000
 
-POWERPAINT_CUDA_VISIBLE_DEVICES=2
-PLANNER_CUDA_VISIBLE_DEVICES=3
+POWERPAINT_CUDA_VISIBLE_DEVICES=4
+PLANNER_CUDA_VISIBLE_DEVICES=5
 SEGMENTER_CUDA_VISIBLE_DEVICES=6
 
 PLANNER_MODEL_REPO=Qwen/Qwen3.5-4B

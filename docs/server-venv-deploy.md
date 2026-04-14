@@ -1,0 +1,168 @@
+# 无 Docker 服务器部署 README
+
+这份文档适用于服务器无法使用 Docker、但允许你创建 Python 虚拟环境的场景。当前项目本身就是多服务架构，因此最稳的替代方案是：
+
+- `gateway` 一个 `venv`
+- `planner` 一个 `venv`
+- `segmenter` 一个 `venv`
+- `powerpaint_service` 一个 `venv`
+- 前端单独构建为静态文件
+
+这些服务之间通过 `127.0.0.1:端口` 的 HTTP API 通信，不依赖 Docker 才能互相连接。
+
+## 1. 前提条件
+
+建议服务器满足：
+
+- Python 3.10+
+- `python3 -m venv`
+- `git`
+- 可以访问 Hugging Face 和 GitHub
+- NVIDIA 驱动与 CUDA 可用
+- Node.js 18+ 与 `npm`，如果你准备在服务器上构建前端
+
+如果服务器没有 Node.js，也可以只在服务器上运行后端，在本机构建前端后再上传 `frontend/dist`。
+
+## 2. 推荐目录
+
+```text
+/home/common/yzhu_2025/science-diagram-platform
+```
+
+另外还需要单独准备官方 PowerPaint 仓库：
+
+```text
+/home/common/yzhu_2025/PowerPaint
+```
+
+## 3. 克隆仓库
+
+```bash
+mkdir -p /home/common/yzhu_2025
+cd /home/common/yzhu_2025
+git clone https://github.com/zy19969967/science-diagram-platform.git
+cd science-diagram-platform
+cp .env.nodocker.example .env.nodocker
+```
+
+`bash scripts/setup_venvs.sh` 会在 PowerPaint 仓库不存在时自动克隆它。
+
+## 4. 编辑 `.env.nodocker`
+
+至少确认这几项：
+
+```bash
+PROJECT_ROOT=/home/common/yzhu_2025/science-diagram-platform
+POWERPAINT_REPO_PATH=/home/common/yzhu_2025/PowerPaint
+
+POWERPAINT_CUDA_VISIBLE_DEVICES=4
+PLANNER_CUDA_VISIBLE_DEVICES=5
+SEGMENTER_CUDA_VISIBLE_DEVICES=6
+
+PUBLIC_GATEWAY_BASE_URL=http://你的服务器IP:8000
+FRONTEND_STATIC_PORT=8080
+```
+
+说明：
+
+- `PUBLIC_GATEWAY_BASE_URL` 是给前端构建用的，浏览器会直接访问这个地址
+- `gateway` 默认绑定在 `127.0.0.1:8000`
+- 如果你希望公网直接访问网关，可以把 `GATEWAY_HOST` 改成 `0.0.0.0`
+
+## 5. 一次性安装环境
+
+```bash
+bash scripts/setup_venvs.sh
+```
+
+这个脚本会做几件事：
+
+- 创建 `.venv-gateway`
+- 创建 `.venv-planner`
+- 创建 `.venv-segmenter`
+- 创建 `.venv-powerpaint`
+- 安装各自依赖
+- 安装前端依赖
+- 自动克隆 PowerPaint 仓库
+
+## 6. 启动后端服务
+
+推荐用 `tmux` 开 4 个窗口分别启动：
+
+```bash
+bash scripts/run_planner.sh
+bash scripts/run_segmenter.sh
+bash scripts/run_powerpaint.sh
+bash scripts/run_gateway.sh
+```
+
+默认端口：
+
+- `planner`: `127.0.0.1:8001`
+- `segmenter`: `127.0.0.1:8003`
+- `powerpaint`: `127.0.0.1:8002`
+- `gateway`: `127.0.0.1:8000`
+
+## 7. 构建并提供前端
+
+先构建：
+
+```bash
+bash scripts/build_frontend.sh
+```
+
+再直接用 Python 提供静态文件：
+
+```bash
+bash scripts/serve_frontend.sh
+```
+
+默认前端访问地址：
+
+```text
+http://你的服务器IP:8080
+```
+
+## 8. 检查服务状态
+
+```bash
+bash scripts/check_services.sh
+```
+
+如果 4 个接口都返回 JSON，说明链路已经连通。
+
+## 9. 首次运行为什么会慢
+
+首次启动或首次请求时，服务会下载或加载：
+
+- Qwen3.5 权重
+- SAM-2 权重
+- PowerPaint 权重
+
+因此第一次调用 `/api/plan`、`/api/segment`、`/api/generate` 明显偏慢是正常的。
+
+## 10. 常见问题
+
+### 10.1 `venv` 之间能不能互相通信
+
+可以。它们不是直接共享 Python 包，而是通过 HTTP 端口通信。
+
+### 10.2 GPU 冲突
+
+如果某张卡已经被占用，直接改 `.env.nodocker` 里的 GPU 编号，然后重启对应脚本。
+
+### 10.3 前端打开后请求失败
+
+优先检查：
+
+- `PUBLIC_GATEWAY_BASE_URL` 是否写成了真实服务器 IP
+- `gateway` 是否真的在对应地址监听
+- 防火墙是否放行前端端口
+
+### 10.4 PowerPaint 没启动
+
+优先检查：
+
+- `POWERPAINT_REPO_PATH` 是否正确
+- 官方 PowerPaint 仓库是否已经克隆
+- 相关 Python 依赖是否安装完整
