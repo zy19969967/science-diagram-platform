@@ -20,6 +20,7 @@
 - 可以访问 Hugging Face 和 GitHub
 - NVIDIA 驱动与 CUDA 可用
 - Node.js 18+ 与 `npm`，如果你准备在服务器上构建前端
+- 推荐安装 `tmux`，便于后台常驻运行多个服务
 
 如果服务器没有 Node.js，也可以只在服务器上运行后端，在本机构建前端后再上传 `frontend/dist`。
 
@@ -87,7 +88,31 @@ bash scripts/setup_venvs.sh
 
 ## 6. 启动后端服务
 
-推荐用 `tmux` 开 4 个窗口分别启动：
+如果服务器安装了 `tmux`，推荐直接后台启动：
+
+```bash
+bash scripts/start_all_tmux.sh
+```
+
+如果还想同时挂起前端静态服务：
+
+```bash
+bash scripts/start_all_tmux.sh --with-frontend
+```
+
+查看会话状态：
+
+```bash
+bash scripts/status_tmux.sh
+```
+
+停止所有会话：
+
+```bash
+bash scripts/stop_all_tmux.sh
+```
+
+如果你不想用 `tmux`，也可以手动分开启动：
 
 ```bash
 bash scripts/run_planner.sh
@@ -166,3 +191,9 @@ bash scripts/check_services.sh
 - `POWERPAINT_REPO_PATH` 是否正确
 - 官方 PowerPaint 仓库是否已经克隆
 - 相关 Python 依赖是否安装完整
+
+## 11. 推荐你直接看的清单
+
+如果你想要按步骤逐条执行，直接看：
+
+- [服务器执行清单](server-execution-checklist.md)
