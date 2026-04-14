@@ -12,7 +12,15 @@ from fastapi.staticfiles import StaticFiles
 
 from common.assets import asset_catalog_with_urls
 from common.planner_logic import build_plan
-from common.schemas import GenerateRequest, GenerateResponse, PlanRequest, PlanResponse, PowerPaintGenerateRequest, SegmentRequest, SegmentResponse
+from common.schemas import (
+    GenerateRequest,
+    GenerateResponse,
+    PlanRequest,
+    PlanResponse,
+    PowerPaintGenerateRequest,
+    SegmentRequest,
+    SegmentResponse,
+)
 from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image
 from common.utils.masks import evaluate_edit
@@ -80,10 +88,14 @@ async def segment(payload: SegmentRequest) -> SegmentResponse:
 async def generate(payload: GenerateRequest, request: Request) -> GenerateResponse:
     plan_payload = payload.plan or await plan(
         PlanRequest(
+            source_image=payload.source_image,
             instruction=payload.instruction,
             selected_asset_id=payload.selected_asset_id,
             preferred_task=payload.task,
-            canvas_hints={"has_asset": bool(payload.asset_placement), "has_mask": bool(payload.mask_image)},
+            canvas_hints={
+                "has_asset": bool(payload.asset_placement),
+                "has_mask": bool(payload.mask_image),
+            },
         )
     )
 
@@ -92,6 +104,7 @@ async def generate(payload: GenerateRequest, request: Request) -> GenerateRespon
     try:
         normalized_mask = await segment(
             SegmentRequest(
+                source_image=payload.source_image,
                 width=source_image.width,
                 height=source_image.height,
                 mask_image=payload.mask_image,
@@ -171,4 +184,3 @@ async def evaluate(payload: dict) -> dict:
     result_image = decode_data_url_to_image(result_image_data, mode="RGB")
     mask_image = decode_data_url_to_image(mask_image_data, mode="L")
     return evaluate_edit(source_image, result_image, mask_image).model_dump()
-

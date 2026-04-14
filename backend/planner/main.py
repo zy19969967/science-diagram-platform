@@ -5,14 +5,17 @@ from fastapi import FastAPI
 from common.planner_logic import build_plan
 from common.schemas import PlanRequest, PlanResponse
 
-app = FastAPI(title="Science Diagram Planner", version="0.1.0")
+from .runtime import planner_runtime
+
+app = FastAPI(title="Science Diagram Planner", version="0.2.0")
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "planner"}
+def health() -> dict[str, object]:
+    return planner_runtime.health()
 
 
 @app.post("/plan", response_model=PlanResponse)
 def plan(payload: PlanRequest) -> PlanResponse:
-    return build_plan(payload)
+    planned = planner_runtime.plan(payload)
+    return planned or build_plan(payload)

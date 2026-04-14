@@ -54,24 +54,51 @@ services:
       context: .
       dockerfile: backend/planner/Dockerfile
     restart: unless-stopped
+    environment:
+      PLANNER_BACKEND: ${PLANNER_BACKEND:-qwen3.5}
+      PLANNER_MODEL_REPO: ${PLANNER_MODEL_REPO:-Qwen/Qwen3.5-4B}
+      PLANNER_MODEL_DTYPE: ${PLANNER_MODEL_DTYPE:-float16}
+      PLANNER_MAX_NEW_TOKENS: ${PLANNER_MAX_NEW_TOKENS:-320}
+      PLANNER_ATTN_IMPL: ${PLANNER_ATTN_IMPL:-sdpa}
+      PLANNER_LOCAL_FILES_ONLY: ${PLANNER_LOCAL_FILES_ONLY:-false}
+      CUDA_VISIBLE_DEVICES: ${PLANNER_CUDA_VISIBLE_DEVICES:-3}
+      NVIDIA_VISIBLE_DEVICES: ${PLANNER_CUDA_VISIBLE_DEVICES:-3}
+      HF_HOME: /models/huggingface
+    volumes:
+      - ./models:/models
+    gpus: all
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health').read()"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health').read()"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 10s
+      start_period: 20s
 
   segmenter:
     build:
       context: .
       dockerfile: backend/segmenter/Dockerfile
     restart: unless-stopped
+    environment:
+      SEGMENTER_BACKEND: ${SEGMENTER_BACKEND:-sam2}
+      SEGMENTER_MODEL_REPO: ${SEGMENTER_MODEL_REPO:-facebook/sam2.1-hiera-base-plus}
+      SEGMENTER_MODEL_DTYPE: ${SEGMENTER_MODEL_DTYPE:-float16}
+      SEGMENTER_LOCAL_FILES_ONLY: ${SEGMENTER_LOCAL_FILES_ONLY:-false}
+      SEGMENTER_BOX_PADDING_RATIO: ${SEGMENTER_BOX_PADDING_RATIO:-0.18}
+      SEGMENTER_MASK_THRESHOLD: ${SEGMENTER_MASK_THRESHOLD:-0.0}
+      SEGMENTER_USE_PLACEMENT_BOX: ${SEGMENTER_USE_PLACEMENT_BOX:-false}
+      CUDA_VISIBLE_DEVICES: ${SEGMENTER_CUDA_VISIBLE_DEVICES:-6}
+      NVIDIA_VISIBLE_DEVICES: ${SEGMENTER_CUDA_VISIBLE_DEVICES:-6}
+      HF_HOME: /models/huggingface
+    volumes:
+      - ./models:/models
+    gpus: all
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health').read()"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health').read()"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 10s
+      start_period: 20s
 
   powerpaint:
     build:
@@ -86,8 +113,8 @@ services:
       POWERPAINT_CHECKPOINT_DIR: /models/powerpaint/${POWERPAINT_MODEL_DIR_NAME:-ppt-v1}
       POWERPAINT_WEIGHT_DTYPE: ${POWERPAINT_WEIGHT_DTYPE:-float16}
       POWERPAINT_LOCAL_FILES_ONLY: ${POWERPAINT_LOCAL_FILES_ONLY:-false}
-      CUDA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-0}
-      NVIDIA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-0}
+      CUDA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-2}
+      NVIDIA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-2}
       HF_HOME: /models/huggingface
     volumes:
       - ./models:/models

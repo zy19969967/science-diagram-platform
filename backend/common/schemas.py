@@ -28,6 +28,7 @@ class AssetPlacement(BaseModel):
 
 
 class PlanRequest(BaseModel):
+    source_image: str | None = None
     instruction: str = ""
     selected_asset_id: str | None = None
     preferred_task: TaskType | None = None
@@ -46,6 +47,7 @@ class PlanResponse(BaseModel):
 
 
 class SegmentRequest(BaseModel):
+    source_image: str | None = None
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     mask_image: str | None = None
