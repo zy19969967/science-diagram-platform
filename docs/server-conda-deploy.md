@@ -59,6 +59,7 @@ PROJECT_ROOT=/home/common/yzhu_2025/science-diagram-platform
 POWERPAINT_REPO_PATH=/home/common/yzhu_2025/PowerPaint
 
 CONDA_PYTHON_VERSION=3.10
+CONDA_BIN=conda
 CONDA_ENV_GATEWAY=sci-gateway
 CONDA_ENV_PLANNER=sci-planner
 CONDA_ENV_SEGMENTER=sci-segmenter
@@ -68,15 +69,17 @@ POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
 SEGMENTER_CUDA_VISIBLE_DEVICES=6
 
-PUBLIC_GATEWAY_BASE_URL=http://你的服务器IP:8000
+GATEWAY_PORT=18000
+PUBLIC_GATEWAY_BASE_URL=http://你的服务器IP:18000
 FRONTEND_STATIC_PORT=8080
 ```
 
 说明：
 
 - `PUBLIC_GATEWAY_BASE_URL` 是给前端构建用的，浏览器会直接访问这个地址
-- `gateway` 默认绑定在 `127.0.0.1:8000`
+- `gateway` 默认绑定在 `127.0.0.1:18000`
 - 如果你希望公网直接访问网关，可以把 `GATEWAY_HOST` 改成 `0.0.0.0`
+- 如果脚本里找不到 `conda`，可以额外设置 `CONDA_BIN=/你的/miniconda3/bin/conda`
 - 如果你已经有统一的 Conda 环境命名规范，可以直接改上面的 `CONDA_ENV_*`
 
 ## 5. 一次性安装环境
@@ -132,7 +135,7 @@ bash scripts/run_gateway.sh
 - `planner`: `127.0.0.1:8001`
 - `segmenter`: `127.0.0.1:8003`
 - `powerpaint`: `127.0.0.1:8002`
-- `gateway`: `127.0.0.1:8000`
+- `gateway`: `127.0.0.1:18000`
 
 ## 7. 构建并提供前端
 

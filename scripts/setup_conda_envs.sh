@@ -12,28 +12,28 @@ ensure_conda
 create_env() {
   local env_name="$1"
   if ! conda_env_exists "${env_name}"; then
-    conda create -y -n "${env_name}" python="${CONDA_PYTHON_VERSION}"
+    run_conda create -y -n "${env_name}" python="${CONDA_PYTHON_VERSION}"
   fi
 }
 
 install_gateway() {
   create_env "${CONDA_ENV_GATEWAY}"
-  conda run -n "${CONDA_ENV_GATEWAY}" python -m pip install --upgrade pip
-  conda run -n "${CONDA_ENV_GATEWAY}" python -m pip install -r "${PROJECT_ROOT}/backend/gateway/requirements.txt"
+  run_conda run -n "${CONDA_ENV_GATEWAY}" python -m pip install --upgrade pip
+  run_conda run -n "${CONDA_ENV_GATEWAY}" python -m pip install -r "${PROJECT_ROOT}/backend/gateway/requirements.txt"
 }
 
 install_planner() {
   create_env "${CONDA_ENV_PLANNER}"
-  conda run -n "${CONDA_ENV_PLANNER}" python -m pip install --upgrade pip
-  conda run -n "${CONDA_ENV_PLANNER}" python -m pip install --index-url "${TORCH_INDEX_URL}" torch==2.5.1 torchvision==0.20.1
-  conda run -n "${CONDA_ENV_PLANNER}" python -m pip install -r "${PROJECT_ROOT}/backend/planner/requirements.txt"
+  run_conda run -n "${CONDA_ENV_PLANNER}" python -m pip install --upgrade pip
+  run_conda run -n "${CONDA_ENV_PLANNER}" python -m pip install --index-url "${TORCH_INDEX_URL}" torch==2.5.1 torchvision==0.20.1
+  run_conda run -n "${CONDA_ENV_PLANNER}" python -m pip install -r "${PROJECT_ROOT}/backend/planner/requirements.txt"
 }
 
 install_segmenter() {
   create_env "${CONDA_ENV_SEGMENTER}"
-  conda run -n "${CONDA_ENV_SEGMENTER}" python -m pip install --upgrade pip
-  conda run -n "${CONDA_ENV_SEGMENTER}" python -m pip install --index-url "${TORCH_INDEX_URL}" torch==2.5.1 torchvision==0.20.1
-  conda run -n "${CONDA_ENV_SEGMENTER}" python -m pip install -r "${PROJECT_ROOT}/backend/segmenter/requirements.txt"
+  run_conda run -n "${CONDA_ENV_SEGMENTER}" python -m pip install --upgrade pip
+  run_conda run -n "${CONDA_ENV_SEGMENTER}" python -m pip install --index-url "${TORCH_INDEX_URL}" torch==2.5.1 torchvision==0.20.1
+  run_conda run -n "${CONDA_ENV_SEGMENTER}" python -m pip install -r "${PROJECT_ROOT}/backend/segmenter/requirements.txt"
 }
 
 ensure_powerpaint_repo() {
@@ -46,9 +46,9 @@ ensure_powerpaint_repo() {
 install_powerpaint() {
   ensure_powerpaint_repo
   create_env "${CONDA_ENV_POWERPAINT}"
-  conda run -n "${CONDA_ENV_POWERPAINT}" python -m pip install --upgrade pip
-  conda run -n "${CONDA_ENV_POWERPAINT}" python -m pip install -r "${PROJECT_ROOT}/backend/powerpaint_service/requirements.txt"
-  conda run -n "${CONDA_ENV_POWERPAINT}" python -m pip install -r "${POWERPAINT_REPO_PATH}/requirements/requirements.txt"
+  run_conda run -n "${CONDA_ENV_POWERPAINT}" python -m pip install --upgrade pip
+  run_conda run -n "${CONDA_ENV_POWERPAINT}" python -m pip install -r "${PROJECT_ROOT}/backend/powerpaint_service/requirements.txt"
+  run_conda run -n "${CONDA_ENV_POWERPAINT}" python -m pip install -r "${POWERPAINT_REPO_PATH}/requirements/requirements.txt"
 }
 
 install_frontend() {
@@ -71,18 +71,19 @@ Setup finished.
 
 Next steps:
 1. Copy .env.nodocker.example to .env.nodocker and edit PUBLIC_GATEWAY_BASE_URL / GPU ids if needed.
-2. Confirm the Conda env names if you customized them:
+2. If conda is not on PATH, set CONDA_BIN in .env.nodocker to the full conda executable path.
+3. Confirm the Conda env names if you customized them:
    ${CONDA_ENV_GATEWAY}
    ${CONDA_ENV_PLANNER}
    ${CONDA_ENV_SEGMENTER}
    ${CONDA_ENV_POWERPAINT}
-3. Start services with:
+4. Start services with:
    bash scripts/run_planner.sh
    bash scripts/run_segmenter.sh
    bash scripts/run_powerpaint.sh
    bash scripts/run_gateway.sh
-4. Build the frontend with:
+5. Build the frontend with:
    bash scripts/build_frontend.sh
-5. Optionally serve the built frontend with:
+6. Optionally serve the built frontend with:
    bash scripts/serve_frontend.sh
 EOF

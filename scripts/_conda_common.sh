@@ -17,7 +17,7 @@ load_platform_env() {
   export POWERPAINT_REPO_PATH="${POWERPAINT_REPO_PATH:-$(cd "${PROJECT_ROOT}/.." && pwd)/PowerPaint}"
 
   export GATEWAY_HOST="${GATEWAY_HOST:-127.0.0.1}"
-  export GATEWAY_PORT="${GATEWAY_PORT:-8000}"
+  export GATEWAY_PORT="${GATEWAY_PORT:-18000}"
   export PLANNER_HOST="${PLANNER_HOST:-127.0.0.1}"
   export PLANNER_PORT="${PLANNER_PORT:-8001}"
   export POWERPAINT_HOST="${POWERPAINT_HOST:-127.0.0.1}"
@@ -36,6 +36,7 @@ load_platform_env() {
   export ASSETS_DIR="${ASSETS_DIR:-${PROJECT_ROOT}/backend/assets}"
 
   export PYTHON_BIN="${PYTHON_BIN:-python3}"
+  export CONDA_BIN="${CONDA_BIN:-conda}"
 
   export CONDA_PYTHON_VERSION="${CONDA_PYTHON_VERSION:-3.10}"
   export CONDA_ENV_GATEWAY="${CONDA_ENV_GATEWAY:-sci-gateway}"
@@ -75,16 +76,28 @@ ensure_runtime_dirs() {
 }
 
 ensure_conda() {
-  if ! command -v conda >/dev/null 2>&1; then
-    echo "conda not found. Please install Miniconda or Anaconda first." >&2
-    exit 1
+  if [[ -x "${CONDA_BIN}" ]]; then
+    return
   fi
+
+  if command -v "${CONDA_BIN}" >/dev/null 2>&1; then
+    CONDA_BIN="$(command -v "${CONDA_BIN}")"
+    export CONDA_BIN
+    return
+  fi
+
+  echo "conda not found. Install Miniconda/Anaconda or set CONDA_BIN to the conda executable path." >&2
+  exit 1
+}
+
+run_conda() {
+  ensure_conda
+  "${CONDA_BIN}" "$@"
 }
 
 conda_env_exists() {
   local env_name="$1"
-  ensure_conda
-  conda run -n "${env_name}" python -c "import sys" >/dev/null 2>&1
+  run_conda run -n "${env_name}" python -c "import sys" >/dev/null 2>&1
 }
 
 require_conda_env() {
@@ -100,5 +113,5 @@ run_in_conda_env() {
   local env_name="$1"
   shift
   require_conda_env "${env_name}"
-  exec conda run --no-capture-output -n "${env_name}" "$@"
+  exec "${CONDA_BIN}" run --no-capture-output -n "${env_name}" "$@"
 }
