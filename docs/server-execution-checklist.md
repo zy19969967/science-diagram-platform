@@ -1,6 +1,6 @@
 # 服务器执行清单
 
-这份清单按你当前服务器环境整理：不使用 Docker，使用多 `venv` + 多端口 + 多 GPU 运行项目。
+这份清单按你当前服务器环境整理：不使用 Docker，使用多 Conda 环境 + 多端口 + 多 GPU 运行项目。
 
 ## 0. 推荐目录
 
@@ -26,6 +26,12 @@ cp .env.nodocker.example .env.nodocker
 PROJECT_ROOT=/home/common/yzhu_2025/science-diagram-platform
 POWERPAINT_REPO_PATH=/home/common/yzhu_2025/PowerPaint
 
+CONDA_PYTHON_VERSION=3.10
+CONDA_ENV_GATEWAY=sci-gateway
+CONDA_ENV_PLANNER=sci-planner
+CONDA_ENV_SEGMENTER=sci-segmenter
+CONDA_ENV_POWERPAINT=sci-powerpaint
+
 POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
 SEGMENTER_CUDA_VISIBLE_DEVICES=6
@@ -50,7 +56,7 @@ GATEWAY_HOST=0.0.0.0
 ## 3. 安装环境
 
 ```bash
-bash scripts/setup_venvs.sh
+bash scripts/setup_conda_envs.sh
 ```
 
 ## 4. 构建前端

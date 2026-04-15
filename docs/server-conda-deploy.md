@@ -1,11 +1,13 @@
-# 无 Docker 服务器部署 README
+# 无 Docker / Conda 服务器部署 README
 
-这份文档适用于服务器无法使用 Docker、但允许你创建 Python 虚拟环境的场景。当前项目本身就是多服务架构，因此最稳的替代方案是：
+这份文档适用于服务器无法使用 Docker、但可以使用 Conda 环境的场景。当前项目已经把无 Docker 流程切换为多服务、多 Conda 环境的部署方式。
 
-- `gateway` 一个 `venv`
-- `planner` 一个 `venv`
-- `segmenter` 一个 `venv`
-- `powerpaint_service` 一个 `venv`
+当前项目本身就是多服务架构，因此最稳的替代方案是：
+
+- `gateway` 一个 Conda 环境
+- `planner` 一个 Conda 环境
+- `segmenter` 一个 Conda 环境
+- `powerpaint_service` 一个 Conda 环境
 - 前端单独构建为静态文件
 
 这些服务之间通过 `127.0.0.1:端口` 的 HTTP API 通信，不依赖 Docker 才能互相连接。
@@ -15,7 +17,7 @@
 建议服务器满足：
 
 - Python 3.10+
-- `python3 -m venv`
+- 已安装 Miniconda 或 Anaconda，并且 `conda` 命令可直接使用
 - `git`
 - 可以访问 Hugging Face 和 GitHub
 - NVIDIA 驱动与 CUDA 可用
@@ -46,7 +48,7 @@ cd science-diagram-platform
 cp .env.nodocker.example .env.nodocker
 ```
 
-`bash scripts/setup_venvs.sh` 会在 PowerPaint 仓库不存在时自动克隆它。
+`bash scripts/setup_conda_envs.sh` 会在 PowerPaint 仓库不存在时自动克隆它。
 
 ## 4. 编辑 `.env.nodocker`
 
@@ -55,6 +57,12 @@ cp .env.nodocker.example .env.nodocker
 ```bash
 PROJECT_ROOT=/home/common/yzhu_2025/science-diagram-platform
 POWERPAINT_REPO_PATH=/home/common/yzhu_2025/PowerPaint
+
+CONDA_PYTHON_VERSION=3.10
+CONDA_ENV_GATEWAY=sci-gateway
+CONDA_ENV_PLANNER=sci-planner
+CONDA_ENV_SEGMENTER=sci-segmenter
+CONDA_ENV_POWERPAINT=sci-powerpaint
 
 POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
@@ -69,19 +77,17 @@ FRONTEND_STATIC_PORT=8080
 - `PUBLIC_GATEWAY_BASE_URL` 是给前端构建用的，浏览器会直接访问这个地址
 - `gateway` 默认绑定在 `127.0.0.1:8000`
 - 如果你希望公网直接访问网关，可以把 `GATEWAY_HOST` 改成 `0.0.0.0`
+- 如果你已经有统一的 Conda 环境命名规范，可以直接改上面的 `CONDA_ENV_*`
 
 ## 5. 一次性安装环境
 
 ```bash
-bash scripts/setup_venvs.sh
+bash scripts/setup_conda_envs.sh
 ```
 
 这个脚本会做几件事：
 
-- 创建 `.venv-gateway`
-- 创建 `.venv-planner`
-- 创建 `.venv-segmenter`
-- 创建 `.venv-powerpaint`
+- 创建 `sci-gateway` 等 Conda 环境，名称可由 `.env.nodocker` 覆盖
 - 安装各自依赖
 - 安装前端依赖
 - 自动克隆 PowerPaint 仓库
@@ -168,7 +174,7 @@ bash scripts/check_services.sh
 
 ## 10. 常见问题
 
-### 10.1 `venv` 之间能不能互相通信
+### 10.1 Conda 环境能不能互相通信
 
 可以。它们不是直接共享 Python 包，而是通过 HTTP 端口通信。
 

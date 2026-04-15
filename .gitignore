@@ -8,6 +8,4 @@ __pycache__/
 *.pyc
 .env
 .env.nodocker
-.venv*/
-venv/
 logs/

@@ -1,8 +1,8 @@
 # 服务器部署 README
 
-如果你的服务器不能使用 Docker，请改看：
+如果你的服务器不能使用 Docker、但可以使用 Conda，请改看：
 
-- [无 Docker 服务器部署 README](server-venv-deploy.md)
+- [无 Docker / Conda 服务器部署 README](server-conda-deploy.md)
 
 这份文档面向“本机开发、服务器运行”的部署方式，默认目标环境是 Ubuntu 22.04 + Docker Compose + NVIDIA GPU 服务器。当前仓库已经接入真实模型优先的运行链路：
 

@@ -24,7 +24,7 @@
 ## 当前模板对应关系
 
 - Docker 模式：看 `.env.server.example`
-- 无 Docker 模式：看 `.env.nodocker.example`
+- 无 Docker / Conda 模式：看 `.env.nodocker.example` 与 `docs/server-conda-deploy.md`
 
 这两个模板现在都按 `4,5,6,7` 这组卡来示例。
 

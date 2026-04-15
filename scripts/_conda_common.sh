@@ -36,6 +36,12 @@ load_platform_env() {
   export ASSETS_DIR="${ASSETS_DIR:-${PROJECT_ROOT}/backend/assets}"
 
   export PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+  export CONDA_PYTHON_VERSION="${CONDA_PYTHON_VERSION:-3.10}"
+  export CONDA_ENV_GATEWAY="${CONDA_ENV_GATEWAY:-sci-gateway}"
+  export CONDA_ENV_PLANNER="${CONDA_ENV_PLANNER:-sci-planner}"
+  export CONDA_ENV_SEGMENTER="${CONDA_ENV_SEGMENTER:-sci-segmenter}"
+  export CONDA_ENV_POWERPAINT="${CONDA_ENV_POWERPAINT:-sci-powerpaint}"
   export TORCH_INDEX_URL="${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu121}"
 
   export POWERPAINT_CUDA_VISIBLE_DEVICES="${POWERPAINT_CUDA_VISIBLE_DEVICES:-4}"
@@ -68,14 +74,31 @@ ensure_runtime_dirs() {
   mkdir -p "${MODELS_DIR}/huggingface" "${MODELS_DIR}/powerpaint" "${RUNS_DIR}" "${PROJECT_ROOT}/logs"
 }
 
-activate_venv() {
-  local env_name="$1"
-  local activate_script="${PROJECT_ROOT}/${env_name}/bin/activate"
-  if [[ ! -f "${activate_script}" ]]; then
-    echo "Virtual environment not found: ${PROJECT_ROOT}/${env_name}" >&2
-    echo "Run bash scripts/setup_venvs.sh first." >&2
+ensure_conda() {
+  if ! command -v conda >/dev/null 2>&1; then
+    echo "conda not found. Please install Miniconda or Anaconda first." >&2
     exit 1
   fi
-  # shellcheck disable=SC1090
-  source "${activate_script}"
+}
+
+conda_env_exists() {
+  local env_name="$1"
+  ensure_conda
+  conda run -n "${env_name}" python -c "import sys" >/dev/null 2>&1
+}
+
+require_conda_env() {
+  local env_name="$1"
+  if ! conda_env_exists "${env_name}"; then
+    echo "Conda environment not found: ${env_name}" >&2
+    echo "Run bash scripts/setup_conda_envs.sh first." >&2
+    exit 1
+  fi
+}
+
+run_in_conda_env() {
+  local env_name="$1"
+  shift
+  require_conda_env "${env_name}"
+  exec conda run --no-capture-output -n "${env_name}" "$@"
 }
