@@ -38,6 +38,12 @@ PLANNER_CUDA_VISIBLE_DEVICES=5
 SEGMENTER_CUDA_VISIBLE_DEVICES=6
 AUX_CUDA_VISIBLE_DEVICES=7
 
+POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint_v2
+POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint_v2
+POWERPAINT_DOWNLOAD_METHOD=git
+POWERPAINT_VERSION=ppt-v2
+POWERPAINT_MODEL_DIR_NAME=ppt-v2
+
 GATEWAY_PORT=18000
 PUBLIC_GATEWAY_BASE_URL=http://211.87.232.112:18000
 FRONTEND_STATIC_PORT=8080
@@ -60,6 +66,14 @@ GATEWAY_HOST=0.0.0.0
 ```bash
 bash scripts/setup_conda_envs.sh
 ```
+
+如果服务器访问 Hugging Face API 不稳定，先预拉 PowerPaint v2 权重：
+
+```bash
+bash scripts/fetch_powerpaint_model.sh
+```
+
+然后把 `.env.nodocker` 里的 `POWERPAINT_LOCAL_FILES_ONLY=true`。
 
 ## 4. 构建前端
 

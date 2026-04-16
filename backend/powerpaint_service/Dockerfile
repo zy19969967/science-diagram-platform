@@ -34,9 +34,11 @@ RUN python3 -m pip install --upgrade pip && \
 
 ENV PYTHONPATH=/app:/opt/PowerPaint
 ENV POWERPAINT_REPO_PATH=/opt/PowerPaint
-ENV POWERPAINT_CHECKPOINT_DIR=/models/powerpaint/ppt-v1
-ENV POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint-v1
-ENV POWERPAINT_VERSION=ppt-v1
+ENV POWERPAINT_CHECKPOINT_DIR=/models/powerpaint/ppt-v2
+ENV POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint_v2
+ENV POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint_v2
+ENV POWERPAINT_DOWNLOAD_METHOD=git
+ENV POWERPAINT_VERSION=ppt-v2
 ENV HF_HOME=/models/huggingface
 
 CMD ["python3", "-m", "uvicorn", "service.main:app", "--host", "0.0.0.0", "--port", "8002"]

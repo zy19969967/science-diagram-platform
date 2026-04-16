@@ -20,6 +20,7 @@
 - 已安装 Miniconda 或 Anaconda，并且 `conda` 命令可直接使用
 - `git`
 - 可以访问 Hugging Face 和 GitHub
+- 推荐安装 `git-lfs`，用于按 Git 方式拉取 `PowerPaint_v2` 权重
 - NVIDIA 驱动与 CUDA 可用
 - Node.js 18+ 与 `npm`，如果你准备在服务器上构建前端
 - 推荐安装 `tmux`，便于后台常驻运行多个服务
@@ -69,8 +70,15 @@ POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
 SEGMENTER_CUDA_VISIBLE_DEVICES=6
 
+POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint_v2
+POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint_v2
+POWERPAINT_DOWNLOAD_METHOD=git
+POWERPAINT_VERSION=ppt-v2
+POWERPAINT_MODEL_DIR_NAME=ppt-v2
+POWERPAINT_LOCAL_FILES_ONLY=false
+
 GATEWAY_PORT=18000
-PUBLIC_GATEWAY_BASE_URL=http://你的服务器IP:18000
+PUBLIC_GATEWAY_BASE_URL=http://211.87.232.112:18000
 FRONTEND_STATIC_PORT=8080
 ```
 
@@ -80,6 +88,8 @@ FRONTEND_STATIC_PORT=8080
 - `gateway` 默认绑定在 `127.0.0.1:18000`
 - 如果你希望公网直接访问网关，可以把 `GATEWAY_HOST` 改成 `0.0.0.0`
 - 如果脚本里找不到 `conda`，可以额外设置 `CONDA_BIN=/你的/miniconda3/bin/conda`
+- `POWERPAINT_DOWNLOAD_METHOD=git` 会按 Git / Git LFS 方式拉取 `PowerPaint_v2` 权重
+- 如果你已经提前把模型拉到本地，建议把 `POWERPAINT_LOCAL_FILES_ONLY=true`
 - 如果你已经有统一的 Conda 环境命名规范，可以直接改上面的 `CONDA_ENV_*`
 
 ## 5. 一次性安装环境
@@ -94,6 +104,14 @@ bash scripts/setup_conda_envs.sh
 - 安装各自依赖
 - 安装前端依赖
 - 自动克隆 PowerPaint 仓库
+
+如果服务器访问 Hugging Face API 不稳定，再执行：
+
+```bash
+bash scripts/fetch_powerpaint_model.sh
+```
+
+下载完成后，建议把 `.env.nodocker` 里的 `POWERPAINT_LOCAL_FILES_ONLY` 改成 `true`，这样 `powerpaint` 启动时会直接使用本地 `PowerPaint_v2` 权重。
 
 ## 6. 启动后端服务
 
@@ -154,7 +172,7 @@ bash scripts/serve_frontend.sh
 默认前端访问地址：
 
 ```text
-http://你的服务器IP:8080
+http://211.87.232.112:8080
 ```
 
 ## 8. 检查服务状态
@@ -171,7 +189,7 @@ bash scripts/check_services.sh
 
 - Qwen3.5 权重
 - SAM-2 权重
-- PowerPaint 权重
+- PowerPaint v2 权重
 
 因此第一次调用 `/api/plan`、`/api/segment`、`/api/generate` 明显偏慢是正常的。
 
@@ -199,6 +217,7 @@ bash scripts/check_services.sh
 
 - `POWERPAINT_REPO_PATH` 是否正确
 - 官方 PowerPaint 仓库是否已经克隆
+- `bash scripts/fetch_powerpaint_model.sh` 是否已经把 `PowerPaint_v2` 权重拉到本地
 - 相关 Python 依赖是否安装完整
 
 ## 11. 推荐你直接看的清单

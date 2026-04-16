@@ -77,13 +77,15 @@ Next steps:
    ${CONDA_ENV_PLANNER}
    ${CONDA_ENV_SEGMENTER}
    ${CONDA_ENV_POWERPAINT}
-4. Start services with:
+4. If you are using PowerPaint v2 with git download, prefetch the weights with:
+   bash scripts/fetch_powerpaint_model.sh
+5. Start services with:
    bash scripts/run_planner.sh
    bash scripts/run_segmenter.sh
    bash scripts/run_powerpaint.sh
    bash scripts/run_gateway.sh
-5. Build the frontend with:
+6. Build the frontend with:
    bash scripts/build_frontend.sh
-6. Optionally serve the built frontend with:
+7. Optionally serve the built frontend with:
    bash scripts/serve_frontend.sh
 EOF
