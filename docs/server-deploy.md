@@ -65,7 +65,7 @@ cd science-diagram-platform
 cp .env.server.example .env
 ```
 
-当前模板已经写好了真实模型配置，最少确认下面这些项：
+当前模板已经写好了真实模型配置，最少桮认下面这些项：
 
 ```bash
 FRONTEND_PUBLIC_PORT=8080
@@ -76,6 +76,7 @@ POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
 SEGMENTER_CUDA_VISIBLE_DEVICES=6
 
+POWERPAINT_REPO_GIT_URL=https://github.com/zhuang2002/PowerPaint.git
 PLANNER_MODEL_REPO=Qwen/Qwen3.5-4B
 SEGMENTER_MODEL_REPO=facebook/sam2.1-hiera-base-plus
 POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint_v2
@@ -103,7 +104,7 @@ POWERPAINT_LOCAL_FILES_ONLY=true
 
 ## 6. 首次构建
 
-如果当前用户没有 Docker daemon 权限，请使用 `sudo`：
+如果你用户涨正是 Docker daemon 权限，请使用 `sudo`：
 
 ```bash
 sudo docker compose --env-file .env build
@@ -252,3 +253,7 @@ sudo docker compose --env-file .env up -d --build
 - `powerpaint` 日志里是否正在初始化权重
 
 这通常不是死机，而是冷启动。
+
+### 12.6 Where PowerPaint v2 Weights Come From
+
+`POWERPAINT_REPO_GIT_URL` only pulls the PowerPaint code repository. The `PowerPaint_v2` weights are not stored in the GitHub code repository. They still need to come from the Hugging Face Git LFS repository referenced by `POWERPAINT_MODEL_GIT_URL`, or be copied into the model directory ahead of time.

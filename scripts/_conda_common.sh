@@ -15,6 +15,7 @@ load_platform_env() {
 
   export PROJECT_ROOT="${PROJECT_ROOT:-${ROOT_DIR}}"
   export POWERPAINT_REPO_PATH="${POWERPAINT_REPO_PATH:-$(cd "${PROJECT_ROOT}/.." && pwd)/PowerPaint}"
+  export POWERPAINT_REPO_GIT_URL="${POWERPAINT_REPO_GIT_URL:-https://github.com/zhuang2002/PowerPaint.git}"
 
   export GATEWAY_HOST="${GATEWAY_HOST:-127.0.0.1}"
   export GATEWAY_PORT="${GATEWAY_PORT:-18000}"

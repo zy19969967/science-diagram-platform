@@ -106,6 +106,8 @@ class PowerPaintRuntime:
                     "Failed to prepare PowerPaint weights. "
                     f"download_method={self.download_method}, model_repo={self.model_repo}, "
                     f"model_git_url={self.model_git_url}. "
+                    "Cloning the PowerPaint GitHub repository only provides the application code, "
+                    "not the v2 checkpoint weights. "
                     "If the server cannot reach the Hugging Face API, try `bash scripts/fetch_powerpaint_model.sh` "
                     "and then set POWERPAINT_LOCAL_FILES_ONLY=true."
                 ) from exc

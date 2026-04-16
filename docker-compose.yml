@@ -104,8 +104,10 @@ services:
       dockerfile: backend/powerpaint_service/Dockerfile
       args:
         POWERPAINT_GIT_REF: ${POWERPAINT_GIT_REF:-main}
+        POWERPAINT_REPO_GIT_URL: ${POWERPAINT_REPO_GIT_URL:-https://github.com/zhuang2002/PowerPaint.git}
     restart: unless-stopped
     environment:
+      POWERPAINT_REPO_GIT_URL: ${POWERPAINT_REPO_GIT_URL:-https://github.com/zhuang2002/PowerPaint.git}
       POWERPAINT_MODEL_REPO: ${POWERPAINT_MODEL_REPO:-JunhaoZhuang/PowerPaint_v2}
       POWERPAINT_MODEL_GIT_URL: ${POWERPAINT_MODEL_GIT_URL:-https://huggingface.co/JunhaoZhuang/PowerPaint_v2}
       POWERPAINT_DOWNLOAD_METHOD: ${POWERPAINT_DOWNLOAD_METHOD:-git}

@@ -25,6 +25,7 @@ cp .env.nodocker.example .env.nodocker
 ```bash
 PROJECT_ROOT=/home/common/yzhu_2025/science-diagram-platform
 POWERPAINT_REPO_PATH=/home/common/yzhu_2025/PowerPaint
+POWERPAINT_REPO_GIT_URL=https://github.com/zhuang2002/PowerPaint.git
 
 CONDA_PYTHON_VERSION=3.10
 CONDA_BIN=conda
@@ -49,7 +50,7 @@ PUBLIC_GATEWAY_BASE_URL=http://211.87.232.112:18000
 FRONTEND_STATIC_PORT=8080
 ```
 
-如果你不想公网直接访问网关，可以保留：
+如果你不想呬网直接访问网关，可以保留：
 
 ```bash
 GATEWAY_HOST=127.0.0.1
@@ -164,3 +165,5 @@ bash scripts/check_services.sh
 ```
 
 如果 `planner`、`segmenter`、`powerpaint` 第一次慢，不一定是故障，通常是在下载或加载模型。
+
+Note: `git clone https://github.com/zhuang2002/PowerPaint.git` only downloads the PowerPaint code repository. It does not contain the `PowerPaint_v2` checkpoints. Those weights still need to come from Hugging Face Git LFS, or be copied from another machine.

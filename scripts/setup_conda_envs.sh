@@ -40,7 +40,7 @@ ensure_powerpaint_repo() {
   if [[ -d "${POWERPAINT_REPO_PATH}/.git" ]]; then
     return
   fi
-  git clone --depth 1 https://github.com/open-mmlab/PowerPaint.git "${POWERPAINT_REPO_PATH}"
+  git clone --depth 1 "${POWERPAINT_REPO_GIT_URL}" "${POWERPAINT_REPO_PATH}"
 }
 
 install_powerpaint() {

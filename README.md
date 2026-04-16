@@ -96,3 +96,10 @@ bash scripts/server-preflight.sh
 - [4 卡部署说明](docs/server-4gpu-notes.md)
 - [已知问题与后续缺口](docs/known-issues.md)
 - [系统架构说明](docs/architecture.md)
+
+## PowerPaint Code And Weights
+
+- Code repo: `https://github.com/zhuang2002/PowerPaint.git`
+- `PowerPaint_v2` weights: `https://huggingface.co/JunhaoZhuang/PowerPaint_v2`
+
+Cloning the GitHub repository only downloads the PowerPaint code. It does not include the `PowerPaint_v2` checkpoints. The v2 weights still need to be fetched through Hugging Face Git LFS, or copied to the server from another machine.

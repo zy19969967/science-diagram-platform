@@ -11,6 +11,15 @@ ensure_runtime_dirs
 POWERPAINT_CHECKPOINT_DIR="${MODELS_DIR}/powerpaint/${POWERPAINT_MODEL_DIR_NAME}"
 POWERPAINT_MODEL_GIT_URL="${POWERPAINT_MODEL_GIT_URL:-https://huggingface.co/${POWERPAINT_MODEL_REPO}}"
 
+cat <<EOF
+PowerPaint code repo:
+  ${POWERPAINT_REPO_GIT_URL}
+PowerPaint weight repo (Git LFS on Hugging Face):
+  ${POWERPAINT_MODEL_GIT_URL}
+
+This script only prepares the model weights. Cloning the GitHub code repo alone does not include the v2 checkpoints.
+EOF
+
 if ! command -v git >/dev/null 2>&1; then
   echo "git is required for fetch_powerpaint_model.sh." >&2
   exit 1

@@ -1,6 +1,7 @@
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
 
 ARG POWERPAINT_GIT_REF=main
+ARG POWERPAINT_REPO_GIT_URL=https://github.com/zhuang2002/PowerPaint.git
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -21,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN git lfs install
-RUN git clone --depth 1 --branch ${POWERPAINT_GIT_REF} https://github.com/open-mmlab/PowerPaint.git /opt/PowerPaint
+RUN git clone --depth 1 --branch ${POWERPAINT_GIT_REF} ${POWERPAINT_REPO_GIT_URL} /opt/PowerPaint
 
 WORKDIR /app
 
@@ -34,6 +35,7 @@ RUN python3 -m pip install --upgrade pip && \
 
 ENV PYTHONPATH=/app:/opt/PowerPaint
 ENV POWERPAINT_REPO_PATH=/opt/PowerPaint
+ENV POWERPAINT_REPO_GIT_URL=https://github.com/zhuang2002/PowerPaint.git
 ENV POWERPAINT_CHECKPOINT_DIR=/models/powerpaint/ppt-v2
 ENV POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint_v2
 ENV POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint_v2
