@@ -40,6 +40,7 @@ load_platform_env() {
   export CONDA_BIN="${CONDA_BIN:-conda}"
 
   export CONDA_PYTHON_VERSION="${CONDA_PYTHON_VERSION:-3.10}"
+  export CONDA_PYTHON_VERSION_POWERPAINT="${CONDA_PYTHON_VERSION_POWERPAINT:-3.10}"
   export CONDA_ENV_GATEWAY="${CONDA_ENV_GATEWAY:-sci-gateway}"
   export CONDA_ENV_PLANNER="${CONDA_ENV_PLANNER:-sci-planner}"
   export CONDA_ENV_SEGMENTER="${CONDA_ENV_SEGMENTER:-sci-segmenter}"
