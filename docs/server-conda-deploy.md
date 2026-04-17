@@ -222,12 +222,6 @@ bash scripts/check_services.sh
 - `bash scripts/fetch_powerpaint_model.sh` 是否已经把 `PowerPaint_v2` 权重拉到本地
 - 相关 Python 依赖是否安装完整
 
-## 11. 推荐你直接看的清单
-
-如果你想要按步骤逐条执行，直接看：
-
-- [服务器执行清单](server-execution-checklist.md)
-
 ## 10.5 PowerPaint Code And Weight Sources
 
 - `POWERPAINT_REPO_GIT_URL` points to the PowerPaint code repository, by default `https://github.com/zhuang2002/PowerPaint.git`
