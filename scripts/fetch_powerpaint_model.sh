@@ -17,7 +17,7 @@ PowerPaint code repo:
 PowerPaint weight repo (Git LFS on Hugging Face):
   ${POWERPAINT_MODEL_GIT_URL}
 
-This script only prepares the model weights. Cloning the GitHub code repo alone does not include the v2 checkpoints.
+This script only prepares the model weights. Cloning the GitHub code repo alone does not include the PowerPaint 2.1 checkpoints.
 EOF
 
 if ! command -v git >/dev/null 2>&1; then
