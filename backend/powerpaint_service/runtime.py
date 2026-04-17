@@ -17,8 +17,8 @@ from common.utils.images import decode_data_url_to_image, encode_image_to_data_u
 class PowerPaintRuntime:
     def __init__(self) -> None:
         self.repo_path = Path(os.getenv("POWERPAINT_REPO_PATH", "/opt/PowerPaint"))
-        self.model_repo = os.getenv("POWERPAINT_MODEL_REPO", "JunhaoZhuang/PowerPaint_v2")
-        self.checkpoint_dir = Path(os.getenv("POWERPAINT_CHECKPOINT_DIR", "/models/powerpaint/ppt-v2"))
+        self.model_repo = os.getenv("POWERPAINT_MODEL_REPO", "JunhaoZhuang/PowerPaint-v2-1")
+        self.checkpoint_dir = Path(os.getenv("POWERPAINT_CHECKPOINT_DIR", "/models/powerpaint/ppt-v2-1"))
         self.version = os.getenv("POWERPAINT_VERSION", "ppt-v2")
         self.model_git_url = os.getenv("POWERPAINT_MODEL_GIT_URL", f"https://huggingface.co/{self.model_repo}")
         self.download_method = os.getenv("POWERPAINT_DOWNLOAD_METHOD", "git").lower()
@@ -107,7 +107,7 @@ class PowerPaintRuntime:
                     f"download_method={self.download_method}, model_repo={self.model_repo}, "
                     f"model_git_url={self.model_git_url}. "
                     "Cloning the PowerPaint GitHub repository only provides the application code, "
-                    "not the v2 checkpoint weights. "
+                    "not the PowerPaint 2.1 checkpoint weights. "
                     "If the server cannot reach the Hugging Face API, try `bash scripts/fetch_powerpaint_model.sh` "
                     "and then set POWERPAINT_LOCAL_FILES_ONLY=true."
                 ) from exc
