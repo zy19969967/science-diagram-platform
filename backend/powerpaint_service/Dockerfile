@@ -36,9 +36,9 @@ RUN python3 -m pip install --upgrade pip && \
 ENV PYTHONPATH=/app:/opt/PowerPaint
 ENV POWERPAINT_REPO_PATH=/opt/PowerPaint
 ENV POWERPAINT_REPO_GIT_URL=https://github.com/zhuang2002/PowerPaint.git
-ENV POWERPAINT_CHECKPOINT_DIR=/models/powerpaint/ppt-v2
-ENV POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint_v2
-ENV POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint_v2
+ENV POWERPAINT_CHECKPOINT_DIR=/models/powerpaint/ppt-v2-1
+ENV POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint-v2-1
+ENV POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1
 ENV POWERPAINT_DOWNLOAD_METHOD=git
 ENV POWERPAINT_VERSION=ppt-v2
 ENV HF_HOME=/models/huggingface
