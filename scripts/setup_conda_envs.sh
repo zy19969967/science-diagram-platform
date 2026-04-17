@@ -77,7 +77,7 @@ Next steps:
    ${CONDA_ENV_PLANNER}
    ${CONDA_ENV_SEGMENTER}
    ${CONDA_ENV_POWERPAINT}
-4. If you are using PowerPaint v2 with git download, prefetch the weights with:
+4. If you are using PowerPaint 2.1 with git download, prefetch the weights with:
    bash scripts/fetch_powerpaint_model.sh
 5. Start services with:
    bash scripts/run_planner.sh
