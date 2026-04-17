@@ -3,6 +3,8 @@ uvicorn[standard]==0.32.1
 pydantic==2.10.4
 pillow==11.0.0
 numpy==2.1.3
-huggingface_hub==0.26.5
+# Verified PowerPaint combo: diffusers==0.27.0 still imports cached_download,
+# so huggingface_hub must stay on a pre-0.26 release.
+huggingface_hub==0.25.1
 safetensors==0.4.5
 python-multipart==0.0.19
