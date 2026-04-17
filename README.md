@@ -88,14 +88,12 @@ bash scripts/server-preflight.sh
 - 前端反向代理已经调大 `/api` 超时，降低模型冷启动时的前端超时概率
 - 对于无 Docker 场景，仓库已经补齐多 Conda 环境安装脚本、启动脚本、tmux 管理脚本和部署文档
 
-## 相关文档
+## Docs
 
-- [服务器部署 README](docs/server-deploy.md)
-- [无 Docker / Conda 服务器部署 README](docs/server-conda-deploy.md)
-- [服务器执行清单](docs/server-execution-checklist.md)
-- [4 卡部署说明](docs/server-4gpu-notes.md)
-- [已知问题与后续缺口](docs/known-issues.md)
-- [系统架构说明](docs/architecture.md)
+- [Docker Deployment README](docs/server-deploy.md): Docker Compose deployment path
+- [Conda Deployment README](docs/server-conda-deploy.md): no-Docker deployment path, including the 4-GPU sample layout and execution steps
+- [Known Issues](docs/known-issues.md)
+- [Architecture](docs/architecture.md)
 
 ## PowerPaint Code And Weights
 
