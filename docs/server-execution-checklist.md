@@ -28,6 +28,7 @@ POWERPAINT_REPO_PATH=/home/common/yzhu_2025/PowerPaint
 POWERPAINT_REPO_GIT_URL=https://github.com/zhuang2002/PowerPaint.git
 
 CONDA_PYTHON_VERSION=3.10
+CONDA_PYTHON_VERSION_POWERPAINT=3.10
 CONDA_BIN=conda
 CONDA_ENV_GATEWAY=sci-gateway
 CONDA_ENV_PLANNER=sci-planner
@@ -50,7 +51,9 @@ PUBLIC_GATEWAY_BASE_URL=http://211.87.232.112:18000
 FRONTEND_STATIC_PORT=8080
 ```
 
-如果你不想呬网直接访问网关，可以保留：
+`CONDA_PYTHON_VERSION_POWERPAINT=3.10` keeps the PowerPaint environment aligned with the platform wrapper and shared schemas.
+
+如果你不想公网直接访问网关，可以保留：
 
 ```bash
 GATEWAY_HOST=127.0.0.1
@@ -67,6 +70,8 @@ GATEWAY_HOST=0.0.0.0
 ```bash
 bash scripts/setup_conda_envs.sh
 ```
+
+`scripts/setup_conda_envs.sh` now creates the `powerpaint` environment with Python 3.10 and installs the official `requirements/requirements.txt` before the wrapper requirements.
 
 如果服务器访问 Hugging Face API 不稳定，先预拉 PowerPaint v2 权重：
 
