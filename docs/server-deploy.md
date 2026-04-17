@@ -79,17 +79,18 @@ SEGMENTER_CUDA_VISIBLE_DEVICES=6
 POWERPAINT_REPO_GIT_URL=https://github.com/zhuang2002/PowerPaint.git
 PLANNER_MODEL_REPO=Qwen/Qwen3.5-4B
 SEGMENTER_MODEL_REPO=facebook/sam2.1-hiera-base-plus
-POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint_v2
-POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint_v2
+POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint-v2-1
+POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1
 POWERPAINT_DOWNLOAD_METHOD=git
 POWERPAINT_VERSION=ppt-v2
-POWERPAINT_MODEL_DIR_NAME=ppt-v2
+POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
 ```
 
 几个关键说明：
 
 - `GATEWAY_BIND_HOST=127.0.0.1` 表示网关只对本机开放，前端容器通过 Docker 网络反向代理访问它
 - `FRONTEND_PUBLIC_PORT=8080` 表示浏览器最终访问的是前端容器
+- `PowerPaint 2.1` 仍然复用 BrushNet 的 `ppt-v2` 推理分支，因此 `POWERPAINT_VERSION` 保持 `ppt-v2`
 - `AUX_CUDA_VISIBLE_DEVICES` 目前只是预留备用卡，不会被 Compose 自动绑定到服务
 
 如果你已经提前下载过模型，也可以开启纯本地模式：
@@ -254,6 +255,6 @@ sudo docker compose --env-file .env up -d --build
 
 这通常不是死机，而是冷启动。
 
-### 12.6 Where PowerPaint v2 Weights Come From
+### 12.6 Where PowerPaint 2.1 Weights Come From
 
-`POWERPAINT_REPO_GIT_URL` only pulls the PowerPaint code repository. The `PowerPaint_v2` weights are not stored in the GitHub code repository. They still need to come from the Hugging Face Git LFS repository referenced by `POWERPAINT_MODEL_GIT_URL`, or be copied into the model directory ahead of time.
+`POWERPAINT_REPO_GIT_URL` only pulls the PowerPaint code repository. The `PowerPaint 2.1` weights are not stored in the GitHub code repository. They still need to come from the Hugging Face Git LFS repository referenced by `POWERPAINT_MODEL_GIT_URL`, or be copied into the model directory ahead of time.
