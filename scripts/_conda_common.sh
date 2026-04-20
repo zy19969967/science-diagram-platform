@@ -68,7 +68,6 @@ load_platform_env() {
 
   export POWERPAINT_MODEL_REPO="${POWERPAINT_MODEL_REPO:-JunhaoZhuang/PowerPaint-v2-1}"
   export POWERPAINT_MODEL_GIT_URL="${POWERPAINT_MODEL_GIT_URL:-https://huggingface.co/${POWERPAINT_MODEL_REPO}}"
-  export POWERPAINT_SD15_REPO="${POWERPAINT_SD15_REPO:-stable-diffusion-v1-5/stable-diffusion-v1-5}"
   export POWERPAINT_DOWNLOAD_METHOD="${POWERPAINT_DOWNLOAD_METHOD:-git}"
   export POWERPAINT_VERSION="${POWERPAINT_VERSION:-ppt-v2}"
   export POWERPAINT_MODEL_DIR_NAME="${POWERPAINT_MODEL_DIR_NAME:-ppt-v2-1}"
@@ -119,15 +118,4 @@ run_in_conda_env() {
   shift
   require_conda_env "${env_name}"
   exec "${CONDA_BIN}" run --no-capture-output -n "${env_name}" "$@"
-}
-
-patch_powerpaint_repo() {
-  local app_path="${POWERPAINT_REPO_PATH}/app.py"
-
-  if [[ ! -f "${app_path}" ]]; then
-    echo "PowerPaint app.py not found at ${app_path}" >&2
-    exit 1
-  fi
-
-  sed -i "s#runwayml/stable-diffusion-v1-5#${POWERPAINT_SD15_REPO}#g" "${app_path}"
 }
