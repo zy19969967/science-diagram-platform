@@ -38,9 +38,11 @@ install_segmenter() {
 
 ensure_powerpaint_repo() {
   if [[ -d "${POWERPAINT_REPO_PATH}/.git" ]]; then
+    patch_powerpaint_repo
     return
   fi
   git clone --depth 1 "${POWERPAINT_REPO_GIT_URL}" "${POWERPAINT_REPO_PATH}"
+  patch_powerpaint_repo
 }
 
 install_powerpaint() {
