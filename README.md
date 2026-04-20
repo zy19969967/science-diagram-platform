@@ -99,6 +99,5 @@ bash scripts/server-preflight.sh
 
 - Code repo: `https://github.com/zhuang2002/PowerPaint.git`
 - `PowerPaint 2.1` weights: `https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1`
-- Stable Diffusion v1.5 mirror: `https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5`
 
-Cloning the GitHub repository only downloads the PowerPaint code. It does not include the `PowerPaint 2.1` checkpoints or the Stable Diffusion v1.5 base model cache. Those weights still need to be fetched through Hugging Face Git LFS, or copied to the server from another machine. By default, the server-side PowerPaint directory is `models/powerpaint/ppt-v2-1`, and the shared Hugging Face cache lives under `models/huggingface`.
+Cloning the GitHub repository only downloads the PowerPaint code. It does not include the `PowerPaint 2.1` checkpoints. The weights still need to be fetched through Hugging Face Git LFS, or copied to the server from another machine. By default, the server-side weight directory is `models/powerpaint/ppt-v2-1`.
