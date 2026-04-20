@@ -110,6 +110,7 @@ services:
       POWERPAINT_REPO_GIT_URL: ${POWERPAINT_REPO_GIT_URL:-https://github.com/zhuang2002/PowerPaint.git}
       POWERPAINT_MODEL_REPO: ${POWERPAINT_MODEL_REPO:-JunhaoZhuang/PowerPaint-v2-1}
       POWERPAINT_MODEL_GIT_URL: ${POWERPAINT_MODEL_GIT_URL:-https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1}
+      POWERPAINT_SD15_REPO: ${POWERPAINT_SD15_REPO:-stable-diffusion-v1-5/stable-diffusion-v1-5}
       POWERPAINT_DOWNLOAD_METHOD: ${POWERPAINT_DOWNLOAD_METHOD:-git}
       POWERPAINT_VERSION: ${POWERPAINT_VERSION:-ppt-v2}
       POWERPAINT_CHECKPOINT_DIR: /models/powerpaint/${POWERPAINT_MODEL_DIR_NAME:-ppt-v2-1}
