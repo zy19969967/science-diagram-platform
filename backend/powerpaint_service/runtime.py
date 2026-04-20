@@ -18,7 +18,6 @@ class PowerPaintRuntime:
     def __init__(self) -> None:
         self.repo_path = Path(os.getenv("POWERPAINT_REPO_PATH", "/opt/PowerPaint"))
         self.model_repo = os.getenv("POWERPAINT_MODEL_REPO", "JunhaoZhuang/PowerPaint-v2-1")
-        self.sd15_repo = os.getenv("POWERPAINT_SD15_REPO", "stable-diffusion-v1-5/stable-diffusion-v1-5")
         self.checkpoint_dir = Path(os.getenv("POWERPAINT_CHECKPOINT_DIR", "/models/powerpaint/ppt-v2-1"))
         self.version = os.getenv("POWERPAINT_VERSION", "ppt-v2")
         self.model_git_url = os.getenv("POWERPAINT_MODEL_GIT_URL", f"https://huggingface.co/{self.model_repo}")
@@ -41,16 +40,6 @@ class PowerPaintRuntime:
         spec.loader.exec_module(module)
         module.weight_dtype = self.weight_dtype
         return module
-
-    def _patch_upstream_repo(self) -> None:
-        app_path = self.repo_path / "app.py"
-        if not app_path.exists():
-            raise RuntimeError(f"Unable to patch PowerPaint entrypoint because {app_path} does not exist")
-
-        content = app_path.read_text(encoding="utf-8")
-        patched = content.replace("runwayml/stable-diffusion-v1-5", self.sd15_repo)
-        if patched != content:
-            app_path.write_text(patched, encoding="utf-8")
 
     def _checkpoint_exists(self) -> bool:
         return self.checkpoint_dir.exists() and any(self.checkpoint_dir.iterdir())
@@ -104,7 +93,6 @@ class PowerPaintRuntime:
 
     def startup(self) -> None:
         self.checkpoint_dir.parent.mkdir(parents=True, exist_ok=True)
-        self._patch_upstream_repo()
         if not self._checkpoint_exists():
             if self.local_files_only:
                 raise FileNotFoundError(
