@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import ControlPanel from "./components/ControlPanel";
+import EditorStage from "./components/EditorStage";
+import HeaderBar from "./components/HeaderBar";
+import ResultPanel from "./components/ResultPanel";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const apiPath = (path) => (API_BASE_URL ? `${API_BASE_URL}${path}` : path);
@@ -52,6 +56,7 @@ function App() {
   const [error, setError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+  const [displayScale, setDisplayScale] = useState(1);
 
   const imageRef = useRef(null);
   const maskCanvasRef = useRef(null);
@@ -63,7 +68,6 @@ function App() {
     () => assets.find((item) => item.id === selectedAssetId) ?? null,
     [assets, selectedAssetId],
   );
-
   useEffect(() => {
     async function fetchAssets() {
       try {
@@ -119,6 +123,13 @@ function App() {
     };
   }, [assetPlacement, naturalSize]);
 
+  useEffect(() => {
+    if (!sourceImage) {
+      return;
+    }
+    window.requestAnimationFrame(() => syncCanvasToImage(naturalSize.width, naturalSize.height));
+  }, [displayScale, naturalSize, sourceImage]);
+
   function syncCanvasToImage(width = naturalSize.width, height = naturalSize.height) {
     const image = imageRef.current;
     const canvas = maskCanvasRef.current;
@@ -150,6 +161,25 @@ function App() {
     setStatus("已清空当前选区");
   }
 
+  function clearCanvasWorkspace() {
+    const canvas = maskCanvasRef.current;
+    if (canvas) {
+      const context = canvas.getContext("2d");
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    setSourceImage("");
+    setSelectedAssetId("");
+    setAssetPlacement(null);
+    setPlan(null);
+    setLatestResult(null);
+    setHistory([]);
+    setNaturalSize({ width: 0, height: 0 });
+    setDisplayScale(1);
+    dragActiveRef.current = false;
+    setStatus("已清除当前画布");
+    setError("");
+  }
+
   function resetWorkspace() {
     setSelectedAssetId("");
     setAssetPlacement(null);
@@ -166,6 +196,7 @@ function App() {
     setLatestResult(null);
     setPlan(null);
     setHistory([]);
+    setDisplayScale(1);
     setStatus("图像已载入，可以开始涂抹 mask 或拖拽素材。");
     setError("");
     resetWorkspace();
@@ -198,7 +229,7 @@ function App() {
     context.lineCap = "round";
     context.lineWidth = brushSize * scaleX;
     context.globalCompositeOperation = drawMode === "erase" ? "destination-out" : "source-over";
-    context.strokeStyle = "rgba(255,255,255,1)";
+    context.strokeStyle = "rgba(128,128,128,0.58)";
 
     if (!lastPointRef.current) {
       context.beginPath();
@@ -399,276 +430,75 @@ function App() {
     setStatus(`已切换到历史结果 ${item.run_id}，可以继续多轮编辑。`);
   }
 
+  function removeAsset() {
+    setSelectedAssetId("");
+    setAssetPlacement(null);
+    dragActiveRef.current = false;
+    setStatus("已移除当前素材");
+  }
+
   return (
     <div className="app-shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Graduation Design Demo</p>
-          <h1>科学示意图交互式生成平台</h1>
-          <p className="hero-copy">
-            基于技术报告中的“规划 + 分割 + 执行”链路，前端支持手绘选区与科学素材放置，后端由 FastAPI 网关统一调度 PowerPaint。
-          </p>
-        </div>
-        <div className="hero-badges">
-          <span>Qwen3.5-ready</span>
-          <span>SAM-2-ready</span>
-          <span>PowerPaint</span>
-          <span>Docker Compose</span>
-        </div>
-      </header>
+      <div className="app-backdrop" />
+      <HeaderBar status={status} sourceImage={sourceImage} latestResult={latestResult} />
 
       <main className="workspace-grid">
-        <section className="panel control-panel">
-          <div className="panel-title-row">
-            <h2>输入与任务</h2>
-            <span className="status-pill">{status}</span>
-          </div>
+        <ControlPanel
+          status={status}
+          instruction={instruction}
+          setInstruction={setInstruction}
+          task={task}
+          taskOptions={TASK_OPTIONS}
+          setTask={setTask}
+          brushSize={brushSize}
+          setBrushSize={setBrushSize}
+          drawMode={drawMode}
+          setDrawMode={setDrawMode}
+          steps={steps}
+          setSteps={setSteps}
+          guidanceScale={guidanceScale}
+          setGuidanceScale={setGuidanceScale}
+          fittingDegree={fittingDegree}
+          setFittingDegree={setFittingDegree}
+          seed={seed}
+          setSeed={setSeed}
+          horizontalExpansionRatio={horizontalExpansionRatio}
+          setHorizontalExpansionRatio={setHorizontalExpansionRatio}
+          verticalExpansionRatio={verticalExpansionRatio}
+          setVerticalExpansionRatio={setVerticalExpansionRatio}
+          assets={assets}
+          selectedAsset={selectedAsset}
+          selectedAssetId={selectedAssetId}
+          chooseAsset={chooseAsset}
+          assetPlacement={assetPlacement}
+          updateAssetScale={updateAssetScale}
+          analyzePlan={analyzePlan}
+          generateResult={generateResult}
+          isGenerating={isGenerating}
+          error={error}
+          handleUpload={handleUpload}
+        />
 
-          <label className="upload-card">
-            <span>上传原图</span>
-            <small>支持科研示意图、实验装置图、流程图局部编辑</small>
-            <input type="file" accept="image/*" onChange={handleUpload} />
-          </label>
+        <EditorStage
+          sourceImage={sourceImage}
+          naturalSize={naturalSize}
+          imageRef={imageRef}
+          maskCanvasRef={maskCanvasRef}
+          syncCanvasToImage={syncCanvasToImage}
+          startDrawing={startDrawing}
+          drawOnCanvas={drawOnCanvas}
+          stopDrawing={stopDrawing}
+          selectedAsset={selectedAsset}
+          assetPlacement={assetPlacement}
+          dragActiveRef={dragActiveRef}
+          clearMask={clearMask}
+          clearCanvas={clearCanvasWorkspace}
+          removeAsset={removeAsset}
+          displayScale={displayScale}
+          setDisplayScale={setDisplayScale}
+        />
 
-          <div className="field-group">
-            <label>编辑指令</label>
-            <textarea
-              value={instruction}
-              onChange={(event) => setInstruction(event.target.value)}
-              rows={5}
-              placeholder="例如：在右侧空白区域添加一个烧杯，并保持文字标签清晰。"
-            />
-          </div>
-
-          <div className="field-group">
-            <label>任务模式</label>
-            <div className="segmented-grid">
-              {TASK_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={task === option.value ? "segment active" : "segment"}
-                  onClick={() => setTask(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="field-row">
-            <div className="field-group compact">
-              <label>笔刷大小</label>
-              <input type="range" min="8" max="72" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} />
-            </div>
-            <div className="field-group compact">
-              <label>绘制模式</label>
-              <div className="segmented-grid two-up">
-                <button type="button" className={drawMode === "brush" ? "segment active" : "segment"} onClick={() => setDrawMode("brush")}>画笔</button>
-                <button type="button" className={drawMode === "erase" ? "segment active" : "segment"} onClick={() => setDrawMode("erase")}>橡皮</button>
-              </div>
-            </div>
-          </div>
-
-          <div className="field-row">
-            <div className="field-group compact">
-              <label>Steps</label>
-              <input type="number" min="1" max="60" value={steps} onChange={(event) => setSteps(Number(event.target.value))} />
-            </div>
-            <div className="field-group compact">
-              <label>Guidance</label>
-              <input type="number" min="0.1" max="30" step="0.1" value={guidanceScale} onChange={(event) => setGuidanceScale(Number(event.target.value))} />
-            </div>
-          </div>
-
-          <div className="field-row">
-            <div className="field-group compact">
-              <label>Fitting</label>
-              <input type="number" min="0" max="1" step="0.05" value={fittingDegree} onChange={(event) => setFittingDegree(Number(event.target.value))} />
-            </div>
-            <div className="field-group compact">
-              <label>Seed</label>
-              <div className="seed-row">
-                <input type="number" min="0" max="2147483647" value={seed} onChange={(event) => setSeed(Number(event.target.value))} />
-                <button type="button" className="ghost-button" onClick={() => setSeed(Math.floor(Math.random() * 2147483647))}>随机</button>
-              </div>
-            </div>
-          </div>
-
-          {task === "image-outpainting" && (
-            <div className="field-row">
-              <div className="field-group compact">
-                <label>横向扩展</label>
-                <input type="number" min="1" max="4" step="0.1" value={horizontalExpansionRatio} onChange={(event) => setHorizontalExpansionRatio(Number(event.target.value))} />
-              </div>
-              <div className="field-group compact">
-                <label>纵向扩展</label>
-                <input type="number" min="1" max="4" step="0.1" value={verticalExpansionRatio} onChange={(event) => setVerticalExpansionRatio(Number(event.target.value))} />
-              </div>
-            </div>
-          )}
-
-          <div className="panel-subtitle-row">
-            <h3>科学素材图库</h3>
-            {selectedAsset && <span>{selectedAsset.name}</span>}
-          </div>
-          <div className="asset-grid">
-            {assets.map((asset) => (
-              <button
-                key={asset.id}
-                type="button"
-                className={selectedAssetId === asset.id ? "asset-card active" : "asset-card"}
-                onClick={() => chooseAsset(asset.id)}
-              >
-                <img src={asset.image_url} alt={asset.name} crossOrigin="anonymous" />
-                <strong>{asset.name}</strong>
-                <small>{asset.category}</small>
-              </button>
-            ))}
-          </div>
-
-          {assetPlacement && (
-            <div className="field-group">
-              <label>素材尺寸</label>
-              <input
-                type="range"
-                min="0.12"
-                max="0.45"
-                step="0.01"
-                value={assetPlacement.width}
-                onChange={(event) => updateAssetScale(event.target.value)}
-              />
-            </div>
-          )}
-
-          <div className="action-row">
-            <button type="button" className="secondary-button" onClick={analyzePlan}>解析任务</button>
-            <button type="button" className="primary-button" onClick={generateResult} disabled={isGenerating}>
-              {isGenerating ? "生成中..." : "调用 PowerPaint"}
-            </button>
-          </div>
-
-          {error && <p className="error-text">{error}</p>}
-        </section>
-
-        <section className="panel editor-panel">
-          <div className="panel-title-row">
-            <h2>交互画布</h2>
-            <div className="inline-actions">
-              <button type="button" className="ghost-button" onClick={clearMask}>清空 Mask</button>
-              <button type="button" className="ghost-button" onClick={() => setAssetPlacement(null)}>移除素材</button>
-            </div>
-          </div>
-
-          <div className="canvas-stage">
-            {sourceImage ? (
-              <div className="canvas-stack">
-                <img ref={imageRef} src={sourceImage} alt="source" onLoad={() => syncCanvasToImage()} />
-                <canvas
-                  ref={maskCanvasRef}
-                  className="mask-canvas"
-                  onPointerDown={startDrawing}
-                  onPointerMove={drawOnCanvas}
-                  onPointerUp={stopDrawing}
-                  onPointerLeave={stopDrawing}
-                />
-                {selectedAsset && assetPlacement && (
-                  <div
-                    className="asset-overlay"
-                    style={{
-                      left: `${assetPlacement.x * 100}%`,
-                      top: `${assetPlacement.y * 100}%`,
-                      width: `${assetPlacement.width * 100}%`,
-                      height: `${assetPlacement.height * 100}%`,
-                    }}
-                    onPointerDown={(event) => {
-                      event.stopPropagation();
-                      dragActiveRef.current = true;
-                    }}
-                  >
-                    <img src={selectedAsset.image_url} alt={selectedAsset.name} crossOrigin="anonymous" draggable="false" />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="empty-stage">
-                <strong>等待图像</strong>
-                <p>上传科研示意图后，可以在这里手绘 mask，或者放置烧杯、试管等素材来生成局部约束。</p>
-              </div>
-            )}
-          </div>
-
-          <div className="tip-grid">
-            <article>
-              <h4>手绘选区</h4>
-              <p>适合删除错误箭头、局部补全背景、替换已有器材。</p>
-            </article>
-            <article>
-              <h4>素材放置</h4>
-              <p>适合先定位置，再交给 PowerPaint 做自然融合与边界修复。</p>
-            </article>
-            <article>
-              <h4>多轮迭代</h4>
-              <p>右侧历史结果可一键回灌，便于论文演示多轮编辑闭环。</p>
-            </article>
-          </div>
-        </section>
-
-        <section className="panel result-panel">
-          <div className="panel-title-row">
-            <h2>规划与结果</h2>
-            {latestResult && <span className="status-pill">Run {latestResult.run_id}</span>}
-          </div>
-
-          <div className="result-preview">
-            {latestResult ? <img src={latestResult.result_image} alt="result" /> : <div className="placeholder-card">生成结果会显示在这里</div>}
-          </div>
-
-          {latestResult?.evaluation && (
-            <div className="metric-card">
-              <div>
-                <span>变化比例</span>
-                <strong>{latestResult.evaluation.changed_ratio}</strong>
-              </div>
-              <div>
-                <span>编辑外溢</span>
-                <strong>{latestResult.evaluation.outside_mask_change_ratio}</strong>
-              </div>
-              <p>{latestResult.evaluation.note}</p>
-            </div>
-          )}
-
-          <div className="action-row compact-row">
-            {latestResult && (
-              <button type="button" className="secondary-button" onClick={() => continueFromHistory(latestResult)}>
-                继续编辑当前结果
-              </button>
-            )}
-          </div>
-
-          <div className="panel-subtitle-row">
-            <h3>结构化计划</h3>
-            <span>/api/plan</span>
-          </div>
-          <pre className="json-panel">{plan ? JSON.stringify(plan, null, 2) : "尚未生成任务计划。"}</pre>
-
-          <div className="panel-subtitle-row">
-            <h3>历史版本</h3>
-            <span>{history.length} 项</span>
-          </div>
-          <div className="history-list">
-            {history.length === 0 && <div className="placeholder-card">当前还没有历史结果。</div>}
-            {history.map((item) => (
-              <button key={item.run_id} type="button" className="history-card" onClick={() => continueFromHistory(item)}>
-                <img src={item.result_image} alt={item.run_id} />
-                <div>
-                  <strong>{item.plan.task}</strong>
-                  <small>{item.run_id}</small>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
+        <ResultPanel latestResult={latestResult} continueFromHistory={continueFromHistory} history={history} />
       </main>
     </div>
   );
