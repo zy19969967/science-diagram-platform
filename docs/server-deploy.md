@@ -81,7 +81,6 @@ PLANNER_MODEL_REPO=Qwen/Qwen3.5-4B
 SEGMENTER_MODEL_REPO=facebook/sam2.1-hiera-base-plus
 POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint-v2-1
 POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1
-POWERPAINT_SD15_REPO=stable-diffusion-v1-5/stable-diffusion-v1-5
 POWERPAINT_DOWNLOAD_METHOD=git
 POWERPAINT_VERSION=ppt-v2
 POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
@@ -92,7 +91,6 @@ POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
 - `GATEWAY_BIND_HOST=127.0.0.1` 表示网关只对本机开放，前端容器通过 Docker 网络反向代理访问它
 - `FRONTEND_PUBLIC_PORT=8080` 表示浏览器最终访问的是前端容器
 - `PowerPaint 2.1` 仍然复用 BrushNet 的 `ppt-v2` 推理分支，因此 `POWERPAINT_VERSION` 保持 `ppt-v2`
-- `POWERPAINT_SD15_REPO` 默认改成了 `stable-diffusion-v1-5/stable-diffusion-v1-5`，用于替代已经弃用的 `runwayml/stable-diffusion-v1-5`
 - `AUX_CUDA_VISIBLE_DEVICES` 目前只是预留备用卡，不会被 Compose 自动绑定到服务
 
 如果你已经提前下载过模型，也可以开启纯本地模式：
@@ -259,4 +257,4 @@ sudo docker compose --env-file .env up -d --build
 
 ### 12.6 Where PowerPaint 2.1 Weights Come From
 
-`POWERPAINT_REPO_GIT_URL` only pulls the PowerPaint code repository. The `PowerPaint 2.1` weights are not stored in the GitHub code repository. They still need to come from the Hugging Face Git LFS repository referenced by `POWERPAINT_MODEL_GIT_URL`, or be copied into the model directory ahead of time. Upstream PowerPaint also expects a Stable Diffusion v1.5 base model, and this project now patches the repo to use `stable-diffusion-v1-5/stable-diffusion-v1-5` instead of the deprecated `runwayml/stable-diffusion-v1-5`.
+`POWERPAINT_REPO_GIT_URL` only pulls the PowerPaint code repository. The `PowerPaint 2.1` weights are not stored in the GitHub code repository. They still need to come from the Hugging Face Git LFS repository referenced by `POWERPAINT_MODEL_GIT_URL`, or be copied into the model directory ahead of time.
