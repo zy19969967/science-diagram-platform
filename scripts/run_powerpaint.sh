@@ -8,6 +8,7 @@ source "${SCRIPT_DIR}/_conda_common.sh"
 load_platform_env
 ensure_runtime_dirs
 ensure_conda
+patch_powerpaint_repo
 
 export PYTHONPATH="${PROJECT_ROOT}/backend:${POWERPAINT_REPO_PATH}"
 export CUDA_VISIBLE_DEVICES="${POWERPAINT_CUDA_VISIBLE_DEVICES}"
