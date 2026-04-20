@@ -74,7 +74,6 @@ SEGMENTER_CUDA_VISIBLE_DEVICES=6
 
 POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint-v2-1
 POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1
-POWERPAINT_SD15_REPO=stable-diffusion-v1-5/stable-diffusion-v1-5
 POWERPAINT_DOWNLOAD_METHOD=git
 POWERPAINT_VERSION=ppt-v2
 POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
@@ -93,7 +92,6 @@ FRONTEND_STATIC_PORT=8080
 - 如果脚本里找不到 `conda`，可以额外设置 `CONDA_BIN=/你的/miniconda3/bin/conda`
 - `POWERPAINT_DOWNLOAD_METHOD=git` 会按 Git / Git LFS 方式拉取 `PowerPaint 2.1` 权重
 - `PowerPaint 2.1` 仍然走 BrushNet 的 `ppt-v2` 推理分支，所以 `POWERPAINT_VERSION` 保持 `ppt-v2`
-- `POWERPAINT_SD15_REPO` 用来覆盖 PowerPaint 里默认的 SD1.5 仓库，默认值已经改成 `stable-diffusion-v1-5/stable-diffusion-v1-5`
 - 如果你已经提前把模型拉到本地，建议把 `POWERPAINT_LOCAL_FILES_ONLY=true`
 - 如果你已经有统一的 Conda 环境命名规范，可以直接改上面的 `CONDA_ENV_*`
 
@@ -195,7 +193,6 @@ bash scripts/check_services.sh
 - Qwen3.5 权重
 - SAM-2 权重
 - PowerPaint 2.1 权重
-- Stable Diffusion v1.5 基础模型缓存
 
 因此第一次调用 `/api/plan`、`/api/segment`、`/api/generate` 明显偏慢是正常的。
 
@@ -224,14 +221,11 @@ bash scripts/check_services.sh
 - `POWERPAINT_REPO_PATH` 是否正确
 - 官方 PowerPaint 仓库是否已经克隆
 - `bash scripts/fetch_powerpaint_model.sh` 是否已经把 `PowerPaint 2.1` 权重拉到本地
-- `HF_HOME` 下是否已经准备好 `stable-diffusion-v1-5/stable-diffusion-v1-5` 的本地缓存
 - 相关 Python 依赖是否安装完整
 
 ## 10.5 PowerPaint Code And Weight Sources
 
 - `POWERPAINT_REPO_GIT_URL` points to the PowerPaint code repository, by default `https://github.com/zhuang2002/PowerPaint.git`
 - `POWERPAINT_MODEL_GIT_URL` points to the `PowerPaint 2.1` weight repository, by default `https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1`
-- `POWERPAINT_SD15_REPO` points to the Stable Diffusion v1.5 mirror used by upstream PowerPaint, by default `stable-diffusion-v1-5/stable-diffusion-v1-5`
 - Cloning the GitHub code repository does not include the `PowerPaint 2.1` checkpoints
 - If the server cannot reach `huggingface.co:443`, download `ppt-v2-1` on another machine first, then copy it to `/home/common/yzhu_2025/science-diagram-platform/models/powerpaint/ppt-v2-1`
-- If the server cannot reach `huggingface.co:443`, also prepare the Stable Diffusion v1.5 cache under `/home/common/yzhu_2025/science-diagram-platform/models/huggingface`
