@@ -83,15 +83,18 @@ POWERPAINT_VERSION=ppt-v2
 POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
 POWERPAINT_LOCAL_FILES_ONLY=false
 
-GATEWAY_PORT=18000
-PUBLIC_GATEWAY_BASE_URL=http://211.87.232.112:18000
-FRONTEND_STATIC_PORT=8080
+GATEWAY_PORT=19080
+PLANNER_PORT=19081
+POWERPAINT_PORT=19082
+SEGMENTER_PORT=19083
+PUBLIC_GATEWAY_BASE_URL=http://211.87.232.112:19080
+FRONTEND_STATIC_PORT=19084
 ```
 
 说明：
 
 - `PUBLIC_GATEWAY_BASE_URL` 是给前端构建用的，浏览器会直接访问这个地址
-- `gateway` 默认绑定在 `127.0.0.1:18000`
+- `gateway` 默认绑定在 `127.0.0.1:19080`
 - 如果你希望公网直接访问网关，可以把 `GATEWAY_HOST` 改成 `0.0.0.0`
 - 如果脚本里找不到 `conda`，可以额外设置 `CONDA_BIN=/你的/miniconda3/bin/conda`
 - `TORCH_INDEX_URL` 必须指向 CUDA wheel 源；如果 PyTorch 装成 CPU 版，模型会显示 `device: cpu`
@@ -158,10 +161,10 @@ bash scripts/run_gateway.sh
 
 默认端口：
 
-- `planner`: `127.0.0.1:8001`
-- `segmenter`: `127.0.0.1:8003`
-- `powerpaint`: `127.0.0.1:8002`
-- `gateway`: `127.0.0.1:18000`
+- `planner`: `127.0.0.1:19081`
+- `segmenter`: `127.0.0.1:19083`
+- `powerpaint`: `127.0.0.1:19082`
+- `gateway`: `127.0.0.1:19080`
 
 ## 7. 构建并提供前端
 
@@ -180,7 +183,7 @@ bash scripts/serve_frontend.sh
 默认前端访问地址：
 
 ```text
-http://211.87.232.112:8080
+http://211.87.232.112:19084
 ```
 
 ## 8. 检查服务状态

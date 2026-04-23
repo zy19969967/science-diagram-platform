@@ -60,7 +60,7 @@ sudo docker compose --env-file .env up -d
 浏览器访问：
 
 ```text
-http://211.87.232.112:8080
+http://211.87.232.112:19084
 ```
 
 ## 推荐先做的检查

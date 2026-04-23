@@ -68,9 +68,9 @@ cp .env.server.example .env
 当前模板已经写好了真实模型配置，最少桮认下面这些项：
 
 ```bash
-FRONTEND_PUBLIC_PORT=8080
+FRONTEND_PUBLIC_PORT=19084
 GATEWAY_BIND_HOST=127.0.0.1
-GATEWAY_PUBLIC_PORT=8000
+GATEWAY_PUBLIC_PORT=19080
 
 POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
@@ -92,7 +92,7 @@ POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
 几个关键说明：
 
 - `GATEWAY_BIND_HOST=127.0.0.1` 表示网关只对本机开放，前端容器通过 Docker 网络反向代理访问它
-- `FRONTEND_PUBLIC_PORT=8080` 表示浏览器最终访问的是前端容器
+- `FRONTEND_PUBLIC_PORT=19084` 表示浏览器最终访问的是前端容器
 - `PowerPaint 2.1` 仍然复用 BrushNet 的 `ppt-v2` 推理分支，因此 `POWERPAINT_VERSION` 保持 `ppt-v2`
 - `AUX_CUDA_VISIBLE_DEVICES` 目前只是预留备用卡，不会被 Compose 自动绑定到服务
 
@@ -148,19 +148,19 @@ sudo docker compose logs -f powerpaint
 如果服务器公网 IP 是 `211.87.232.112`，并且保留：
 
 ```bash
-FRONTEND_PUBLIC_PORT=8080
+FRONTEND_PUBLIC_PORT=19084
 ```
 
 那么浏览器访问地址就是：
 
 ```text
-http://211.87.232.112:8080
+http://211.87.232.112:19084
 ```
 
 也可以在服务器里直接检查网关健康状态：
 
 ```bash
-curl http://127.0.0.1:8000/api/health
+curl http://127.0.0.1:19080/api/health
 ```
 
 ## 9. 首次请求较慢是正常现象

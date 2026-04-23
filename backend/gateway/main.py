@@ -25,9 +25,9 @@ from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image
 from common.utils.masks import evaluate_edit
 
-PLANNER_URL = os.getenv("PLANNER_URL", "http://planner:8001")
-SEGMENTER_URL = os.getenv("SEGMENTER_URL", "http://segmenter:8003")
-POWERPAINT_URL = os.getenv("POWERPAINT_URL", "http://powerpaint:8002")
+PLANNER_URL = os.getenv("PLANNER_URL", "http://127.0.0.1:19081")
+SEGMENTER_URL = os.getenv("SEGMENTER_URL", "http://127.0.0.1:19083")
+POWERPAINT_URL = os.getenv("POWERPAINT_URL", "http://127.0.0.1:19082")
 RUNS_DIR = Path(os.getenv("RUNS_DIR", "/app/data/runs"))
 ASSETS_DIR = Path(os.getenv("ASSETS_DIR", "/app/assets"))
 

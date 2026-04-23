@@ -7,7 +7,7 @@ services:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PUBLIC_PORT:-5173}:80"
+      - "${FRONTEND_PUBLIC_PORT:-19084}:80"
     depends_on:
       gateway:
         condition: service_healthy
@@ -32,7 +32,7 @@ services:
     volumes:
       - ./data/runs:/app/data/runs
     ports:
-      - "${GATEWAY_BIND_HOST:-127.0.0.1}:${GATEWAY_PUBLIC_PORT:-8000}:8000"
+      - "${GATEWAY_BIND_HOST:-127.0.0.1}:${GATEWAY_PUBLIC_PORT:-19080}:8000"
     depends_on:
       planner:
         condition: service_healthy
