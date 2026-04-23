@@ -16,6 +16,14 @@ create_env() {
   fi
 }
 
+install_cuda_torch() {
+  local env_name="$1"
+  run_conda run -n "${env_name}" python -m pip install \
+    --index-url "${TORCH_INDEX_URL}" \
+    torch=="${TORCH_VERSION}" \
+    torchvision=="${TORCHVISION_VERSION}"
+}
+
 install_gateway() {
   create_env "${CONDA_ENV_GATEWAY}"
   run_conda run -n "${CONDA_ENV_GATEWAY}" python -m pip install --upgrade pip
@@ -25,14 +33,14 @@ install_gateway() {
 install_planner() {
   create_env "${CONDA_ENV_PLANNER}"
   run_conda run -n "${CONDA_ENV_PLANNER}" python -m pip install --upgrade pip
-  run_conda run -n "${CONDA_ENV_PLANNER}" python -m pip install --index-url "${TORCH_INDEX_URL}" torch==2.5.1 torchvision==0.20.1
+  install_cuda_torch "${CONDA_ENV_PLANNER}"
   run_conda run -n "${CONDA_ENV_PLANNER}" python -m pip install -r "${PROJECT_ROOT}/backend/planner/requirements.txt"
 }
 
 install_segmenter() {
   create_env "${CONDA_ENV_SEGMENTER}"
   run_conda run -n "${CONDA_ENV_SEGMENTER}" python -m pip install --upgrade pip
-  run_conda run -n "${CONDA_ENV_SEGMENTER}" python -m pip install --index-url "${TORCH_INDEX_URL}" torch==2.5.1 torchvision==0.20.1
+  install_cuda_torch "${CONDA_ENV_SEGMENTER}"
   run_conda run -n "${CONDA_ENV_SEGMENTER}" python -m pip install -r "${PROJECT_ROOT}/backend/segmenter/requirements.txt"
 }
 
@@ -47,8 +55,10 @@ install_powerpaint() {
   ensure_powerpaint_repo
   create_env "${CONDA_ENV_POWERPAINT}"
   run_conda run -n "${CONDA_ENV_POWERPAINT}" python -m pip install --upgrade pip
+  install_cuda_torch "${CONDA_ENV_POWERPAINT}"
   run_conda run -n "${CONDA_ENV_POWERPAINT}" python -m pip install -r "${PROJECT_ROOT}/backend/powerpaint_service/requirements.txt"
   run_conda run -n "${CONDA_ENV_POWERPAINT}" python -m pip install -r "${POWERPAINT_REPO_PATH}/requirements/requirements.txt"
+  install_cuda_torch "${CONDA_ENV_POWERPAINT}"
 }
 
 install_frontend() {

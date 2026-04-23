@@ -67,6 +67,9 @@ CONDA_ENV_GATEWAY=sci-gateway
 CONDA_ENV_PLANNER=sci-planner
 CONDA_ENV_SEGMENTER=sci-segmenter
 CONDA_ENV_POWERPAINT=sci-powerpaint
+TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
+TORCH_VERSION=2.5.1
+TORCHVISION_VERSION=0.20.1
 
 POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
@@ -90,6 +93,7 @@ FRONTEND_STATIC_PORT=8080
 - `gateway` 默认绑定在 `127.0.0.1:18000`
 - 如果你希望公网直接访问网关，可以把 `GATEWAY_HOST` 改成 `0.0.0.0`
 - 如果脚本里找不到 `conda`，可以额外设置 `CONDA_BIN=/你的/miniconda3/bin/conda`
+- `TORCH_INDEX_URL` 必须指向 CUDA wheel 源；如果 PyTorch 装成 CPU 版，模型会显示 `device: cpu`
 - `POWERPAINT_DOWNLOAD_METHOD=git` 会按 Git / Git LFS 方式拉取 `PowerPaint 2.1` 权重
 - `PowerPaint 2.1` 仍然走 BrushNet 的 `ppt-v2` 推理分支，所以 `POWERPAINT_VERSION` 保持 `ppt-v2`
 - 如果你已经提前把模型拉到本地，建议把 `POWERPAINT_LOCAL_FILES_ONLY=true`
@@ -179,6 +183,20 @@ http://211.87.232.112:8080
 ```
 
 ## 8. 检查服务状态
+
+先确认每个 Conda 环境能看到 CUDA：
+
+```bash
+bash scripts/check_gpu_envs.sh
+```
+
+如果任何环境输出 `torch.version.cuda: None` 或 `torch.cuda.is_available: False`，说明该环境没有可用的 CUDA PyTorch，先重跑：
+
+```bash
+bash scripts/setup_conda_envs.sh
+```
+
+然后再检查服务 HTTP 状态：
 
 ```bash
 bash scripts/check_services.sh
