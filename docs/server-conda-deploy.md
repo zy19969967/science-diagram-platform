@@ -67,6 +67,7 @@ CONDA_ENV_GATEWAY=sci-gateway
 CONDA_ENV_PLANNER=sci-planner
 CONDA_ENV_SEGMENTER=sci-segmenter
 CONDA_ENV_POWERPAINT=sci-powerpaint
+HF_ENDPOINT=https://hf-mirror.com
 TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
 TORCH_VERSION=2.5.1
 TORCHVISION_VERSION=0.20.1

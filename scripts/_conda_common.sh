@@ -33,6 +33,7 @@ load_platform_env() {
 
   export MODELS_DIR="${MODELS_DIR:-${PROJECT_ROOT}/models}"
   export HF_HOME="${HF_HOME:-${MODELS_DIR}/huggingface}"
+  export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
   export RUNS_DIR="${RUNS_DIR:-${PROJECT_ROOT}/data/runs}"
   export ASSETS_DIR="${ASSETS_DIR:-${PROJECT_ROOT}/backend/assets}"
 
