@@ -173,6 +173,7 @@ async def generate_pipeline(
                 canvas_hints={
                     "has_asset": bool(payload.asset_placement),
                     "has_mask": bool(payload.mask_image),
+                    "has_point_prompts": bool(payload.point_prompts),
                 },
             )
         )
@@ -190,6 +191,7 @@ async def generate_pipeline(
                 height=source_image.height,
                 mask_image=payload.mask_image,
                 asset_placement=payload.asset_placement,
+                point_prompts=payload.point_prompts,
             )
         )
     except Exception as exc:

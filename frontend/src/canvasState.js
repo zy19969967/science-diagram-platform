@@ -134,6 +134,13 @@ export function extractTextLayersFromCanvasState(canvasState) {
     .map((layer, index) => normalizeTextLayer(layer, index));
 }
 
+export function extractPointPromptsFromCanvasState(canvasState) {
+  const layer = Array.isArray(canvasState?.layers)
+    ? canvasState.layers.find((item) => item?.type === "region-prompt")
+    : null;
+  return Array.isArray(layer?.data?.point_prompts) ? layer.data.point_prompts : [];
+}
+
 export function createCanvasStateSnapshot({
   sourceImage,
   naturalSize,
@@ -143,6 +150,7 @@ export function createCanvasStateSnapshot({
   selectedAsset,
   assetPlacement,
   textLayers,
+  pointPrompts,
   instruction,
   task,
   initPlan,
@@ -209,6 +217,25 @@ export function createCanvasStateSnapshot({
     });
   }
 
+  if (Array.isArray(pointPrompts) && pointPrompts.length > 0) {
+    layers.push({
+      id: "region-prompts",
+      type: "region-prompt",
+      name: "SAM point prompts",
+      visible: true,
+      locked: false,
+      opacity: 1,
+      data: {
+        point_prompts: pointPrompts.map((point) => ({
+          id: point.id,
+          x: point.x,
+          y: point.y,
+          label: point.label,
+        })),
+      },
+    });
+  }
+
   layers.push(...(textLayers ?? []).map((layer, index) => normalizeTextLayer(layer, index)));
 
   const orderedLayers = sortLayersByOrder(
@@ -233,6 +260,7 @@ export function createCanvasStateSnapshot({
       init_diagram_type: initPlan?.diagram_type ?? null,
       latest_run_id: currentRunId,
       plan_task: plan?.task ?? null,
+      point_prompt_count: Array.isArray(pointPrompts) ? pointPrompts.length : 0,
     },
   };
 }

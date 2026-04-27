@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 TaskType = Literal["text-guided", "object-removal", "shape-guided", "image-outpainting"]
 InitMode = Literal["create_from_text"]
 JobStatus = Literal["CREATED", "PLANNING", "SEGMENTING", "EXECUTING", "EVALUATING", "DONE", "FAILED", "CANCELLED"]
-CanvasLayerType = Literal["base-image", "mask", "asset", "text", "result"]
+CanvasLayerType = Literal["base-image", "mask", "asset", "text", "result", "region-prompt"]
+PointPromptLabel = Literal["positive", "negative"]
 CanvasSource = Literal["upload", "init-candidate", "history", "generated"]
 ProjectVersionKind = Literal["init-candidate", "generate-result", "manual-snapshot"]
 MAX_CANVAS_LAYERS = 64
@@ -26,6 +27,7 @@ CANVAS_METADATA_KEYS = {
     "latest_result_url",
     "latest_mask_url",
     "plan_task",
+    "point_prompt_count",
 }
 
 
@@ -57,6 +59,12 @@ class AssetPlacement(BaseModel):
     width: float = Field(gt=0.0, le=1.0)
     height: float = Field(gt=0.0, le=1.0)
     rotation: float = 0.0
+
+
+class SegmentPoint(BaseModel):
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+    label: PointPromptLabel = "positive"
 
 
 class PlanRequest(BaseModel):
@@ -208,6 +216,7 @@ class SegmentRequest(BaseModel):
     mask_image: str | None = None
     asset_placement: AssetPlacement | None = None
     box: list[int] | None = None
+    point_prompts: list[SegmentPoint] = Field(default_factory=list, max_length=32)
 
 
 class SegmentResponse(BaseModel):
@@ -258,6 +267,7 @@ class GenerateRequest(BaseModel):
     instruction: str = ""
     task: TaskType | None = None
     mask_image: str | None = None
+    point_prompts: list[SegmentPoint] = Field(default_factory=list, max_length=32)
     selected_asset_id: str | None = None
     asset_placement: AssetPlacement | None = None
     plan: PlanResponse | None = None

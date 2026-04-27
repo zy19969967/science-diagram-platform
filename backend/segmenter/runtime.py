@@ -131,6 +131,20 @@ class SegmenterRuntime:
             return self._expand_box(placement_to_box(width, height, payload.asset_placement), width, height)
         return None
 
+    def _build_prompt_points(self, payload: SegmentRequest, size: tuple[int, int]) -> tuple[list[list[list[int]]], list[list[int]]] | None:
+        if not payload.point_prompts:
+            return None
+        width, height = size
+        points: list[list[int]] = []
+        labels: list[int] = []
+        for point in payload.point_prompts:
+            points.append([
+                max(0, min(width - 1, int(round(point.x * width)))),
+                max(0, min(height - 1, int(round(point.y * height)))),
+            ])
+            labels.append(1 if point.label == "positive" else 0)
+        return [points], [labels]
+
     def _select_best_mask(self, masks: Any, scores: Any | None) -> Any | None:
         if masks is None:
             return None
@@ -173,10 +187,19 @@ class SegmenterRuntime:
             self._load()
             source_image = decode_data_url_to_image(payload.source_image, mode="RGB")
             prompt_box = self._build_prompt_box(payload, source_image.size)
-            if prompt_box is None:
+            prompt_points = self._build_prompt_points(payload, source_image.size)
+            if prompt_box is None and prompt_points is None:
                 return None
 
-            inputs = self._processor(images=source_image, input_boxes=[[prompt_box]], return_tensors="pt")
+            processor_kwargs: dict[str, Any] = {
+                "images": source_image,
+                "return_tensors": "pt",
+            }
+            if prompt_box is not None:
+                processor_kwargs["input_boxes"] = [[prompt_box]]
+            if prompt_points is not None:
+                processor_kwargs["input_points"], processor_kwargs["input_labels"] = prompt_points
+            inputs = self._processor(**processor_kwargs)
             original_sizes = inputs["original_sizes"]
             if hasattr(inputs, "to"):
                 inputs = inputs.to(self._device)

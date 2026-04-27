@@ -507,6 +507,104 @@ Add Fabric layer editor
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
+## Task 21: Rich SAM-2 Point Prompts
+
+**Files:**
+- Modify: `backend/common/schemas.py`
+- Modify: `backend/common/segment_logic.py`
+- Modify: `backend/common/utils/masks.py`
+- Modify: `backend/segmenter/runtime.py`
+- Modify: `backend/gateway/main.py`
+- Create: `backend/tests/test_segment_logic.py`
+- Modify: `backend/tests/test_canvas_state.py`
+- Modify: `frontend/src/App.jsx`
+- Modify: `frontend/src/canvasState.js`
+- Create: `frontend/src/regionPrompts.js`
+- Create: `frontend/tests/regionPrompts.test.mjs`
+- Modify: `frontend/tests/canvasState.test.mjs`
+- Modify: `frontend/src/components/ControlPanel.jsx`
+- Modify: `frontend/src/components/EditorStage.jsx`
+- Modify: `frontend/src/layerState.js`
+- Modify: `frontend/src/styles.css`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `backend/tests/test_ci_workflow.py`
+
+- [x] **Step 1: Write failing backend point-prompt tests**
+
+Add tests proving `SegmentRequest` accepts normalized positive/negative point prompts, `build_segment` can create a deterministic fallback mask from positive points, empty requests still fail, and `SegmenterRuntime` converts normalized points into SAM pixel coordinates and labels.
+
+- [x] **Step 2: Run backend tests and verify failure**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs python -m unittest backend.tests.test_segment_logic -v
+```
+
+Expected: fails because `SegmentPoint`, `point_prompts`, and point prompt runtime helpers do not exist yet.
+
+- [x] **Step 3: Implement backend point prompt contract**
+
+Add `SegmentPoint` with normalized `x`, `y`, and `label` values. Add `point_prompts` to `SegmentRequest` and `GenerateRequest`. Preserve existing mask, asset placement, and box behavior. Gateway generation should pass `point_prompts` into `/api/segment` and planner hints.
+
+- [x] **Step 4: Implement SAM2.1 point prompt runtime support**
+
+Convert normalized points to pixel coordinates for the current source image. Pass both `input_points` and `input_labels` to `Sam2Processor` when points exist, while retaining box prompt fallback from mask/box/asset placement. If SAM runtime is unavailable, the deterministic fallback should draw positive disks and carve negative disks.
+
+- [x] **Step 5: Write failing frontend point prompt tests**
+
+Add pure helper tests for adding/removing/clamping positive and negative region points. Extend `canvasState` tests to verify point prompts are serialized as a `region-prompt` layer without embedded data URLs.
+
+- [x] **Step 6: Implement frontend point prompt UI**
+
+Add positive-point and negative-point canvas modes. Clicking the canvas in those modes should add normalized point prompts. Show point markers, allow removing markers, send `point_prompts` in sync/async generate payloads, and allow point-only generation without requiring painted mask pixels.
+
+- [x] **Step 7: Verify**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs python -m unittest discover -s backend/tests -p 'test_*.py' -v
+PYTHONPATH=backend python -m py_compile backend/common/schemas.py backend/common/init_logic.py backend/common/canvas_state.py backend/common/quality.py backend/common/utils/masks.py backend/gateway/jobs.py backend/gateway/projects.py backend/gateway/main.py backend/segmenter/runtime.py
+cd frontend && node tests/regionPrompts.test.mjs && node tests/layerState.test.mjs && node tests/canvasState.test.mjs && node tests/projectState.test.mjs && npm run build
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 22: Phase 9 Review, Commit, Push
+
+**Files:**
+- Review: Phase 9 code and docs from Task 21
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Document Phase 9 scope and limitations**
+
+Update docs to say Phase 9 supports positive/negative point prompts and provenance while preserving box/mask fallback, but does not yet provide instance candidate selection, automatic text grounding, or advanced SAM multi-mask refinement UI.
+
+- [x] **Step 2: Review**
+
+Request code review for Phase 9 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run backend tests, backend compile checks, frontend helper tests/build, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 9 files and commit:
+
+```text
+Add SAM point prompt refinement
+```
+
+- [ ] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
 ## Task 15: Project Persistence And Version Tree
 
 **Files:**

@@ -20,6 +20,7 @@ class CIWorkflowTest(unittest.TestCase):
         self.assertIn("import gateway.projects", text)
         self.assertIn("import gateway.main", text)
         self.assertIn("npm install", text)
+        self.assertIn("node tests/regionPrompts.test.mjs", text)
         self.assertIn("node tests/layerState.test.mjs", text)
         self.assertIn("node tests/canvasState.test.mjs", text)
         self.assertIn("node tests/projectState.test.mjs", text)

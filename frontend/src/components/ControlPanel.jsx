@@ -91,7 +91,7 @@ function ControlPanel({
         </div>
         <div className="field-group">
           <label>绘制模式</label>
-          <div className="segmented-grid three-up">
+          <div className="segmented-grid tool-mode-grid">
             <button type="button" className={drawMode === "brush" ? "segment active" : "segment"} onClick={() => setDrawMode("brush")}>
               画笔
             </button>
@@ -100,6 +100,12 @@ function ControlPanel({
             </button>
             <button type="button" className={drawMode === "layer" ? "segment active" : "segment"} onClick={() => setDrawMode("layer")}>
               图层
+            </button>
+            <button type="button" className={drawMode === "positive-point" ? "segment active" : "segment"} onClick={() => setDrawMode("positive-point")}>
+              正点
+            </button>
+            <button type="button" className={drawMode === "negative-point" ? "segment active" : "segment"} onClick={() => setDrawMode("negative-point")}>
+              负点
             </button>
           </div>
         </div>

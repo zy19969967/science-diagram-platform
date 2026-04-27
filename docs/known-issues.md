@@ -29,7 +29,7 @@
 
 ### 4. 更细粒度的 SAM-2 交互
 
-当前 `segmenter` 主要把用户粗选区转换成 box prompt，再调用 SAM-2 精修。还没有加入正负点、多轮点击修正或实例级交互分割。
+当前 `segmenter` 已支持用户 mask/box/asset placement 以及正负点 SAM prompt。前端也新增了正点/负点模式，用户可以在画布上多次点击添加 point prompts，并把这些点作为 `point_prompts` 传入生成链路。仍未完成的是多 mask 候选选择、实例级分割列表、自动文本 grounding、点击历史分支和高级 refinement scoring UI。
 
 ### 5. 自动化测试与 CI
 
@@ -86,3 +86,9 @@ Remaining async limitations: this is still not Redis/Celery, there is no separat
 The current branch now includes a first Fabric.js-backed editor slice. It keeps the existing `canvas_state` contract, adds layer order and per-layer visibility/lock/opacity metadata, and lets users switch into layer mode to select and transform asset/text objects without losing the brush/erase mask workflow.
 
 Remaining layer-editor limitations: Fabric scene JSON is not persisted as the source of truth yet, mask drawing still uses the native mask canvas, SVG/PPT export and OCR reconciliation are not implemented, and advanced editor features such as grouping, snapping, alignment guides, and vector export validation remain future phases.
+
+## Phase 9 SAM Point Prompt Note
+
+The current branch now includes normalized positive/negative point prompts across the gateway, segmenter, front end, and `canvas_state` provenance. SAM2.1 receives `input_points` and `input_labels` when available, while the existing mask, box, and asset-placement fallback path remains intact.
+
+Remaining SAM interaction limitations: there is no multi-mask candidate picker, no automatic text-to-region grounding, no instance segmentation list, and no advanced click refinement scoring UI yet.

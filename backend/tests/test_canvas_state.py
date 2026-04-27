@@ -79,6 +79,30 @@ class CanvasStateTest(unittest.TestCase):
                 ],
             )
 
+    def test_canvas_state_accepts_region_prompt_layer(self) -> None:
+        state = CanvasState(
+            canvas_id="canvas_1",
+            width=1024,
+            height=768,
+            layers=[
+                CanvasLayer(
+                    id="region-prompts",
+                    type="region-prompt",
+                    name="SAM point prompts",
+                    data={
+                        "point_prompts": [
+                            {"id": "point-1", "x": 0.5, "y": 0.5, "label": "positive"},
+                            {"id": "point-2", "x": 0.6, "y": 0.5, "label": "negative"},
+                        ]
+                    },
+                )
+            ],
+            metadata={"point_prompt_count": 2},
+        )
+
+        self.assertEqual(state.layers[0].type, "region-prompt")
+        self.assertEqual(state.metadata["point_prompt_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

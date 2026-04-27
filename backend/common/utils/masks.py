@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image, ImageDraw
 
-from ..schemas import AssetPlacement, EvaluationResult
+from ..schemas import AssetPlacement, EvaluationResult, SegmentPoint
 
 
 def normalize_mask(mask: Image.Image, size: tuple[int, int]) -> Image.Image:
@@ -34,6 +34,22 @@ def placement_to_box(width: int, height: int, placement: AssetPlacement) -> list
 
 def mask_from_placement(width: int, height: int, placement: AssetPlacement) -> Image.Image:
     return mask_from_box(width, height, placement_to_box(width, height, placement))
+
+
+def mask_from_points(width: int, height: int, points: list[SegmentPoint]) -> Image.Image:
+    mask = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(mask)
+    radius = max(6, int(min(width, height) * 0.04))
+    ordered_points = [
+        *[point for point in points if point.label == "positive"],
+        *[point for point in points if point.label == "negative"],
+    ]
+    for point in ordered_points:
+        x = int(point.x * width)
+        y = int(point.y * height)
+        box = (x - radius, y - radius, x + radius, y + radius)
+        draw.ellipse(box, fill=255 if point.label == "positive" else 0)
+    return mask
 
 
 def coverage_ratio(mask: Image.Image) -> float:

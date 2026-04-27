@@ -112,6 +112,16 @@ Explicitly out of scope for Phase 8: full Fabric scene JSON persistence, complex
 
 Add positive/negative point prompts, multi-click refinement, and explicit box/point provenance. Preserve the current box-derived fallback so existing brush and asset placement workflows still work.
 
+Implemented Phase 9 scope:
+
+- `SegmentRequest` and `GenerateRequest` now accept normalized positive/negative SAM point prompts.
+- The SAM2.1 runtime converts normalized point prompts into pixel `input_points` and `input_labels` while retaining the existing box/mask/asset prompt path.
+- The deterministic segment fallback can build a rough mask from positive points and carve negative points when SAM is unavailable.
+- The front end adds positive-point and negative-point canvas modes, renders removable point markers, and allows point-only generation without painted mask pixels.
+- `canvas_state` stores point prompt provenance in a `region-prompt` layer and records `point_prompt_count` metadata.
+
+Explicitly out of scope for Phase 9: multi-mask candidate selection, automatic text-to-region grounding, instance segmentation lists, prompt history branching, and advanced SAM click refinement scoring UI.
+
 ### Phase 10: OCR, Vector Text, And SVG Export
 
 Add OCR validation for generated labels, vector text layer reconciliation, and SVG/PPT-ready export paths. This should build on the layer editor and not treat bitmap fallback text as editable vector text.

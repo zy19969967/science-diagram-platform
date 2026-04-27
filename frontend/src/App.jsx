@@ -5,6 +5,7 @@ import HeaderBar from "./components/HeaderBar";
 import ResultPanel from "./components/ResultPanel";
 import {
   createCanvasStateSnapshot,
+  extractPointPromptsFromCanvasState,
   createTextLayersFromLabels,
   extractTextLayersFromCanvasState,
 } from "./canvasState.js";
@@ -14,6 +15,7 @@ import {
   normalizeLayerOrder,
   patchLayerOverrides,
 } from "./layerState.js";
+import { addRegionPoint, normalizeRegionPoints, removeRegionPoint } from "./regionPrompts.js";
 import {
   buildProjectCreatePayload,
   buildProjectVersionPayload,
@@ -91,6 +93,7 @@ function App() {
   const [initCandidates, setInitCandidates] = useState([]);
   const [selectedInitCandidateId, setSelectedInitCandidateId] = useState("");
   const [textLayers, setTextLayers] = useState([]);
+  const [pointPrompts, setPointPrompts] = useState([]);
   const [layerOrder, setLayerOrder] = useState([]);
   const [layerOverrides, setLayerOverrides] = useState({});
   const [activeLayerId, setActiveLayerId] = useState("");
@@ -128,10 +131,11 @@ function App() {
         selectedAsset,
         assetPlacement,
         textLayers,
+        pointPrompts,
         layerOrder,
         layerOverrides,
       }),
-    [sourceImage, selectedAsset, assetPlacement, textLayers, layerOrder, layerOverrides],
+    [sourceImage, selectedAsset, assetPlacement, textLayers, pointPrompts, layerOrder, layerOverrides],
   );
   const editorLayerIds = useMemo(() => editorLayers.map((layer) => layer.id), [editorLayers]);
 
@@ -272,6 +276,10 @@ function App() {
     );
   }
 
+  function restoreRegionPrompts(canvasState) {
+    setPointPrompts(normalizeRegionPoints(extractPointPromptsFromCanvasState(canvasState)));
+  }
+
   function patchEditorLayer(layerId, patch) {
     setLayerOverrides((current) => patchLayerOverrides(current, layerId, patch));
     if (layerId.startsWith("text-")) {
@@ -314,6 +322,26 @@ function App() {
     setAssetPlacement((current) => (current ? { ...current, ...patch } : current));
   }
 
+  function addPointPromptFromCanvas(event, label) {
+    if (!imageRef.current) {
+      return;
+    }
+    const rect = imageRef.current.getBoundingClientRect();
+    setPointPrompts((current) =>
+      addRegionPoint(current, {
+        x: (event.clientX - rect.left) / rect.width,
+        y: (event.clientY - rect.top) / rect.height,
+        label,
+      }),
+    );
+    setStatus(label === "positive" ? "已添加 SAM 正点提示" : "已添加 SAM 负点提示");
+  }
+
+  function removePointPrompt(pointId) {
+    setPointPrompts((current) => removeRegionPoint(current, pointId));
+    setStatus("已移除 SAM 点提示");
+  }
+
   function clearMask() {
     const canvas = maskCanvasRef.current;
     if (!canvas) {
@@ -339,6 +367,7 @@ function App() {
     setInitCandidates([]);
     setSelectedInitCandidateId("");
     setTextLayers([]);
+    setPointPrompts([]);
     resetLayerEditorState();
     setJobSnapshot(null);
     setLatestResult(null);
@@ -371,6 +400,7 @@ function App() {
     setInitCandidates([]);
     setSelectedInitCandidateId("");
     setTextLayers([]);
+    setPointPrompts([]);
     resetLayerEditorState();
     setJobSnapshot(null);
     setHistory([]);
@@ -398,7 +428,17 @@ function App() {
   }
 
   function startDrawing(event) {
-    if (!sourceImage || drawMode === "layer" || layerOverrides["mask-current"]?.locked || !maskCanvasRef.current) {
+    if (!sourceImage || drawMode === "layer" || !maskCanvasRef.current) {
+      return;
+    }
+    if (drawMode === "positive-point" || drawMode === "negative-point") {
+      if (layerOverrides["region-prompts"]?.locked) {
+        return;
+      }
+      addPointPromptFromCanvas(event, drawMode === "positive-point" ? "positive" : "negative");
+      return;
+    }
+    if (layerOverrides["mask-current"]?.locked) {
       return;
     }
 
@@ -551,6 +591,7 @@ function App() {
           canvas_hints: {
             has_mask: maskPayload.pixelCount > 0,
             has_asset: Boolean(assetPlacement),
+            has_point_prompts: pointPrompts.length > 0,
             has_source_image: Boolean(sourceImage),
             image_width: naturalSize.width || null,
             image_height: naturalSize.height || null,
@@ -631,8 +672,12 @@ function App() {
     }
 
     const maskPayload = await buildMaskPayload();
-    if (maskPayload.pixelCount === 0) {
-      throw new Error("当前没有有效的 mask 或素材位置，请先绘制或选择素材。");
+    const assetLayerId = assetPlacement ? `asset-${assetPlacement.asset_id}` : "";
+    const hasVisibleAssetPlacement = Boolean(
+      selectedAsset && assetPlacement && layerOverrides[assetLayerId]?.visible !== false,
+    );
+    if (maskPayload.pixelCount === 0 && !hasVisibleAssetPlacement && pointPrompts.length === 0) {
+      throw new Error("当前没有有效的 mask、素材位置或 SAM 点提示，请先绘制、选择素材或添加点提示。");
     }
 
     const canvasState = createCanvasStateSnapshot({
@@ -644,6 +689,7 @@ function App() {
       selectedAsset,
       assetPlacement,
       textLayers,
+      pointPrompts,
       instruction,
       task,
       initPlan,
@@ -659,7 +705,8 @@ function App() {
       task,
       selected_asset_id: selectedAssetId || null,
       asset_placement: assetPlacement,
-      mask_image: maskPayload.dataUrl,
+      mask_image: maskPayload.pixelCount > 0 ? maskPayload.dataUrl : null,
+      point_prompts: pointPrompts,
       plan,
       steps,
       guidance_scale: guidanceScale,
@@ -676,6 +723,7 @@ function App() {
     setLatestResult(data);
     if (data.canvas_state) {
       setTextLayers(extractTextLayersFromCanvasState(data.canvas_state));
+      restoreRegionPrompts(data.canvas_state);
       restoreLayerEditorState(data.canvas_state);
     }
     setHistory((current) => [data, ...current]);
@@ -711,6 +759,7 @@ function App() {
       selectedAsset,
       assetPlacement,
       textLayers,
+      pointPrompts,
       instruction,
       task,
       initPlan,
@@ -831,6 +880,7 @@ function App() {
       setLatestResult(editableResult);
       setHistory(versionResults);
       setTextLayers(extractTextLayersFromCanvasState(latestVersion?.canvas_state));
+      restoreRegionPrompts(latestVersion?.canvas_state);
       restoreLayerEditorState(latestVersion?.canvas_state);
       setInstruction(latestVersion?.metadata?.instruction || loadedProject.name || "");
       setTask(latestVersion?.metadata?.task || "text-guided");
@@ -988,6 +1038,7 @@ function App() {
       setSourceImage(editableImage);
       setLatestResult(editableItem);
       setTextLayers(extractTextLayersFromCanvasState(item.canvas_state));
+      restoreRegionPrompts(item.canvas_state);
       restoreLayerEditorState(item.canvas_state);
       clearMask();
       setStatus(`已切换到历史结果 ${item.run_id}，可以继续多轮编辑。`);
@@ -1012,6 +1063,7 @@ function App() {
     setCurrentProject(null);
     setSelectedInitCandidateId(candidate.id);
     setTextLayers(createTextLayersFromLabels(initPlan?.labels ?? candidate.metadata?.labels ?? []));
+    setPointPrompts([]);
     resetLayerEditorState();
     setSelectedAssetId("");
     setAssetPlacement(null);
@@ -1095,6 +1147,8 @@ function App() {
           selectedAsset={selectedAsset}
           assetPlacement={assetPlacement}
           textLayers={textLayers}
+          pointPrompts={pointPrompts}
+          removePointPrompt={removePointPrompt}
           editorLayers={editorLayers}
           activeLayerId={activeLayerId}
           setActiveLayerId={setActiveLayerId}

@@ -34,6 +34,7 @@ const layers = buildEditorLayers({
   selectedAsset: { id: "arrow", name: "Arrow" },
   assetPlacement: { asset_id: "arrow", x: 0.5, y: 0.5, width: 0.2, height: 0.1 },
   textLayers,
+  pointPrompts: [{ id: "point-1", x: 0.5, y: 0.5, label: "positive" }],
   layerOrder: ["text-2", "asset-arrow", "missing-layer", "mask-current", "base-image"],
   layerOverrides: {
     "text-2": { visible: false, locked: true, opacity: 0.42 },
@@ -42,7 +43,7 @@ const layers = buildEditorLayers({
 
 assert.deepEqual(
   layers.map((layer) => layer.id),
-  ["base-image", "text-2", "asset-arrow", "mask-current", "text-1"],
+  ["base-image", "text-2", "asset-arrow", "mask-current", "region-prompts", "text-1"],
 );
 assert.equal(layers[0].locked, true);
 assert.equal(layers[0].reorderable, false);

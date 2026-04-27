@@ -99,6 +99,7 @@ export function buildEditorLayers({
   selectedAsset,
   assetPlacement,
   textLayers = [],
+  pointPrompts = [],
   layerOrder = [],
   layerOverrides = {},
 }) {
@@ -141,6 +142,19 @@ export function buildEditorLayers({
       locked: false,
       opacity: 1,
       selectable: true,
+      reorderable: true,
+    });
+  }
+
+  if ((pointPrompts ?? []).length > 0) {
+    layers.push({
+      id: "region-prompts",
+      type: "region-prompt",
+      name: "SAM point prompts",
+      visible: true,
+      locked: false,
+      opacity: 1,
+      selectable: false,
       reorderable: true,
     });
   }

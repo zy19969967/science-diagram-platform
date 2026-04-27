@@ -73,6 +73,7 @@ jobs:
       - name: Run frontend helper tests
         working-directory: frontend
         run: |
+          node tests/regionPrompts.test.mjs
           node tests/layerState.test.mjs
           node tests/canvasState.test.mjs
           node tests/projectState.test.mjs

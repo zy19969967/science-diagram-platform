@@ -323,6 +323,8 @@ function EditorStage({
   selectedAsset,
   assetPlacement,
   textLayers,
+  pointPrompts,
+  removePointPrompt,
   editorLayers,
   activeLayerId,
   setActiveLayerId,
@@ -339,7 +341,9 @@ function EditorStage({
 }) {
   const scaledWidth = naturalSize.width ? Math.max(280, Math.round(naturalSize.width * displayScale)) : null;
   const maskOverride = layerOverrideFor(layerOverrides, "mask-current");
-  const canPaintMask = drawMode !== "layer" && !maskOverride.locked;
+  const regionOverride = layerOverrideFor(layerOverrides, "region-prompts");
+  const isPointMode = drawMode === "positive-point" || drawMode === "negative-point";
+  const canUseMaskCanvas = isPointMode ? !regionOverride.locked : drawMode !== "layer" && !maskOverride.locked;
 
   return (
     <section className="editor-column">
@@ -403,13 +407,37 @@ function EditorStage({
                   className="mask-canvas"
                   style={{
                     opacity: maskOverride.visible === false ? 0 : maskOverride.opacity ?? 1,
-                    pointerEvents: canPaintMask ? "auto" : "none",
+                    pointerEvents: canUseMaskCanvas ? "auto" : "none",
                   }}
                   onPointerDown={startDrawing}
                   onPointerMove={drawOnCanvas}
                   onPointerUp={stopDrawing}
                   onPointerLeave={stopDrawing}
                 />
+                {(pointPrompts ?? []).length > 0 && regionOverride.visible !== false && (
+                  <div className="point-prompt-layer" style={{ opacity: regionOverride.opacity ?? 1 }}>
+                    {pointPrompts.map((point) => (
+                      <button
+                        key={point.id}
+                        type="button"
+                        className={`point-prompt-marker ${point.label}`}
+                        style={{
+                          left: `${point.x * 100}%`,
+                          top: `${point.y * 100}%`,
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (!regionOverride.locked) {
+                            removePointPrompt(point.id);
+                          }
+                        }}
+                        title={point.label === "positive" ? "Positive SAM point" : "Negative SAM point"}
+                      >
+                        {point.label === "positive" ? "+" : "-"}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="empty-stage">
