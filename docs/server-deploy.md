@@ -9,6 +9,7 @@
 - `planner`：优先调用 `Qwen/Qwen3.5-4B`
 - `segmenter`：优先调用 `facebook/sam2.1-hiera-base-plus`
 - `powerpaint_service`：调用官方 `PowerPaint`
+- `flux`：本地 diffusers FLUX-compatible 初图服务，默认 `black-forest-labs/FLUX.1-schnell`
 - 当真实模型不可用时，会自动回退到仓库内规则逻辑，保证平台还能用于调试和演示
 - Gateway 还包含异步任务、项目版本、benchmark ledger、readiness 检查和可选单 token 保护
 
@@ -29,7 +30,7 @@
 - GPU 4：`powerpaint_service`
 - GPU 5：`planner`
 - GPU 6：`segmenter`
-- GPU 7：备用卡
+- GPU 7：`flux`
 
 ## 2. 推荐部署目录
 
@@ -80,6 +81,7 @@ VITE_API_TOKEN=
 POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
 SEGMENTER_CUDA_VISIBLE_DEVICES=6
+FLUX_CUDA_VISIBLE_DEVICES=7
 TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
 TORCH_VERSION=2.5.1
 TORCHVISION_VERSION=0.20.1
@@ -93,6 +95,14 @@ POWERPAINT_DOWNLOAD_METHOD=git
 POWERPAINT_VERSION=ppt-v2
 POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
 BENCHMARKS_DIR=/app/data/benchmarks
+
+# Gateway defaults to the Compose-local flux service if this stays empty.
+FLUX_INIT_URL=
+FLUX_MODEL_REPO=black-forest-labs/FLUX.1-schnell
+FLUX_MODEL_DTYPE=bfloat16
+FLUX_NUM_INFERENCE_STEPS=4
+FLUX_GUIDANCE_SCALE=0.0
+FLUX_LOCAL_FILES_ONLY=false
 ```
 
 几个关键说明：
@@ -103,7 +113,8 @@ BENCHMARKS_DIR=/app/data/benchmarks
 - 如果设置了 `GATEWAY_API_TOKEN`，前端构建也要设置相同的 `VITE_API_TOKEN`，Docker Compose 会把它传给 Vite build
 - `VITE_API_TOKEN` 会进入静态前端 bundle，只适合内网或受控演示边界，不是公网多租户认证方案
 - `PowerPaint 2.1` 仍然复用 BrushNet 的 `ppt-v2` 推理分支，因此 `POWERPAINT_VERSION` 保持 `ppt-v2`
-- `AUX_CUDA_VISIBLE_DEVICES` 目前只是预留备用卡，不会被 Compose 自动绑定到服务
+- `flux` 是本地初图服务，Compose 内部默认把 `FLUX_INIT_URL` 设置为 `http://flux:8004`
+- `FLUX_MODEL_REPO` 可以是 Hugging Face repo，也可以是服务器上的本地模型目录；如果已提前准备权重，可以设置 `FLUX_LOCAL_FILES_ONLY=true`
 - Compose 会把 `RUNS_DIR`、`PROJECTS_DIR`、`JOBS_DIR` 和 `BENCHMARKS_DIR` 挂到项目 `data/` 目录下，便于重启后读取生成产物、项目版本、异步任务和实验记录
 
 如果你已经提前下载过模型，也可以开启纯本地模式：
@@ -151,6 +162,7 @@ sudo docker compose logs -f gateway
 sudo docker compose logs -f planner
 sudo docker compose logs -f segmenter
 sudo docker compose logs -f powerpaint
+sudo docker compose logs -f flux
 ```
 
 ## 8. 健康检查与访问地址
@@ -185,17 +197,18 @@ curl http://127.0.0.1:19080/api/deployment/readiness
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/readiness
 ```
 
-`/api/deployment/readiness` 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档是否存在；它不会调用 Qwen3.5、SAM2.1、PowerPaint 或远程 FLUX 服务。
+`/api/deployment/readiness` 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档是否存在；它不会调用 Qwen3.5、SAM2.1、PowerPaint 或本地 FLUX 模型。
 
 ## 9. 首次请求较慢是正常现象
 
-`planner` 和 `segmenter` 采用惰性加载。也就是说：
+`planner`、`segmenter` 和 `flux` 采用惰性加载。也就是说：
 
 - 容器可以先启动成功
 - 第一次真正调用 `/api/plan` 或 `/api/segment` 时才加载模型
+- 第一次真正调用 `/api/init-generate` 且命中本地 FLUX 时才加载 FLUX 模型
 - 首次请求明显比后续请求慢
 
-为了避免前端经由 Nginx 反代时在冷启动阶段超时，前端容器已经把 `/api` 代理超时调大到 600 秒。
+为了避免前端经由 Nginx 反代时在冷启动阶段超时，前端容器已经把 `/api` 代理超时调大到 600 秒。本地 FLUX 首次加载也可能超过普通 HTTP 请求预期，建议先在服务器上用小尺寸初图请求预热。
 
 ## 10. 模型缓存与磁盘建议
 
@@ -208,6 +221,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 这样做的好处是：
 
 - `planner`、`segmenter`、`powerpaint` 共享 Hugging Face 缓存
+- `flux` 也复用同一个 Hugging Face 缓存
 - 重启容器不必重新下载所有模型
 - 更容易把模型目录迁移到大盘路径
 
@@ -289,6 +303,7 @@ sudo docker compose --env-file .env up -d --build
 
 - `planner` 日志里是否正在加载 Qwen3.5
 - `segmenter` 日志里是否正在加载 SAM-2
+- `flux` 日志里是否正在加载 FLUX 模型
 - `powerpaint` 日志里是否正在初始化权重
 
 这通常不是死机，而是冷启动。
@@ -301,6 +316,16 @@ sudo docker compose --env-file .env up -d --build
 - 修改 token 后是否重新执行了 `sudo docker compose --env-file .env up -d --build`
 - 请求是否访问的是 `/api/*`；`/assets` 与 `/artifacts` 是静态资源路由，当前仍然 intentionally exempt
 
-### 12.7 Where PowerPaint 2.1 Weights Come From
+### 12.7 本地 FLUX 初图失败
+
+优先确认：
+
+- `sudo docker compose logs -f flux`
+- `FLUX_MODEL_REPO` 是否是可访问的 Hugging Face repo 或服务器本地模型目录
+- 如果设置了 `FLUX_LOCAL_FILES_ONLY=true`，`models/huggingface` 或本地模型目录里是否已经有完整权重
+- GPU 7 是否空闲，或者把 `FLUX_CUDA_VISIBLE_DEVICES` 改成空闲卡
+- 如果只是 FLUX 服务不可用，Gateway 的 `auto` 初图生成会回退到确定性 fallback；显式 `flux-local` 请求会返回错误
+
+### 12.8 Where PowerPaint 2.1 Weights Come From
 
 `POWERPAINT_REPO_GIT_URL` only pulls the PowerPaint code repository. The `PowerPaint 2.1` weights are not stored in the GitHub code repository. They still need to come from the Hugging Face Git LFS repository referenced by `POWERPAINT_MODEL_GIT_URL`, or be copied into the model directory ahead of time.

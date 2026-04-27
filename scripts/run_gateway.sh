@@ -13,5 +13,6 @@ export PYTHONPATH="${PROJECT_ROOT}/backend"
 export PLANNER_URL="http://${PLANNER_HOST}:${PLANNER_PORT}"
 export SEGMENTER_URL="http://${SEGMENTER_HOST}:${SEGMENTER_PORT}"
 export POWERPAINT_URL="http://${POWERPAINT_HOST}:${POWERPAINT_PORT}"
+export FLUX_INIT_URL="${FLUX_INIT_URL:-http://${FLUX_HOST}:${FLUX_PORT}}"
 
 run_in_conda_env "${CONDA_ENV_GATEWAY}" uvicorn gateway.main:app --host "${GATEWAY_HOST}" --port "${GATEWAY_PORT}"

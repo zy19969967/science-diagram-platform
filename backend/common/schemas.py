@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 TaskType = Literal["text-guided", "object-removal", "shape-guided", "image-outpainting"]
 InitMode = Literal["create_from_text"]
-InitGenerationProvider = Literal["auto", "deterministic-fallback", "flux-remote"]
+InitGenerationProvider = Literal["auto", "deterministic-fallback", "flux-local", "flux-remote"]
 JobStatus = Literal["CREATED", "PLANNING", "SEGMENTING", "EXECUTING", "EVALUATING", "DONE", "FAILED", "CANCELLED"]
 CanvasLayerType = Literal["base-image", "mask", "asset", "text", "result", "region-prompt"]
 PointPromptLabel = Literal["positive", "negative"]

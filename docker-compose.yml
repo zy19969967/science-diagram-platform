@@ -28,7 +28,7 @@ services:
       PLANNER_URL: http://planner:8001
       SEGMENTER_URL: http://segmenter:8003
       POWERPAINT_URL: http://powerpaint:8002
-      FLUX_INIT_URL: ${FLUX_INIT_URL:-}
+      FLUX_INIT_URL: ${FLUX_INIT_URL:-http://flux:8004}
       GATEWAY_API_TOKEN: ${GATEWAY_API_TOKEN:-}
       RUNS_DIR: /app/data/runs
       PROJECTS_DIR: /app/data/projects
@@ -48,6 +48,8 @@ services:
       segmenter:
         condition: service_healthy
       powerpaint:
+        condition: service_healthy
+      flux:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health').read()"]
@@ -136,3 +138,33 @@ services:
       timeout: 15s
       retries: 10
       start_period: 300s
+
+  flux:
+    build:
+      context: .
+      dockerfile: backend/flux_service/Dockerfile
+      args:
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu121}
+        TORCH_VERSION: ${TORCH_VERSION:-2.5.1}
+        TORCHVISION_VERSION: ${TORCHVISION_VERSION:-0.20.1}
+    restart: unless-stopped
+    environment:
+      FLUX_BACKEND: ${FLUX_BACKEND:-diffusers}
+      FLUX_MODEL_REPO: ${FLUX_MODEL_REPO:-black-forest-labs/FLUX.1-schnell}
+      FLUX_MODEL_DTYPE: ${FLUX_MODEL_DTYPE:-bfloat16}
+      FLUX_NUM_INFERENCE_STEPS: ${FLUX_NUM_INFERENCE_STEPS:-4}
+      FLUX_GUIDANCE_SCALE: ${FLUX_GUIDANCE_SCALE:-0.0}
+      FLUX_MAX_SEQUENCE_LENGTH: ${FLUX_MAX_SEQUENCE_LENGTH:-256}
+      FLUX_LOCAL_FILES_ONLY: ${FLUX_LOCAL_FILES_ONLY:-false}
+      CUDA_VISIBLE_DEVICES: ${FLUX_CUDA_VISIBLE_DEVICES:-7}
+      NVIDIA_VISIBLE_DEVICES: ${FLUX_CUDA_VISIBLE_DEVICES:-7}
+      HF_HOME: /models/huggingface
+    volumes:
+      - ./models:/models
+    gpus: all
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/health').read()"]
+      interval: 60s
+      timeout: 15s
+      retries: 10
+      start_period: 30s

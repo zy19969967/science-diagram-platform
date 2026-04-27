@@ -142,13 +142,21 @@ Replace the deterministic fallback with a real initial-canvas generation service
 
 Implemented Phase 11 scope:
 
-- `InitGenerateRequest` now supports provider selection with default `auto`, explicit `deterministic-fallback`, and explicit `flux-remote`.
-- The gateway can call a FLUX-compatible remote initial-canvas service configured by `FLUX_INIT_URL` while keeping `/api/init-generate` stable.
-- `auto` mode uses the remote provider when configured and falls back to deterministic candidates when it is missing or unavailable. Explicit `flux-remote` fails clearly instead of silently downgrading.
+- `InitGenerateRequest` initially supported provider selection with default `auto`, explicit `deterministic-fallback`, and explicit `flux-remote`; the post-Phase 13 correction adds explicit `flux-local`.
+- The gateway can call a FLUX-compatible initial-canvas service configured by `FLUX_INIT_URL` while keeping `/api/init-generate` stable.
+- `auto` mode uses the configured provider when available and falls back to deterministic candidates when it is missing or unavailable. Explicit `flux-local` or `flux-remote` fails clearly instead of silently downgrading.
 - Initial candidates are scored and reranked using model score, label coverage, diagram-type match, and provider source metadata.
 - The front end displays requested/used provider, fallback state, warnings, candidate rank, score, provider source, and label coverage.
 
-Explicitly out of scope for Phase 11: bundling FLUX weights, running a local GPU FLUX service inside this repository, high-resolution async regeneration, and persistent candidate artifact storage beyond the existing init candidate data URLs.
+Original Phase 11 out of scope before the local correction: bundling FLUX weights, running a local GPU FLUX service inside this repository, high-resolution async regeneration, and persistent candidate artifact storage beyond the existing init candidate data URLs.
+
+### Post-Phase 13 Local FLUX Deployment Correction
+
+- `InitGenerateRequest.provider` now also supports explicit `flux-local`.
+- `backend/flux_service` provides a local FastAPI service with `GET /health` and `POST /generate`, loading `FLUX_MODEL_REPO` through diffusers only when generation is requested.
+- Docker Compose now runs a local `flux` service and defaults `FLUX_INIT_URL` to `http://flux:8004`; the no-Docker path adds `CONDA_ENV_FLUX`, `scripts/run_flux.sh`, tmux startup, GPU checks, and service checks.
+- Remote FLUX remains compatible through `FLUX_INIT_URL` and `flux-remote`, but the documented default deployment path is local FLUX.
+- This still does not bundle model weights, solve model licensing, guarantee the configured model exists in cache, or implement high-resolution async regeneration.
 
 ### Phase 12: Benchmark And Experiment Dashboard
 

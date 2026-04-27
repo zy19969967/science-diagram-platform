@@ -28,6 +28,7 @@ mkdir -p "${PROJECT_ROOT}/logs"
 start_session sci-planner "bash scripts/run_planner.sh >> logs/planner.log 2>&1"
 start_session sci-segmenter "bash scripts/run_segmenter.sh >> logs/segmenter.log 2>&1"
 start_session sci-powerpaint "bash scripts/run_powerpaint.sh >> logs/powerpaint.log 2>&1"
+start_session sci-flux "bash scripts/run_flux.sh >> logs/flux.log 2>&1"
 sleep 3
 start_session sci-gateway "bash scripts/run_gateway.sh >> logs/gateway.log 2>&1"
 

@@ -4,10 +4,16 @@ from collections.abc import Awaitable, Callable
 
 import httpx
 
-from common.init_logic import PROVIDER, build_init_candidates, score_and_rank_init_candidates
+from common.init_logic import (
+    FLUX_LOCAL_PROVIDER,
+    FLUX_PROVIDERS,
+    FLUX_REMOTE_PROVIDER,
+    PROVIDER,
+    build_init_candidates,
+    score_and_rank_init_candidates,
+)
 from common.schemas import InitGenerateRequest, InitGenerateResponse
 
-FLUX_PROVIDER = "flux-remote"
 PostJsonFunc = Callable[[str, dict], Awaitable[dict]]
 
 
@@ -29,6 +35,10 @@ def _flux_generate_url(flux_init_url: str) -> str:
     return f"{normalized}/generate"
 
 
+def _requires_flux_service(provider: str) -> bool:
+    return provider in FLUX_PROVIDERS
+
+
 def _fallback_response(payload: InitGenerateRequest, warnings: list[str]) -> InitGenerateResponse:
     response = build_init_candidates(payload.model_copy(update={"provider": "deterministic-fallback"}))
     return response.model_copy(
@@ -41,7 +51,7 @@ def _fallback_response(payload: InitGenerateRequest, warnings: list[str]) -> Ini
     )
 
 
-async def _generate_remote(
+async def _generate_with_flux_service(
     payload: InitGenerateRequest,
     *,
     flux_init_url: str,
@@ -49,11 +59,16 @@ async def _generate_remote(
 ) -> InitGenerateResponse:
     data = await post_json_func(_flux_generate_url(flux_init_url), payload.model_dump())
     response = InitGenerateResponse.model_validate(data)
+    provider = response.provider if response.provider in FLUX_PROVIDERS else FLUX_REMOTE_PROVIDER
+    if payload.provider == FLUX_LOCAL_PROVIDER:
+        provider = FLUX_LOCAL_PROVIDER
+    if payload.provider == FLUX_REMOTE_PROVIDER:
+        provider = FLUX_REMOTE_PROVIDER
     response = response.model_copy(
         update={
-            "provider": FLUX_PROVIDER,
+            "provider": provider,
             "requested_provider": payload.provider,
-            "used_provider": FLUX_PROVIDER,
+            "used_provider": provider,
             "fallback_used": False,
             "warnings": response.warnings,
         }
@@ -75,13 +90,13 @@ async def generate_initial_candidates(
         return response.model_copy(update={"requested_provider": provider, "used_provider": PROVIDER, "fallback_used": False})
 
     if not configured_url:
-        if provider == "flux-remote":
-            raise InitProviderError("FLUX_INIT_URL is required when provider is flux-remote.")
+        if _requires_flux_service(provider):
+            raise InitProviderError(f"FLUX_INIT_URL is required when provider is {provider}.")
         return _fallback_response(payload, ["FLUX_INIT_URL is not configured; using deterministic fallback candidates."])
 
     try:
-        return await _generate_remote(payload, flux_init_url=configured_url, post_json_func=post_json_func)
+        return await _generate_with_flux_service(payload, flux_init_url=configured_url, post_json_func=post_json_func)
     except Exception as exc:
-        if provider == "flux-remote":
+        if _requires_flux_service(provider):
             raise InitProviderError(f"FLUX initial-canvas service is unavailable: {exc}") from exc
-        return _fallback_response(payload, [f"FLUX remote provider failed; using deterministic fallback candidates: {exc}"])
+        return _fallback_response(payload, [f"FLUX provider failed; using deterministic fallback candidates: {exc}"])

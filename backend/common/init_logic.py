@@ -17,7 +17,9 @@ from .schemas import (
 from .utils.images import encode_image_to_data_url
 
 PROVIDER = "deterministic-fallback"
-FLUX_PROVIDER = "flux-remote"
+FLUX_LOCAL_PROVIDER = "flux-local"
+FLUX_REMOTE_PROVIDER = "flux-remote"
+FLUX_PROVIDERS = {FLUX_LOCAL_PROVIDER, FLUX_REMOTE_PROVIDER}
 DEFAULT_NEGATIVE_PROMPT = "photorealistic, watermark, blurry text, messy labels, extra arrows"
 
 
@@ -120,7 +122,7 @@ def build_scene_plan(payload: ScenePlanRequest) -> ScenePlanResponse:
         f"objects: {english_objects}, connected by arrows"
     )
     warnings = [
-        "当前初图由确定性 fallback 渲染器生成；后续阶段将替换为 FLUX 候选初图服务。"
+        "当前场景规划由规则逻辑生成；初图候选会优先交给本地 FLUX 服务，失败时使用确定性 fallback。"
     ]
 
     return ScenePlanResponse(
@@ -271,7 +273,7 @@ def _score_candidate(candidate: InitCandidate, plan: ScenePlanResponse) -> tuple
     label_coverage = len(expected & actual) / len(expected) if expected else 1.0
     diagram_type_match = 1.0 if candidate.metadata.get("diagram_type") == plan.diagram_type else 0.0
     model_score = min(1.0, max(0.0, float(candidate.score)))
-    provider_bonus = 0.03 if candidate.provider == FLUX_PROVIDER else 0.0
+    provider_bonus = 0.03 if candidate.provider in FLUX_PROVIDERS else 0.0
     final_score = min(1.0, model_score * 0.45 + label_coverage * 0.35 + diagram_type_match * 0.17 + provider_bonus)
     return final_score, {
         "model_score": round(model_score, 4),

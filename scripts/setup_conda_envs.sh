@@ -61,6 +61,13 @@ install_powerpaint() {
   install_cuda_torch "${CONDA_ENV_POWERPAINT}"
 }
 
+install_flux() {
+  create_env "${CONDA_ENV_FLUX}"
+  run_conda run -n "${CONDA_ENV_FLUX}" python -m pip install --upgrade pip
+  install_cuda_torch "${CONDA_ENV_FLUX}"
+  run_conda run -n "${CONDA_ENV_FLUX}" python -m pip install -r "${PROJECT_ROOT}/backend/flux_service/requirements.txt"
+}
+
 install_frontend() {
   if ! command -v npm >/dev/null 2>&1; then
     echo "npm not found; skipping frontend dependency installation." >&2
@@ -74,6 +81,7 @@ install_gateway
 install_planner
 install_segmenter
 install_powerpaint
+install_flux
 install_frontend
 
 cat <<EOF
@@ -87,12 +95,14 @@ Next steps:
    ${CONDA_ENV_PLANNER}
    ${CONDA_ENV_SEGMENTER}
    ${CONDA_ENV_POWERPAINT}
+   ${CONDA_ENV_FLUX}
 4. If you are using PowerPaint 2.1 with git download, prefetch the weights with:
    bash scripts/fetch_powerpaint_model.sh
 5. Start services with:
    bash scripts/run_planner.sh
    bash scripts/run_segmenter.sh
    bash scripts/run_powerpaint.sh
+   bash scripts/run_flux.sh
    bash scripts/run_gateway.sh
 6. Build the frontend with:
    bash scripts/build_frontend.sh

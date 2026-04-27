@@ -66,6 +66,7 @@ class GatewaySecurityTest(unittest.TestCase):
         self.assertIn("benchmarks_dir", check_names)
         self.assertIn("assets_dir", check_names)
         self.assertIn("planner_url", check_names)
+        self.assertIn("flux_init_url", check_names)
         self.assertIn("traceability_matrix", check_names)
 
     def test_readiness_warns_when_auth_is_disabled(self) -> None:

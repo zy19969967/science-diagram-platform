@@ -14,7 +14,7 @@
 
 ### 0. FLUX 初图服务与候选重排
 
-当前已经补入无图文本入口的 API 合同和确定性 fallback 初图候选，便于前端先进入“文本初图 -> 后续局部编辑”的闭环。Phase 11 又新增了 `FLUX_INIT_URL` 可配置远程初图服务适配器、`auto`/`flux-remote`/`deterministic-fallback` provider 选择、候选评分重排和前端 provider/score 展示。仍未完成的是在本仓库内捆绑 FLUX.2 [klein] 4B 权重、本地 GPU 初图模型服务、低清预览/高清异步二阶段生成和长期候选 artifact 存储；fallback 画面中的文字仍是位图提示，第三阶段新增的文本层只覆盖前端轻量标签元数据。
+当前已经补入无图文本入口的 API 合同和确定性 fallback 初图候选，便于前端先进入“文本初图 -> 后续局部编辑”的闭环。Phase 11 新增了 `FLUX_INIT_URL` 可配置 FLUX-compatible provider、`auto`/`flux-local`/`flux-remote`/`deterministic-fallback` provider 选择、候选评分重排和前端 provider/score 展示。当前分支又补入了仓库内 `backend/flux_service`、Docker Compose `flux` 服务和 Conda/tmux 启动脚本，使默认部署路径改为本地 FLUX 服务。仍未完成的是在本仓库内捆绑 FLUX.2 [klein] 4B 权重、低清预览/高清异步二阶段生成和长期候选 artifact 存储；fallback 画面中的文字仍是位图提示，第三阶段新增的文本层只覆盖前端轻量标签元数据。
 
 ### 1. 认证与权限控制
 
@@ -103,9 +103,9 @@ Remaining export limitations: there is no built-in OCR model yet, bitmap-only la
 
 ## Phase 11 FLUX-Compatible Init Provider Note
 
-The current branch now includes a configurable FLUX-compatible initial-canvas provider path. `/api/init-generate` keeps the same endpoint shape, but `InitGenerateRequest.provider` can request `auto`, `deterministic-fallback`, or `flux-remote`; when `FLUX_INIT_URL` is configured, `auto` calls the remote provider and reranks returned candidates, otherwise it falls back with explicit warnings. The front end shows provider, fallback, rank, score, label coverage, and source metadata for each initial candidate.
+The current branch now includes a configurable FLUX-compatible initial-canvas provider path. `/api/init-generate` keeps the same endpoint shape, but `InitGenerateRequest.provider` can request `auto`, `deterministic-fallback`, `flux-local`, or `flux-remote`; the default Docker/Conda deployment points `FLUX_INIT_URL` at the local `flux` service and reranks returned candidates, while `auto` still falls back with explicit warnings when the provider is unavailable. The front end shows provider, fallback, rank, score, label coverage, and source metadata for each initial candidate.
 
-Remaining initial-canvas limitations: this repository still does not bundle FLUX weights or a GPU model server, remote provider response quality depends on the separately deployed service, high-resolution async regeneration is not implemented yet, and init candidates are still session data URLs rather than durable artifact files.
+Remaining initial-canvas limitations: this repository still does not bundle FLUX weights, model quality depends on the configured local model/cache, high-resolution async regeneration is not implemented yet, and init candidates are still session data URLs rather than durable artifact files.
 
 ## Phase 12 Benchmark Ledger Note
 

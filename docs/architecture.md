@@ -11,7 +11,7 @@
    - `planner /plan`：Qwen3.5 优先，规则规划 fallback。
    - `segmenter /segment`：SAM2.1 优先，几何 mask fallback。
    - `powerpaint /generate`：PowerPaint 局部生成服务。
-   - `FLUX_INIT_URL`：可选远程初图 provider；未配置时使用确定性 fallback。
+   - `flux /generate`：本地 FLUX-compatible 初图服务；未配置或失败时 `auto` 模式使用确定性 fallback。
 5. Gateway 将生成产物写入 `RUNS_DIR`，并把项目、异步任务和 benchmark 记录分别写入对应目录。
 6. 前端把结果图、mask、质量报告、项目版本、图层状态和实验指标回流到工作区，支持下一轮编辑。
 
@@ -33,7 +33,7 @@
   - `jobs.py`：异步生成 job snapshot、取消和重启恢复标记。
   - `projects.py`：文件项目和版本快照。
   - `benchmarks.py`：实验 run ledger 和聚合指标。
-  - `init_provider.py`：FLUX-compatible 远程 provider 和 fallback 选择。
+  - `init_provider.py`：本地/远程 FLUX-compatible provider 和 fallback 选择。
   - `security.py`：可选单 token `/api/*` 保护。
   - `deployment.py`：readiness 配置检查。
 - `/api/health`、`/assets`、`/artifacts`、OpenAPI docs 和 CORS preflight 保持豁免；其他 `/api/*` 在 `GATEWAY_API_TOKEN` 非空时需要 token。
@@ -57,6 +57,13 @@
 - 接收原图、mask 和 prompt，返回局部生成结果。
 - 权重不随 GitHub 仓库一起下载，需要通过 Hugging Face Git LFS 拉取或提前复制到服务器。
 
+### Flux Service
+
+- 本地 FastAPI 服务，接口为 `GET /health` 和 `POST /generate`。
+- 使用 diffusers 懒加载 `FLUX_MODEL_REPO`，默认 `black-forest-labs/FLUX.1-schnell`，也可以配置成本地模型目录或报告指定模型。
+- 返回与 `/api/init-generate` 相同形状的 `InitGenerateResponse`，provider 标记为 `flux-local`。
+- 不把 FLUX 权重提交进仓库；部署时通过 Hugging Face 缓存、`models/` 挂载或服务器本地路径提供权重。
+
 ## 数据目录
 
 Docker Compose 默认把这些目录挂到项目 `data/` 下：
@@ -73,7 +80,7 @@ models/            Hugging Face 与 PowerPaint 权重缓存
 
 ## 主要 API 合同
 
-- 初图：`POST /api/init-plan`、`POST /api/init-generate`
+- 初图：`POST /api/init-plan`、`POST /api/init-generate`；Gateway 默认把 FLUX 请求转发到本地 `flux` 服务
 - 编辑规划：`POST /api/plan`
 - 分割：`POST /api/segment`
 - 同步生成：`POST /api/generate`
@@ -96,4 +103,5 @@ models/            Hugging Face 与 PowerPaint 权重缓存
 - 异步任务是 Gateway 进程内执行加文件 snapshot，不是 Redis/Celery 或独立 worker 集群。
 - 项目、job 和 benchmark 都是 JSON 文件持久化，不是数据库。
 - Readiness 只检查本地目录、配置、服务 URL 格式和 traceability 文件，不调用真实模型或浏览器 E2E。
+- 本地 FLUX 服务已经纳入 Docker/Conda 部署，但权重下载、显存占用、模型许可和高分辨率二阶段生成仍由部署方处理。
 - 技术报告中的生产级能力和未完成项统一记录在 `docs/known-issues.md` 与 `docs/report-traceability.md`。

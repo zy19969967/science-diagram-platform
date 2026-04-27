@@ -53,3 +53,4 @@ if torch.cuda.is_available():
 check_env "planner" "${CONDA_ENV_PLANNER}" "${PLANNER_CUDA_VISIBLE_DEVICES}"
 check_env "segmenter" "${CONDA_ENV_SEGMENTER}" "${SEGMENTER_CUDA_VISIBLE_DEVICES}"
 check_env "powerpaint" "${CONDA_ENV_POWERPAINT}" "${POWERPAINT_CUDA_VISIBLE_DEVICES}"
+check_env "flux" "${CONDA_ENV_FLUX}" "${FLUX_CUDA_VISIBLE_DEVICES}"

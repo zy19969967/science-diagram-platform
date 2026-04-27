@@ -64,7 +64,7 @@ PROJECTS_DIR = Path(os.getenv("PROJECTS_DIR", str(RUNS_DIR.parent / "projects"))
 JOBS_DIR = Path(os.getenv("JOBS_DIR", str(RUNS_DIR.parent / "jobs")))
 BENCHMARKS_DIR = Path(os.getenv("BENCHMARKS_DIR", str(RUNS_DIR.parent / "benchmarks")))
 ASSETS_DIR = Path(os.getenv("ASSETS_DIR", "/app/assets"))
-FLUX_INIT_URL = os.getenv("FLUX_INIT_URL", "")
+FLUX_INIT_URL = os.getenv("FLUX_INIT_URL", "http://127.0.0.1:19085")
 GATEWAY_API_TOKEN = os.getenv("GATEWAY_API_TOKEN", "")
 
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
@@ -126,6 +126,7 @@ def deployment_readiness() -> DeploymentReadinessResponse:
             "planner_url": PLANNER_URL,
             "segmenter_url": SEGMENTER_URL,
             "powerpaint_url": POWERPAINT_URL,
+            "flux_init_url": FLUX_INIT_URL,
         },
         assets_dir=ASSETS_DIR,
         traceability_path=repo_root / "docs" / "report-traceability.md",

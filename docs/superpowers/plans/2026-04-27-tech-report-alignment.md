@@ -700,6 +700,8 @@ Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
 ## Task 25: Phase 11 FLUX-Compatible Initial Canvas Provider And Ranking
 
+Historical note: this Phase 11 slice originally established the provider contract and scoring path. Task 31 supersedes the deployment direction so the default FLUX path is now a server-local `flux` service, not an external API provider.
+
 **Files:**
 - Modify: `backend/common/schemas.py`
 - Modify: `backend/common/init_logic.py`
@@ -717,7 +719,7 @@ Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
 - [x] **Step 1: Write failing backend ranking/provider tests**
 
-Add tests proving candidate scoring prefers label coverage, diagram-type match, and model score; remote FLUX-compatible responses are normalized into `InitGenerateResponse`; `auto` falls back to deterministic candidates when no `FLUX_INIT_URL` is configured; explicit `flux-remote` fails clearly when the remote service is unavailable.
+Add tests proving candidate scoring prefers label coverage, diagram-type match, and model score; same-shape FLUX-compatible responses are normalized into `InitGenerateResponse`; `auto` falls back to deterministic candidates when no `FLUX_INIT_URL` is configured; explicit FLUX providers fail clearly when the configured service is unavailable.
 
 - [x] **Step 2: Run backend tests and verify failure**
 
@@ -731,7 +733,7 @@ Expected: fails because provider request fields, ranking helpers, and `gateway.i
 
 - [x] **Step 3: Implement backend FLUX-compatible adapter and ranking**
 
-Extend `InitGenerateRequest` with provider selection while keeping default `auto` behavior. Add scoring metadata to each candidate and return candidates sorted by final score. Add a gateway helper that calls a configured `FLUX_INIT_URL` using the existing init contract, normalizes a same-shape response, reranks candidates, and falls back only when provider is `auto`.
+Extend `InitGenerateRequest` with provider selection while keeping default `auto` behavior. Add scoring metadata to each candidate and return candidates sorted by final score. Add a gateway helper that calls a configured `FLUX_INIT_URL` using the existing init contract, normalizes a same-shape response, reranks candidates, and falls back only when provider is `auto`; after Task 31, that URL defaults to the server-local `flux` service.
 
 - [x] **Step 4: Write failing frontend candidate summary tests**
 
@@ -765,7 +767,7 @@ Expected: all pass.
 
 - [x] **Step 1: Document Phase 11 scope and limitations**
 
-Update docs to say Phase 11 adds a configurable FLUX-compatible remote provider adapter, scoring/reranking, provider metadata, and fallback policy while not shipping FLUX weights or a bundled GPU model server.
+Update docs to say Phase 11 adds a configurable FLUX-compatible provider adapter, scoring/reranking, provider metadata, and fallback policy. Task 31 later adds the bundled service wrapper and makes server-local FLUX the default deployment path.
 
 - [x] **Step 2: Review**
 
@@ -973,6 +975,42 @@ Add deployment auth readiness traceability
 - [x] **Step 5: Push**
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
+## Task 31: Local FLUX Deployment Correction
+
+**Files:**
+- Create: `backend/flux_service/`
+- Create: `backend/tests/test_flux_service.py`
+- Create: `backend/tests/test_local_flux_deployment.py`
+- Create: `scripts/run_flux.sh`
+- Modify: `backend/common/schemas.py`
+- Modify: `backend/common/init_logic.py`
+- Modify: `backend/gateway/init_provider.py`
+- Modify: `backend/gateway/main.py`
+- Modify: `docker-compose.yml`
+- Modify: `.env.example`, `.env.server.example`, `.env.nodocker.example`
+- Modify: Conda/tmux scripts and CI
+- Modify: README and docs
+
+- [x] **Step 1: Write RED tests**
+
+Add tests proving `flux-local` is a valid provider, local provider responses are preserved, local FLUX runtime can generate candidates with an injected pipeline, and Docker/Conda deployment files include a local `flux` service.
+
+- [x] **Step 2: Implement local FLUX service**
+
+Add `backend/flux_service` with `GET /health` and `POST /generate`, lazy diffusers loading through `FLUX_MODEL_REPO`, `flux-local` metadata, and same-shape `InitGenerateResponse` output.
+
+- [x] **Step 3: Wire deployment**
+
+Add Docker Compose `flux`, default Gateway `FLUX_INIT_URL` to the Compose-local service, add no-Docker `CONDA_ENV_FLUX`, `scripts/run_flux.sh`, tmux startup, service checks, GPU checks, and env examples.
+
+- [x] **Step 4: Update docs**
+
+Revise README, architecture, Docker/Conda deployment docs, known issues, traceability, specs, and requirements so local FLUX is the default deployment path and remote FLUX is compatibility only.
+
+- [x] **Step 5: Verify, review, commit, push**
+
+Run targeted local FLUX tests, full backend tests, backend compile checks, frontend helper tests/build, and `git diff --check`; review diff scope; commit and push.
 
 ## Task 15: Project Persistence And Version Tree
 

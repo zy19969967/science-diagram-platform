@@ -21,6 +21,15 @@ assert.deepEqual(summarizeInitGeneration(response), {
   warnings: [],
 });
 
+const localSummary = summarizeInitGeneration({
+  provider: "flux-local",
+  requested_provider: "auto",
+  used_provider: "flux-local",
+  fallback_used: false,
+  warnings: [],
+});
+assert.equal(localSummary.usedProvider, "flux-local");
+
 const fallbackSummary = summarizeInitGeneration({
   provider: "deterministic-fallback",
   requested_provider: "auto",

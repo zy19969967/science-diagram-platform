@@ -41,6 +41,8 @@ jobs:
             backend/common/quality.py \
             backend/common/export_logic.py \
             backend/common/utils/masks.py \
+            backend/flux_service/runtime.py \
+            backend/flux_service/main.py \
             backend/segmenter/runtime.py \
             backend/gateway/security.py \
             backend/gateway/deployment.py \
@@ -65,6 +67,8 @@ jobs:
           import common.canvas_state
           import common.quality
           import common.export_logic
+          import flux_service.runtime
+          import flux_service.main
           import gateway.security
           import gateway.deployment
           import gateway.init_provider

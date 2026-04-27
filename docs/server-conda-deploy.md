@@ -8,6 +8,7 @@
 - `planner` 一个 Conda 环境
 - `segmenter` 一个 Conda 环境
 - `powerpaint_service` 一个 Conda 环境
+- `flux` 一个 Conda 环境
 - 前端单独构建为静态文件
 
 这些服务之间通过 `127.0.0.1:端口` 的 HTTP API 通信，不依赖 Docker 才能互相连接。
@@ -67,6 +68,7 @@ CONDA_ENV_GATEWAY=sci-gateway
 CONDA_ENV_PLANNER=sci-planner
 CONDA_ENV_SEGMENTER=sci-segmenter
 CONDA_ENV_POWERPAINT=sci-powerpaint
+CONDA_ENV_FLUX=sci-flux
 HF_ENDPOINT=https://hf-mirror.com
 TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
 TORCH_VERSION=2.5.1
@@ -75,6 +77,7 @@ TORCHVISION_VERSION=0.20.1
 POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
 SEGMENTER_CUDA_VISIBLE_DEVICES=6
+FLUX_CUDA_VISIBLE_DEVICES=7
 
 POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint-v2-1
 POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1
@@ -82,6 +85,15 @@ POWERPAINT_DOWNLOAD_METHOD=git
 POWERPAINT_VERSION=ppt-v2
 POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
 POWERPAINT_LOCAL_FILES_ONLY=false
+
+FLUX_HOST=127.0.0.1
+FLUX_PORT=19085
+FLUX_INIT_URL=http://127.0.0.1:19085
+FLUX_MODEL_REPO=black-forest-labs/FLUX.1-schnell
+FLUX_MODEL_DTYPE=bfloat16
+FLUX_NUM_INFERENCE_STEPS=4
+FLUX_GUIDANCE_SCALE=0.0
+FLUX_LOCAL_FILES_ONLY=false
 
 GATEWAY_PORT=19080
 PLANNER_PORT=19081
@@ -103,6 +115,8 @@ BENCHMARKS_DIR=/home/common/yzhu_2025/science-diagram-platform/data/benchmarks
 - `PUBLIC_GATEWAY_BASE_URL` 是给前端构建用的，浏览器会直接访问这个地址
 - `gateway` 默认绑定在 `127.0.0.1:19080`
 - 如果你希望公网直接访问网关，可以把 `GATEWAY_HOST` 改成 `0.0.0.0`
+- `FLUX_INIT_URL` 默认指向本机 `flux` 服务；Gateway 的 `auto` 初图生成会优先调用它
+- `FLUX_MODEL_REPO` 可以是 Hugging Face repo，也可以是服务器上的本地模型目录；提前准备好权重时可设置 `FLUX_LOCAL_FILES_ONLY=true`
 - `GATEWAY_API_TOKEN` 为空时保持开放内网行为；非空时，除 `/api/health` 等豁免路由外，`/api/*` 需要 token
 - 如果设置了 `GATEWAY_API_TOKEN`，前端构建时也要设置相同的 `VITE_API_TOKEN`
 - `VITE_API_TOKEN` 会进入前端静态 bundle，只适合受控演示或内网边界
@@ -126,6 +140,7 @@ bash scripts/setup_conda_envs.sh
 - 安装各自依赖
 - 安装前端依赖
 - 自动克隆 PowerPaint 仓库
+- 安装本地 `flux` 服务依赖；FLUX 权重仍通过 Hugging Face 缓存或本地模型目录提供
 
 如果服务器访问 Hugging Face API 不稳定，再执行：
 
@@ -167,6 +182,7 @@ bash scripts/stop_all_tmux.sh
 bash scripts/run_planner.sh
 bash scripts/run_segmenter.sh
 bash scripts/run_powerpaint.sh
+bash scripts/run_flux.sh
 bash scripts/run_gateway.sh
 ```
 
@@ -175,6 +191,7 @@ bash scripts/run_gateway.sh
 - `planner`: `127.0.0.1:19081`
 - `segmenter`: `127.0.0.1:19083`
 - `powerpaint`: `127.0.0.1:19082`
+- `flux`: `127.0.0.1:19085`
 - `gateway`: `127.0.0.1:19080`
 
 ## 7. 构建并提供前端
@@ -217,7 +234,7 @@ bash scripts/setup_conda_envs.sh
 bash scripts/check_services.sh
 ```
 
-如果 4 个接口都返回 JSON，说明链路已经连通。
+如果 5 个接口都返回 JSON，说明链路已经连通。
 
 还可以检查 Gateway 部署 readiness：
 
@@ -231,7 +248,7 @@ curl http://127.0.0.1:19080/api/deployment/readiness
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/readiness
 ```
 
-这个 readiness 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档，不会主动调用 Qwen3.5、SAM2.1、PowerPaint 或远程 FLUX 服务。
+这个 readiness 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档，不会主动调用 Qwen3.5、SAM2.1、PowerPaint 或本地 FLUX 模型。
 
 ## 9. 首次运行为什么会慢
 
@@ -240,8 +257,10 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 - Qwen3.5 权重
 - SAM-2 权重
 - PowerPaint 2.1 权重
+- FLUX 初图模型权重
 
 因此第一次调用 `/api/plan`、`/api/segment`、`/api/generate` 明显偏慢是正常的。
+第一次调用 `/api/init-generate` 且命中本地 FLUX 时也会加载 FLUX 模型，建议先用小尺寸请求预热。
 
 ## 10. 常见问题
 
@@ -272,7 +291,19 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 - `bash scripts/fetch_powerpaint_model.sh` 是否已经把 `PowerPaint 2.1` 权重拉到本地
 - 相关 Python 依赖是否安装完整
 
-### 10.5 运行数据在哪里
+### 10.5 本地 FLUX 初图失败
+
+优先检查：
+
+- `bash scripts/run_flux.sh` 是否已经启动
+- `curl http://127.0.0.1:19085/health` 是否返回 JSON
+- `FLUX_MODEL_REPO` 是否是可访问的 Hugging Face repo 或服务器本地模型目录
+- 如果设置了 `FLUX_LOCAL_FILES_ONLY=true`，模型权重是否已经在本地缓存或模型目录中
+- `FLUX_CUDA_VISIBLE_DEVICES` 指向的 GPU 是否空闲
+
+Gateway 的默认 `auto` 初图请求在本地 FLUX 不可用时会回退到确定性 fallback；显式 `flux-local` 请求会返回错误。
+
+### 10.6 运行数据在哪里
 
 默认运行数据目录：
 
@@ -286,7 +317,7 @@ models            Hugging Face 与 PowerPaint 权重缓存
 
 迁移服务器或备份毕业设计演示数据时，至少备份 `data/` 和必要的 `models/`。
 
-### 10.6 PowerPaint Code And Weight Sources
+### 10.7 PowerPaint Code And Weight Sources
 
 - `POWERPAINT_REPO_GIT_URL` points to the PowerPaint code repository, by default `https://github.com/zhuang2002/PowerPaint.git`
 - `POWERPAINT_MODEL_GIT_URL` points to the `PowerPaint 2.1` weight repository, by default `https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1`

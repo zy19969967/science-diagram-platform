@@ -1,12 +1,12 @@
 # 科学示意图交互式生成平台
 
-基于技术报告与 [PowerPaint](https://github.com/open-mmlab/PowerPaint) 搭建的交互式科学示意图生成系统。当前分支已经完成技术报告对齐的 13 个阶段：从文本初图、局部编辑、异步任务、画布状态、项目持久化、Fabric 图层编辑、SAM 点提示、OCR-ready SVG 导出、FLUX-compatible 初图 provider、实验台账，到部署 readiness 和单 token 网关保护。
+基于技术报告与 [PowerPaint](https://github.com/open-mmlab/PowerPaint) 搭建的交互式科学示意图生成系统。当前分支已经完成技术报告对齐的 13 个阶段：从文本初图、局部编辑、异步任务、画布状态、项目持久化、Fabric 图层编辑、SAM 点提示、OCR-ready SVG 导出、本地 FLUX-compatible 初图服务、实验台账，到部署 readiness 和单 token 网关保护。
 
 仓库地址：<https://github.com/zy19969967/science-diagram-platform>
 
 ## 当前能力
 
-- 文本初图入口：`/api/init-plan` 和 `/api/init-generate` 支持无底图的初始画布候选；没有远程 FLUX 服务时会回退到确定性候选。
+- 文本初图入口：`/api/init-plan` 和 `/api/init-generate` 支持无底图的初始画布候选；Gateway 默认调用本地 `flux` 服务，没有可用 FLUX 权重或服务异常时会回退到确定性候选。
 - 交互式编辑链路：上传底图、绘制 mask、放置素材、添加文字层、使用 SAM 正/负点提示，再调用 PowerPaint 生成局部结果。
 - 同步与异步生成：保留旧的 `/api/generate` 同步接口，同时新增 `/api/jobs`、`/api/jobs/{job_id}` 和取消接口。
 - 可序列化画布状态：base、mask、asset、text layer、point prompts、quality report 和 provenance 可以随请求与项目版本保存。
@@ -25,6 +25,7 @@ backend/
   assets/               科学素材目录
   common/               共享 schema、画布状态、质量评估、导出逻辑
   gateway/              API 网关、任务、项目、实验台账、部署 readiness
+  flux_service/         本地 FLUX-compatible 初图服务
   planner/              Qwen3.5 规划服务
   powerpaint_service/   PowerPaint 执行服务
   segmenter/            SAM-2 分割服务
@@ -44,7 +45,8 @@ docker-compose.yml      Docker Compose 编排
 - `planner`：优先调用 Hugging Face `Qwen/Qwen3.5-4B`
 - `segmenter`：优先调用 Hugging Face `facebook/sam2.1-hiera-base-plus`
 - `powerpaint_service`：调用官方 [PowerPaint](https://github.com/open-mmlab/PowerPaint)
-- `init provider`：可选调用 `FLUX_INIT_URL` 指向的远程初图服务；未配置时使用确定性 fallback
+- `flux_service`：本地 diffusers FLUX-compatible 初图服务，默认模型为 `black-forest-labs/FLUX.1-schnell`，可通过 `FLUX_MODEL_REPO` 改为服务器已有模型路径或报告指定模型
+- `init provider`：Gateway 默认通过 `FLUX_INIT_URL=http://flux:8004` 调用本地 `flux_service`；服务不可用时 `auto` 模式回退到确定性 fallback
 - 当真实模型不可用、GPU 不可用或模型输出异常时，会回退到仓库内规则逻辑
 
 ## 快速部署
@@ -60,7 +62,7 @@ docker-compose.yml      Docker Compose 编排
 - GPU 4：`powerpaint_service`
 - GPU 5：`planner`
 - GPU 6：`segmenter`
-- GPU 7：备用
+- GPU 7：`flux`
 
 Docker 部署：
 
@@ -117,7 +119,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 - `GET /api/assets`：读取内置科学素材。
 - `POST /api/plan`：基于底图和用户意图生成结构化编辑计划。
 - `POST /api/init-plan`：文本初图规划。
-- `POST /api/init-generate`：文本初图候选生成，支持 fallback 或远程 FLUX-compatible provider。
+- `POST /api/init-generate`：文本初图候选生成，默认使用服务器本地 FLUX-compatible provider，失败时可 fallback。
 - `POST /api/segment`：mask/box/素材位置/正负点提示分割。
 - `POST /api/generate`：同步局部生成。
 - `POST /api/jobs`、`GET /api/jobs/{job_id}`、`POST /api/jobs/{job_id}/cancel`：异步生成任务。
