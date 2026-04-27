@@ -30,8 +30,10 @@ function ControlPanel({
   analyzePlan,
   createInitialCanvas,
   generateResult,
+  startGenerateJob,
   isInitializing,
   isGenerating,
+  isJobGenerating,
   error,
   handleUpload,
 }) {
@@ -201,7 +203,10 @@ function ControlPanel({
           <button type="button" className="secondary-button" onClick={analyzePlan}>
             解析任务
           </button>
-          <button type="button" className="primary-button" onClick={generateResult} disabled={isGenerating}>
+          <button type="button" className="secondary-button" onClick={startGenerateJob} disabled={isJobGenerating || isGenerating}>
+            {isJobGenerating ? "异步任务中..." : "异步生成"}
+          </button>
+          <button type="button" className="primary-button" onClick={generateResult} disabled={isGenerating || isJobGenerating}>
             {isGenerating ? "生成中..." : "调用 PowerPaint"}
           </button>
         </div>

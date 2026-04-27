@@ -4,9 +4,10 @@ import json
 import os
 import uuid
 from pathlib import Path
+from typing import Callable
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -18,6 +19,9 @@ from common.schemas import (
     GenerateResponse,
     InitGenerateRequest,
     InitGenerateResponse,
+    JobCreateRequest,
+    JobSnapshot,
+    JobStatus,
     PlanRequest,
     PlanResponse,
     PowerPaintGenerateRequest,
@@ -29,6 +33,8 @@ from common.schemas import (
 from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image
 from common.utils.masks import evaluate_edit
+
+from .jobs import job_store
 
 PLANNER_URL = os.getenv("PLANNER_URL", "http://127.0.0.1:19081")
 SEGMENTER_URL = os.getenv("SEGMENTER_URL", "http://127.0.0.1:19083")
@@ -59,6 +65,9 @@ async def post_json(url: str, payload: dict) -> dict:
 
 def current_base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
+
+
+ProgressCallback = Callable[[JobStatus, float, str], None]
 
 
 @app.get("/api/health")
@@ -99,8 +108,13 @@ async def segment(payload: SegmentRequest) -> SegmentResponse:
         return build_segment(payload)
 
 
-@app.post("/api/generate", response_model=GenerateResponse)
-async def generate(payload: GenerateRequest, request: Request) -> GenerateResponse:
+async def generate_pipeline(
+    payload: GenerateRequest,
+    base_url: str,
+    progress: ProgressCallback | None = None,
+) -> GenerateResponse:
+    if progress:
+        progress("PLANNING", 0.12, "Planning edit instructions")
     plan_payload = payload.plan or await plan(
         PlanRequest(
             source_image=payload.source_image,
@@ -116,6 +130,8 @@ async def generate(payload: GenerateRequest, request: Request) -> GenerateRespon
 
     source_image = decode_data_url_to_image(payload.source_image, mode="RGB")
 
+    if progress:
+        progress("SEGMENTING", 0.35, "Preparing edit mask")
     try:
         normalized_mask = await segment(
             SegmentRequest(
@@ -129,6 +145,8 @@ async def generate(payload: GenerateRequest, request: Request) -> GenerateRespon
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Unable to prepare a valid mask: {exc}") from exc
 
+    if progress:
+        progress("EXECUTING", 0.65, "PowerPaint generation is running")
     powerpaint_request = PowerPaintGenerateRequest(
         image=payload.source_image,
         mask_image=normalized_mask.mask_image,
@@ -149,6 +167,8 @@ async def generate(payload: GenerateRequest, request: Request) -> GenerateRespon
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"PowerPaint service is unavailable: {exc}") from exc
 
+    if progress:
+        progress("EVALUATING", 0.9, "Evaluating result and saving artifacts")
     result_image_data = powerpaint_data["result_image"]
     result_image = decode_data_url_to_image(result_image_data, mode="RGB")
     mask_image = decode_data_url_to_image(normalized_mask.mask_image, mode="L")
@@ -170,7 +190,6 @@ async def generate(payload: GenerateRequest, request: Request) -> GenerateRespon
     }
     (run_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    base_url = current_base_url(request)
     artifacts = {
         "source": f"{base_url}/artifacts/{run_id}/source.png",
         "mask": f"{base_url}/artifacts/{run_id}/mask.png",
@@ -185,6 +204,62 @@ async def generate(payload: GenerateRequest, request: Request) -> GenerateRespon
         evaluation=evaluation,
         artifacts=artifacts,
     )
+
+
+@app.post("/api/generate", response_model=GenerateResponse)
+async def generate(payload: GenerateRequest, request: Request) -> GenerateResponse:
+    return await generate_pipeline(payload, current_base_url(request))
+
+
+async def run_generate_job(job_id: str, payload: GenerateRequest, base_url: str) -> None:
+    def update(status: JobStatus, progress: float, message: str) -> None:
+        job_store.update(job_id, status=status, progress=progress, message=message)
+
+    try:
+        result = await generate_pipeline(payload, base_url, progress=update)
+        job_store.update(
+            job_id,
+            status="DONE",
+            progress=1.0,
+            message="Generation complete",
+            result=result,
+        )
+    except HTTPException as exc:
+        job_store.update(
+            job_id,
+            status="FAILED",
+            progress=1.0,
+            message="Generation failed",
+            error=str(exc.detail),
+        )
+    except Exception as exc:
+        job_store.update(
+            job_id,
+            status="FAILED",
+            progress=1.0,
+            message="Generation failed",
+            error=str(exc),
+        )
+
+
+@app.post("/api/jobs", response_model=JobSnapshot)
+async def create_job(payload: JobCreateRequest, request: Request, background_tasks: BackgroundTasks) -> JobSnapshot:
+    snapshot = job_store.create("Queued for generation")
+    background_tasks.add_task(
+        run_generate_job,
+        snapshot.job_id,
+        payload.generate_request,
+        current_base_url(request),
+    )
+    return snapshot
+
+
+@app.get("/api/jobs/{job_id}", response_model=JobSnapshot)
+async def get_job(job_id: str) -> JobSnapshot:
+    snapshot = job_store.get(job_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return snapshot
 
 
 @app.post("/api/evaluate")

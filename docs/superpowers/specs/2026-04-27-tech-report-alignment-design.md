@@ -27,6 +27,8 @@ This does not claim to be FLUX. It creates the same API and UX shape that a late
 
 Introduce `job_id`, task states, and polling for long-running work. Start with in-process state or file-backed state before adding Redis/Celery. Preserve compatibility with synchronous `/api/generate` until the UI is moved.
 
+Phase 2 keeps `/api/generate` intact and adds `POST /api/jobs` plus `GET /api/jobs/{job_id}` for asynchronous generation. The first implementation is intentionally in-process and non-durable; Redis/Celery, cancellation, retries, and multi-worker scheduling are later work.
+
 ### Phase 3: Canvas State And Layers
 
 Introduce a serializable canvas state with base image, mask layer, asset layer, and vector text layer. The front end can stay React-first initially; Fabric.js should be added only when the layer model is stable.

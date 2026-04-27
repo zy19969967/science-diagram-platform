@@ -59,6 +59,8 @@ function App() {
   const [error, setError] = useState("");
   const [isInitializing, setIsInitializing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isJobGenerating, setIsJobGenerating] = useState(false);
+  const [jobSnapshot, setJobSnapshot] = useState(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [displayScale, setDisplayScale] = useState(1);
 
@@ -67,6 +69,7 @@ function App() {
   const drawingRef = useRef(false);
   const lastPointRef = useRef(null);
   const dragActiveRef = useRef(false);
+  const jobTokenRef = useRef(0);
 
   const selectedAsset = useMemo(
     () => assets.find((item) => item.id === selectedAssetId) ?? null,
@@ -155,6 +158,11 @@ function App() {
     }
   }
 
+  function invalidateJobPolling() {
+    jobTokenRef.current += 1;
+    setIsJobGenerating(false);
+  }
+
   function clearMask() {
     const canvas = maskCanvasRef.current;
     if (!canvas) {
@@ -166,6 +174,7 @@ function App() {
   }
 
   function clearCanvasWorkspace() {
+    invalidateJobPolling();
     const canvas = maskCanvasRef.current;
     if (canvas) {
       const context = canvas.getContext("2d");
@@ -178,6 +187,7 @@ function App() {
     setInitPlan(null);
     setInitCandidates([]);
     setSelectedInitCandidateId("");
+    setJobSnapshot(null);
     setLatestResult(null);
     setHistory([]);
     setNaturalSize({ width: 0, height: 0 });
@@ -198,6 +208,7 @@ function App() {
     if (!file) {
       return;
     }
+    invalidateJobPolling();
     const dataUrl = await readFileAsDataUrl(file);
     setSourceImage(dataUrl);
     setLatestResult(null);
@@ -205,6 +216,7 @@ function App() {
     setInitPlan(null);
     setInitCandidates([]);
     setSelectedInitCandidateId("");
+    setJobSnapshot(null);
     setHistory([]);
     setDisplayScale(1);
     setStatus("图像已载入，可以开始涂抹 mask 或拖拽素材。");
@@ -403,6 +415,7 @@ function App() {
       return;
     }
 
+    invalidateJobPolling();
     setIsInitializing(true);
     setError("");
     setStatus("正在规划无图初始画布...");
@@ -446,48 +459,57 @@ function App() {
     }
   }
 
-  async function generateResult() {
+  async function buildGenerateRequestPayload() {
     if (!sourceImage) {
-      setError("请先上传原始图像。");
-      return;
+      throw new Error("请先上传原始图像或选择一张初图候选。");
     }
 
+    const maskPayload = await buildMaskPayload();
+    if (maskPayload.pixelCount === 0) {
+      throw new Error("当前没有有效的 mask 或素材位置，请先绘制或选择素材。");
+    }
+
+    return {
+      source_image: sourceImage,
+      instruction,
+      task,
+      selected_asset_id: selectedAssetId || null,
+      asset_placement: assetPlacement,
+      mask_image: maskPayload.dataUrl,
+      plan,
+      steps,
+      guidance_scale: guidanceScale,
+      fitting_degree: fittingDegree,
+      seed,
+      horizontal_expansion_ratio: horizontalExpansionRatio,
+      vertical_expansion_ratio: verticalExpansionRatio,
+    };
+  }
+
+  function applyGenerateResult(data, statusPrefix = "生成完成") {
+    setPlan(data.plan);
+    setLatestResult(data);
+    setHistory((current) => [data, ...current]);
+    setStatus(`${statusPrefix}：${data.evaluation.note}`);
+  }
+
+  async function generateResult() {
+    invalidateJobPolling();
     setIsGenerating(true);
     setError("");
     setStatus("正在调用 PowerPaint 生成结果...");
 
     try {
-      const maskPayload = await buildMaskPayload();
-      if (maskPayload.pixelCount === 0) {
-        throw new Error("当前没有有效的 mask 或素材位置，请先绘制或选择素材。");
-      }
-
+      const requestPayload = await buildGenerateRequestPayload();
       const response = await fetch(apiPath("/api/generate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source_image: sourceImage,
-          instruction,
-          task,
-          selected_asset_id: selectedAssetId || null,
-          asset_placement: assetPlacement,
-          mask_image: maskPayload.dataUrl,
-          plan,
-          steps,
-          guidance_scale: guidanceScale,
-          fitting_degree: fittingDegree,
-          seed,
-          horizontal_expansion_ratio: horizontalExpansionRatio,
-          vertical_expansion_ratio: verticalExpansionRatio,
-        }),
+        body: JSON.stringify(requestPayload),
       });
 
       const data = await readJsonResponse(response, "生成失败");
 
-      setPlan(data.plan);
-      setLatestResult(data);
-      setHistory((current) => [data, ...current]);
-      setStatus(`生成完成：${data.evaluation.note}`);
+      applyGenerateResult(data);
     } catch (generationError) {
       setError(generationError.message);
       setStatus("生成失败，请调整选区或提示词后重试。");
@@ -496,7 +518,77 @@ function App() {
     }
   }
 
+  async function pollJobUntilComplete(jobId, token) {
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 1500);
+      });
+      if (jobTokenRef.current !== token) {
+        return null;
+      }
+      const response = await fetch(apiPath(`/api/jobs/${jobId}`));
+      const snapshot = await readJsonResponse(response, "任务状态读取失败");
+      if (jobTokenRef.current !== token) {
+        return null;
+      }
+      setJobSnapshot(snapshot);
+      setStatus(`${snapshot.status}：${snapshot.message}`);
+
+      if (snapshot.status === "DONE") {
+        if (!snapshot.result) {
+          throw new Error("任务已完成，但没有返回生成结果。");
+        }
+        return snapshot;
+      }
+      if (snapshot.status === "FAILED") {
+        throw new Error(snapshot.error || snapshot.message || "异步生成失败");
+      }
+    }
+    throw new Error("异步生成超时，请稍后刷新任务状态。");
+  }
+
+  async function startGenerateJob() {
+    const token = jobTokenRef.current + 1;
+    jobTokenRef.current = token;
+    setIsJobGenerating(true);
+    setError("");
+    setJobSnapshot(null);
+    setStatus("正在提交异步生成任务...");
+
+    try {
+      const requestPayload = await buildGenerateRequestPayload();
+      const response = await fetch(apiPath("/api/jobs"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "generate",
+          generate_request: requestPayload,
+        }),
+      });
+      const created = await readJsonResponse(response, "任务创建失败");
+      if (jobTokenRef.current !== token) {
+        return;
+      }
+      setJobSnapshot(created);
+      setStatus(`任务已创建：${created.job_id}`);
+
+      const completed = await pollJobUntilComplete(created.job_id, token);
+      if (!completed) {
+        return;
+      }
+      applyGenerateResult(completed.result, "异步生成完成");
+    } catch (jobError) {
+      setError(jobError.message);
+      setStatus("异步生成失败，请查看任务状态或调整输入后重试。");
+    } finally {
+      if (jobTokenRef.current === token) {
+        setIsJobGenerating(false);
+      }
+    }
+  }
+
   function continueFromHistory(item) {
+    invalidateJobPolling();
     setSourceImage(item.result_image);
     setLatestResult(item);
     clearMask();
@@ -504,6 +596,7 @@ function App() {
   }
 
   function chooseInitCandidate(candidate) {
+    invalidateJobPolling();
     const canvas = maskCanvasRef.current;
     if (canvas) {
       const context = canvas.getContext("2d");
@@ -513,6 +606,7 @@ function App() {
     setLatestResult(null);
     setPlan(null);
     setHistory([]);
+    setJobSnapshot(null);
     setSelectedInitCandidateId(candidate.id);
     setSelectedAssetId("");
     setAssetPlacement(null);
@@ -566,8 +660,10 @@ function App() {
           analyzePlan={analyzePlan}
           createInitialCanvas={createInitialCanvas}
           generateResult={generateResult}
+          startGenerateJob={startGenerateJob}
           isInitializing={isInitializing}
           isGenerating={isGenerating}
+          isJobGenerating={isJobGenerating}
           error={error}
           handleUpload={handleUpload}
         />
@@ -599,6 +695,7 @@ function App() {
           initCandidates={initCandidates}
           selectedInitCandidateId={selectedInitCandidateId}
           chooseInitCandidate={chooseInitCandidate}
+          jobSnapshot={jobSnapshot}
         />
       </main>
     </div>

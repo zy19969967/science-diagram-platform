@@ -6,6 +6,7 @@ function ResultPanel({
   initCandidates,
   selectedInitCandidateId,
   chooseInitCandidate,
+  jobSnapshot,
 }) {
   return (
     <aside className="workbench-panel result-panel">
@@ -41,6 +42,26 @@ function ResultPanel({
                 </span>
               </button>
             ))}
+          </div>
+        </section>
+      )}
+
+      {jobSnapshot && (
+        <section className="surface-block rail-block job-block">
+          <div className="section-header compact-header">
+            <div>
+              <span className="section-label">Job</span>
+              <strong>异步任务</strong>
+            </div>
+            <span className="section-meta">{jobSnapshot.status}</span>
+          </div>
+          <div className="job-progress">
+            <div>
+              <span>{jobSnapshot.job_id}</span>
+              <strong>{Math.round(jobSnapshot.progress * 100)}%</strong>
+            </div>
+            <progress value={jobSnapshot.progress} max="1" />
+            <p>{jobSnapshot.error || jobSnapshot.message}</p>
           </div>
         </section>
       )}

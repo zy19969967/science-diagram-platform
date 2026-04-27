@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 TaskType = Literal["text-guided", "object-removal", "shape-guided", "image-outpainting"]
 InitMode = Literal["create_from_text"]
+JobStatus = Literal["CREATED", "PLANNING", "SEGMENTING", "EXECUTING", "EVALUATING", "DONE", "FAILED"]
 
 
 class AssetMeta(BaseModel):
@@ -171,3 +172,19 @@ class GenerateResponse(BaseModel):
     result_image: str
     evaluation: EvaluationResult
     artifacts: dict[str, str] = Field(default_factory=dict)
+
+
+class JobCreateRequest(BaseModel):
+    kind: Literal["generate"] = "generate"
+    generate_request: GenerateRequest
+
+
+class JobSnapshot(BaseModel):
+    job_id: str
+    status: JobStatus
+    progress: float = Field(ge=0.0, le=1.0)
+    message: str
+    result: GenerateResponse | None = None
+    error: str | None = None
+    created_at: str
+    updated_at: str

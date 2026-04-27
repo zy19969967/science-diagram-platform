@@ -153,6 +153,7 @@ img {
 }
 
 .metric-card p,
+.job-progress p,
 .placeholder-card,
 .empty-stage p {
   margin: 6px 0 0;
@@ -584,6 +585,29 @@ input[type="range"] {
 .candidate-card span {
   display: grid;
   gap: 2px;
+}
+
+.job-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.job-progress div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.job-progress progress {
+  width: 100%;
+  height: 10px;
+  accent-color: var(--accent);
+}
+
+.job-progress p {
+  margin: 0;
 }
 
 .history-card img {
