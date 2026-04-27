@@ -1,3 +1,5 @@
+import { candidateScoreSummary, summarizeInitGeneration } from "../initCandidates.js";
+
 const formatRatio = (value) => {
   if (typeof value !== "number" || Number.isNaN(value)) {
     return "n/a";
@@ -10,6 +12,7 @@ function ResultPanel({
   continueFromHistory,
   history,
   initPlan,
+  initGeneration,
   initCandidates,
   selectedInitCandidateId,
   chooseInitCandidate,
@@ -37,6 +40,7 @@ function ResultPanel({
   const latestProjectVersionId = currentProject?.latest_version_id ?? "none";
   const canCancelJob = jobSnapshot && !["DONE", "FAILED", "CANCELLED"].includes(jobSnapshot.status);
   const exportWarnings = Array.from(new Set([...(textValidationReport?.warnings ?? []), ...(svgExport?.warnings ?? [])]));
+  const initSummary = summarizeInitGeneration(initGeneration);
 
   return (
     <aside className="workbench-panel result-panel">
@@ -55,23 +59,40 @@ function ResultPanel({
               <span className="section-label">Initial</span>
               <strong>初图候选</strong>
             </div>
-            {initPlan && <span className="section-meta">{initPlan.provider}</span>}
+            {initPlan && <span className="section-meta">{initSummary.usedProvider}</span>}
           </div>
+          <div className={initSummary.fallbackUsed ? "candidate-provider-summary fallback" : "candidate-provider-summary"}>
+            <span>Requested {initSummary.requestedProvider}</span>
+            <strong>{initSummary.fallbackUsed ? "Fallback active" : initSummary.provider}</strong>
+          </div>
+          {initSummary.warnings.length > 0 && (
+            <div className="candidate-warning-list">
+              {initSummary.warnings.slice(0, 2).map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </div>
+          )}
           <div className="candidate-list">
-            {initCandidates.map((candidate) => (
-              <button
-                key={candidate.id}
-                type="button"
-                className={selectedInitCandidateId === candidate.id ? "candidate-card active" : "candidate-card"}
-                onClick={() => chooseInitCandidate(candidate)}
-              >
-                <img src={candidate.image} alt={candidate.id} />
-                <span>
-                  <strong>{candidate.id}</strong>
-                  <small>seed {candidate.seed} | score {candidate.score}</small>
-                </span>
-              </button>
-            ))}
+            {initCandidates.map((candidate) => {
+              const score = candidateScoreSummary(candidate);
+              return (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  className={selectedInitCandidateId === candidate.id ? "candidate-card active" : "candidate-card"}
+                  onClick={() => chooseInitCandidate(candidate)}
+                >
+                  <img src={candidate.image} alt={candidate.id} />
+                  <span>
+                    <strong>{score.rank ? `#${score.rank} ${candidate.id}` : candidate.id}</strong>
+                    <small>seed {candidate.seed} | score {score.scoreLabel}</small>
+                    <small className="candidate-meta">
+                      {score.providerSource} | labels {score.labelCoverageLabel}
+                    </small>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}

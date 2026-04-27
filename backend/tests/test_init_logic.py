@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from common.init_logic import build_init_candidates, build_scene_plan
-from common.schemas import InitGenerateRequest, ScenePlanRequest
+from common.init_logic import build_init_candidates, build_scene_plan, score_and_rank_init_candidates
+from common.schemas import InitCandidate, InitGenerateRequest, InitGenerateResponse, ScenePlanRequest
 
 
 class InitLogicTest(unittest.TestCase):
@@ -40,6 +40,48 @@ class InitLogicTest(unittest.TestCase):
         self.assertTrue(first.candidates[0].image.startswith("data:image/png;base64,"))
         self.assertEqual(first.candidates[0].image, second.candidates[0].image)
         self.assertEqual(first.candidates[0].seed, 123)
+
+    def test_score_and_rank_init_candidates_prefers_label_coverage_and_model_score(self) -> None:
+        plan = build_scene_plan(
+            ScenePlanRequest(
+                instruction="画一个酶促反应示意图，包含底物、酶、产物",
+                candidate_count=3,
+                seed=77,
+            )
+        )
+        response = InitGenerateResponse(
+            provider="flux-remote",
+            scene_plan=plan,
+            candidates=[
+                InitCandidate(
+                    id="weak",
+                    image="data:image/png;base64,weak",
+                    seed=77,
+                    provider="flux-remote",
+                    score=0.95,
+                    width=plan.width,
+                    height=plan.height,
+                    metadata={"labels": ["底物"], "diagram_type": "other"},
+                ),
+                InitCandidate(
+                    id="strong",
+                    image="data:image/png;base64,strong",
+                    seed=78,
+                    provider="flux-remote",
+                    score=0.82,
+                    width=plan.width,
+                    height=plan.height,
+                    metadata={"labels": ["底物", "酶", "产物"], "diagram_type": plan.diagram_type},
+                ),
+            ],
+        )
+
+        ranked = score_and_rank_init_candidates(response)
+
+        self.assertEqual(ranked.candidates[0].id, "strong")
+        self.assertEqual(ranked.candidates[0].metadata["rank"], 1)
+        self.assertGreater(ranked.candidates[0].metadata["label_coverage_score"], 0.99)
+        self.assertEqual(ranked.candidates[1].metadata["rank"], 2)
 
 
 if __name__ == "__main__":

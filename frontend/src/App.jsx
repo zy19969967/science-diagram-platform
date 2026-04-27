@@ -95,6 +95,7 @@ function App() {
   const [assetPlacement, setAssetPlacement] = useState(null);
   const [plan, setPlan] = useState(null);
   const [initPlan, setInitPlan] = useState(null);
+  const [initGeneration, setInitGeneration] = useState(null);
   const [initCandidates, setInitCandidates] = useState([]);
   const [selectedInitCandidateId, setSelectedInitCandidateId] = useState("");
   const [textLayers, setTextLayers] = useState([]);
@@ -378,6 +379,7 @@ function App() {
     setAssetPlacement(null);
     setPlan(null);
     setInitPlan(null);
+    setInitGeneration(null);
     setInitCandidates([]);
     setSelectedInitCandidateId("");
     setTextLayers([]);
@@ -413,6 +415,7 @@ function App() {
     setLatestResult(null);
     setPlan(null);
     setInitPlan(null);
+    setInitGeneration(null);
     setInitCandidates([]);
     setSelectedInitCandidateId("");
     setTextLayers([]);
@@ -669,6 +672,7 @@ function App() {
       const data = await readJsonResponse(generateResponse, "初图候选生成失败");
 
       setInitPlan(data.scene_plan);
+      setInitGeneration(data);
       setInitCandidates(data.candidates);
       setSelectedInitCandidateId("");
       setTextLayers([]);
@@ -903,6 +907,7 @@ function App() {
       setInstruction(latestVersion?.metadata?.instruction || loadedProject.name || "");
       setTask(latestVersion?.metadata?.task || "text-guided");
       setInitPlan(loadedProject.init_plan ?? null);
+      setInitGeneration(null);
       setInitCandidates([]);
       setSelectedInitCandidateId(
         latestVersion?.metadata?.selected_init_candidate_id || loadedProject.selected_candidate_id || "",
@@ -1265,6 +1270,7 @@ function App() {
           continueFromHistory={continueFromHistory}
           history={history}
           initPlan={initPlan}
+          initGeneration={initGeneration}
           initCandidates={initCandidates}
           selectedInitCandidateId={selectedInitCandidateId}
           chooseInitCandidate={chooseInitCandidate}

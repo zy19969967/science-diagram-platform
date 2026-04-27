@@ -27,6 +27,7 @@ services:
       PLANNER_URL: http://planner:8001
       SEGMENTER_URL: http://segmenter:8003
       POWERPAINT_URL: http://powerpaint:8002
+      FLUX_INIT_URL: ${FLUX_INIT_URL:-}
       RUNS_DIR: /app/data/runs
       PROJECTS_DIR: /app/data/projects
       JOBS_DIR: /app/data/jobs

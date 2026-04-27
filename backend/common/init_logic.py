@@ -17,6 +17,7 @@ from .schemas import (
 from .utils.images import encode_image_to_data_url
 
 PROVIDER = "deterministic-fallback"
+FLUX_PROVIDER = "flux-remote"
 DEFAULT_NEGATIVE_PROMPT = "photorealistic, watermark, blurry text, messy labels, extra arrows"
 
 
@@ -227,7 +228,7 @@ def build_init_candidates(payload: InitGenerateRequest) -> InitGenerateResponse:
                 image=encode_image_to_data_url(image),
                 seed=candidate_seed,
                 provider=PROVIDER,
-                score=round(0.72 + index * 0.04, 2),
+                score=round(0.9 - index * 0.03, 2),
                 width=plan.width,
                 height=plan.height,
                 metadata={
@@ -235,8 +236,71 @@ def build_init_candidates(payload: InitGenerateRequest) -> InitGenerateResponse:
                     "labels": plan.labels,
                     "render_text_as_vector": plan.render_text_as_vector,
                     "vector_text_layer": False,
+                    "provider_source": PROVIDER,
                 },
             )
         )
 
-    return InitGenerateResponse(provider=PROVIDER, scene_plan=plan, candidates=candidates)
+    return score_and_rank_init_candidates(
+        InitGenerateResponse(
+            provider=PROVIDER,
+            scene_plan=plan,
+            candidates=candidates,
+            requested_provider=payload.provider,
+            used_provider=PROVIDER,
+            fallback_used=payload.provider == "auto",
+            warnings=[],
+        )
+    )
+
+
+def _label_key(value: object) -> str:
+    return " ".join(str(value or "").strip().split()).casefold()
+
+
+def _metadata_labels(candidate: InitCandidate) -> list[str]:
+    labels = candidate.metadata.get("labels", [])
+    if not isinstance(labels, list):
+        return []
+    return [str(label) for label in labels if str(label).strip()]
+
+
+def _score_candidate(candidate: InitCandidate, plan: ScenePlanResponse) -> tuple[float, dict[str, float | int | str]]:
+    expected = {_label_key(label) for label in plan.labels if _label_key(label)}
+    actual = {_label_key(label) for label in _metadata_labels(candidate)}
+    label_coverage = len(expected & actual) / len(expected) if expected else 1.0
+    diagram_type_match = 1.0 if candidate.metadata.get("diagram_type") == plan.diagram_type else 0.0
+    model_score = min(1.0, max(0.0, float(candidate.score)))
+    provider_bonus = 0.03 if candidate.provider == FLUX_PROVIDER else 0.0
+    final_score = min(1.0, model_score * 0.45 + label_coverage * 0.35 + diagram_type_match * 0.17 + provider_bonus)
+    return final_score, {
+        "model_score": round(model_score, 4),
+        "label_coverage_score": round(label_coverage, 4),
+        "diagram_type_score": round(diagram_type_match, 4),
+        "provider_source": candidate.provider,
+    }
+
+
+def score_and_rank_init_candidates(response: InitGenerateResponse) -> InitGenerateResponse:
+    scored: list[InitCandidate] = []
+    for candidate in response.candidates:
+        final_score, score_metadata = _score_candidate(candidate, response.scene_plan)
+        scored.append(
+            candidate.model_copy(
+                deep=True,
+                update={
+                    "score": round(final_score, 4),
+                    "metadata": {
+                        **candidate.metadata,
+                        **score_metadata,
+                    },
+                },
+            )
+        )
+
+    ranked = sorted(scored, key=lambda item: (-item.score, item.id))
+    ranked = [
+        candidate.model_copy(update={"metadata": {**candidate.metadata, "rank": index + 1}})
+        for index, candidate in enumerate(ranked)
+    ]
+    return response.model_copy(update={"candidates": ranked, "used_provider": response.used_provider or response.provider})

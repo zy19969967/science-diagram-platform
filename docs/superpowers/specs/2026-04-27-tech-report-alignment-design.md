@@ -140,6 +140,16 @@ Explicitly out of scope for Phase 10: running a real OCR model in the gateway, v
 
 Replace the deterministic fallback with a real initial-canvas generation service, candidate scoring, low-resolution previews, and high-resolution async regeneration. Keep the existing `/api/init-plan` and `/api/init-generate` contracts stable.
 
+Implemented Phase 11 scope:
+
+- `InitGenerateRequest` now supports provider selection with default `auto`, explicit `deterministic-fallback`, and explicit `flux-remote`.
+- The gateway can call a FLUX-compatible remote initial-canvas service configured by `FLUX_INIT_URL` while keeping `/api/init-generate` stable.
+- `auto` mode uses the remote provider when configured and falls back to deterministic candidates when it is missing or unavailable. Explicit `flux-remote` fails clearly instead of silently downgrading.
+- Initial candidates are scored and reranked using model score, label coverage, diagram-type match, and provider source metadata.
+- The front end displays requested/used provider, fallback state, warnings, candidate rank, score, provider source, and label coverage.
+
+Explicitly out of scope for Phase 11: bundling FLUX weights, running a local GPU FLUX service inside this repository, high-resolution async regeneration, and persistent candidate artifact storage beyond the existing init candidate data URLs.
+
 ### Phase 12: Benchmark And Experiment Dashboard
 
 Aggregate `quality_report` records across runs into dataset-level metrics, model/prompt comparisons, and exportable experiment summaries. This phase turns Phase 4 per-run records into report-ready evaluation evidence.

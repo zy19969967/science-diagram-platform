@@ -698,6 +698,95 @@ Add OCR-ready SVG export
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
+## Task 25: Phase 11 FLUX-Compatible Initial Canvas Provider And Ranking
+
+**Files:**
+- Modify: `backend/common/schemas.py`
+- Modify: `backend/common/init_logic.py`
+- Create: `backend/gateway/init_provider.py`
+- Modify: `backend/gateway/main.py`
+- Modify: `backend/tests/test_init_logic.py`
+- Create: `backend/tests/test_init_provider.py`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `backend/tests/test_ci_workflow.py`
+- Create: `frontend/src/initCandidates.js`
+- Create: `frontend/tests/initCandidates.test.mjs`
+- Modify: `frontend/src/App.jsx`
+- Modify: `frontend/src/components/ResultPanel.jsx`
+- Modify: `frontend/src/styles.css`
+
+- [x] **Step 1: Write failing backend ranking/provider tests**
+
+Add tests proving candidate scoring prefers label coverage, diagram-type match, and model score; remote FLUX-compatible responses are normalized into `InitGenerateResponse`; `auto` falls back to deterministic candidates when no `FLUX_INIT_URL` is configured; explicit `flux-remote` fails clearly when the remote service is unavailable.
+
+- [x] **Step 2: Run backend tests and verify failure**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs python -m unittest backend.tests.test_init_logic backend.tests.test_init_provider -v
+```
+
+Expected: fails because provider request fields, ranking helpers, and `gateway.init_provider` do not exist yet.
+
+- [x] **Step 3: Implement backend FLUX-compatible adapter and ranking**
+
+Extend `InitGenerateRequest` with provider selection while keeping default `auto` behavior. Add scoring metadata to each candidate and return candidates sorted by final score. Add a gateway helper that calls a configured `FLUX_INIT_URL` using the existing init contract, normalizes a same-shape response, reranks candidates, and falls back only when provider is `auto`.
+
+- [x] **Step 4: Write failing frontend candidate summary tests**
+
+Add pure helper tests proving the front end can summarize provider/fallback state and display score metadata from returned init candidates without changing candidate selection behavior.
+
+- [x] **Step 5: Implement frontend provider and score display**
+
+Store the full init-generation response, show provider/fallback/warnings in the candidate panel, and show each candidate score plus label coverage and provider source when available. Keep the existing “choose candidate -> enter edit loop” behavior.
+
+- [x] **Step 6: Verify**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs python -m unittest discover -s backend/tests -p 'test_*.py' -v
+PYTHONPATH=backend python -m py_compile backend/common/schemas.py backend/common/init_logic.py backend/common/canvas_state.py backend/common/quality.py backend/common/export_logic.py backend/common/utils/masks.py backend/gateway/init_provider.py backend/gateway/jobs.py backend/gateway/projects.py backend/gateway/main.py backend/segmenter/runtime.py
+cd frontend && node tests/initCandidates.test.mjs && node tests/exportState.test.mjs && node tests/regionPrompts.test.mjs && node tests/layerState.test.mjs && node tests/canvasState.test.mjs && node tests/projectState.test.mjs && npm run build
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 26: Phase 11 Review, Commit, Push
+
+**Files:**
+- Review: Phase 11 code and docs from Task 25
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Document Phase 11 scope and limitations**
+
+Update docs to say Phase 11 adds a configurable FLUX-compatible remote provider adapter, scoring/reranking, provider metadata, and fallback policy while not shipping FLUX weights or a bundled GPU model server.
+
+- [x] **Step 2: Review**
+
+Request code review for Phase 11 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run backend tests, backend compile checks, frontend helper tests/build, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 11 files and commit:
+
+```text
+Add FLUX init provider adapter
+```
+
+- [ ] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
 ## Task 15: Project Persistence And Version Tree
 
 **Files:**

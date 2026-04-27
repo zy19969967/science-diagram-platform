@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from common.assets import asset_catalog_with_urls
 from common.canvas_state import build_canvas_state_after_generate
 from common.export_logic import build_svg_export, build_text_validation_report
-from common.init_logic import build_init_candidates, build_scene_plan
+from common.init_logic import build_scene_plan
 from common.planner_logic import build_plan
 from common.quality import build_quality_report
 from common.schemas import (
@@ -45,6 +45,7 @@ from common.utils.images import decode_data_url_to_image
 from common.utils.masks import evaluate_edit
 
 from .jobs import JobCancelled, JobStore
+from .init_provider import InitProviderError, generate_initial_candidates
 from .projects import ProjectStore
 
 PLANNER_URL = os.getenv("PLANNER_URL", "http://127.0.0.1:19081")
@@ -54,6 +55,7 @@ RUNS_DIR = Path(os.getenv("RUNS_DIR", "/app/data/runs"))
 PROJECTS_DIR = Path(os.getenv("PROJECTS_DIR", str(RUNS_DIR.parent / "projects")))
 JOBS_DIR = Path(os.getenv("JOBS_DIR", str(RUNS_DIR.parent / "jobs")))
 ASSETS_DIR = Path(os.getenv("ASSETS_DIR", "/app/assets"))
+FLUX_INIT_URL = os.getenv("FLUX_INIT_URL", "")
 
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 job_store = JobStore(JOBS_DIR)
@@ -111,7 +113,10 @@ async def init_plan(payload: ScenePlanRequest) -> ScenePlanResponse:
 
 @app.post("/api/init-generate", response_model=InitGenerateResponse)
 async def init_generate(payload: InitGenerateRequest) -> InitGenerateResponse:
-    return build_init_candidates(payload)
+    try:
+        return await generate_initial_candidates(payload, flux_init_url=FLUX_INIT_URL)
+    except InitProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/api/canvas/validate-text", response_model=TextValidationReport)
