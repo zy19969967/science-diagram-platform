@@ -13,6 +13,16 @@
 - 当真实模型不可用时，会自动回退到仓库内规则逻辑，保证平台还能用于调试和演示
 - Gateway 还包含异步任务、项目版本、benchmark ledger、readiness 检查和可选单 token 保护
 
+## 0. 当前能不能部署
+
+可以部署，但请按下面边界理解：
+
+- 当前推荐部署版本是 PR 分支 `codex/report-alignment-phase1`；如果 PR 已经合并到 `main`，再改为部署 `main`。
+- 推荐优先使用 Docker Compose，因为它会同时编排 `frontend`、`gateway`、`planner`、`segmenter`、`powerpaint` 和本地 `flux` 服务。
+- 服务器必须能访问或已经缓存 Qwen3.5、SAM2.1、PowerPaint 2.1 和 FLUX 权重；仓库不会把这些大模型权重提交进 Git。
+- 这是单节点、单用户、文件持久化优先的部署，适合毕业设计演示、内网测试和受控服务器环境；不是公网多租户生产系统。
+- 如果 Docker 不可用，可以改用 [无 Docker / Conda 服务器部署 README](server-conda-deploy.md)。
+
 ## 1. 部署前提
 
 建议服务器满足以下条件：
@@ -22,7 +32,7 @@
 - Docker Compose v2
 - NVIDIA 驱动
 - NVIDIA Container Toolkit
-- 至少 3 张可用 GPU
+- 建议至少 4 张可用 GPU；资源紧张时可以让服务共享 GPU，但需要自己评估显存占用
 - 足够的磁盘空间保存 Docker 镜像和模型缓存
 
 如果你使用的正是当前这台 8 x RTX 3090 服务器，当前模板示例按 4 卡方式部署：
@@ -52,12 +62,25 @@ bash scripts/server-preflight.sh
 
 ## 4. 克隆项目
 
+如果 PR 还没有合并到 `main`，现在应当显式拉取当前开发分支：
+
+```bash
+mkdir -p /home/common/yzhu_2025
+cd /home/common/yzhu_2025
+git clone -b codex/report-alignment-phase1 https://github.com/zy19969967/science-diagram-platform.git
+cd science-diagram-platform
+```
+
+如果 PR 已经合并到 `main`，则使用：
+
 ```bash
 mkdir -p /home/common/yzhu_2025
 cd /home/common/yzhu_2025
 git clone https://github.com/zy19969967/science-diagram-platform.git
 cd science-diagram-platform
 ```
+
+两种方式二选一，不要在同一个目录重复 clone。
 
 ## 5. 准备环境变量
 
@@ -114,6 +137,7 @@ FLUX_LOCAL_FILES_ONLY=false
 - `VITE_API_TOKEN` 会进入静态前端 bundle，只适合内网或受控演示边界，不是公网多租户认证方案
 - `PowerPaint 2.1` 仍然复用 BrushNet 的 `ppt-v2` 推理分支，因此 `POWERPAINT_VERSION` 保持 `ppt-v2`
 - `flux` 是本地初图服务，Compose 内部默认把 `FLUX_INIT_URL` 设置为 `http://flux:8004`
+- 初图生成阶段不会调用外部 FLUX API；只有首次下载或更新模型权重时可能访问 Hugging Face
 - `FLUX_MODEL_REPO` 可以是 Hugging Face repo，也可以是服务器上的本地模型目录；如果已提前准备权重，可以设置 `FLUX_LOCAL_FILES_ONLY=true`
 - Compose 会把 `RUNS_DIR`、`PROJECTS_DIR`、`JOBS_DIR` 和 `BENCHMARKS_DIR` 挂到项目 `data/` 目录下，便于重启后读取生成产物、项目版本、异步任务和实验记录
 
@@ -248,7 +272,14 @@ sudo docker info | grep 'Docker Root Dir'
 
 ```bash
 cd /home/common/yzhu_2025/science-diagram-platform
-git pull
+git pull origin codex/report-alignment-phase1
+sudo docker compose --env-file .env up -d --build
+```
+
+如果你已经把 PR 合并到 `main` 并切回主分支，则使用：
+
+```bash
+git pull origin main
 sudo docker compose --env-file .env up -d --build
 ```
 

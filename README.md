@@ -45,7 +45,7 @@ docker-compose.yml      Docker Compose 编排
 - `planner`：优先调用 Hugging Face `Qwen/Qwen3.5-4B`
 - `segmenter`：优先调用 Hugging Face `facebook/sam2.1-hiera-base-plus`
 - `powerpaint_service`：调用官方 [PowerPaint](https://github.com/open-mmlab/PowerPaint)
-- `flux_service`：本地 diffusers FLUX-compatible 初图服务，默认模型为 `black-forest-labs/FLUX.1-schnell`，可通过 `FLUX_MODEL_REPO` 改为服务器已有模型路径或报告指定模型
+- `flux_service`：本地 diffusers FLUX-compatible 初图服务，默认模型为 `black-forest-labs/FLUX.1-schnell`，生成阶段不调用外部 FLUX API，可通过 `FLUX_MODEL_REPO` 改为服务器已有模型路径或报告指定模型
 - `init provider`：Gateway 默认通过 `FLUX_INIT_URL=http://flux:8004` 调用本地 `flux_service`；服务不可用时 `auto` 模式回退到确定性 fallback
 - 当真实模型不可用、GPU 不可用或模型输出异常时，会回退到仓库内规则逻辑
 
@@ -69,12 +69,14 @@ Docker 部署：
 ```bash
 mkdir -p /home/common/yzhu_2025
 cd /home/common/yzhu_2025
-git clone https://github.com/zy19969967/science-diagram-platform.git
+git clone -b codex/report-alignment-phase1 https://github.com/zy19969967/science-diagram-platform.git
 cd science-diagram-platform
 cp .env.server.example .env
 sudo docker compose --env-file .env build
 sudo docker compose --env-file .env up -d
 ```
+
+如果 PR 已经合并到 `main`，可以把上面的 `-b codex/report-alignment-phase1` 去掉，直接部署默认分支。
 
 如果服务器不能使用 Docker、但可以使用 Conda，请看 [Conda Deployment README](docs/server-conda-deploy.md)，并使用 `scripts/setup_conda_envs.sh`、`scripts/start_all_tmux.sh`、`scripts/run_*.sh` 这组脚本。
 
@@ -130,6 +132,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 ## 文档
 
 - [Architecture](docs/architecture.md)：当前服务链路、数据目录、API 合同和对齐边界。
+- [Server Deployment Checklist](docs/server-deployment-checklist.md)：从零部署到验证的中文步骤清单。
 - [Docker Deployment README](docs/server-deploy.md)：Docker Compose 部署路径。
 - [Conda Deployment README](docs/server-conda-deploy.md)：无 Docker 部署路径、4-GPU 示例布局和执行步骤。
 - [Technical Report Traceability Matrix](docs/report-traceability.md)：Phase 1-13 对技术报告声明、代码路径、测试和限制的映射。
