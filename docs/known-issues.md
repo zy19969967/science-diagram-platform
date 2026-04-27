@@ -25,7 +25,7 @@
 
 ### 3. 画布状态、图层系统与项目级持久化
 
-当前生成请求已经可以携带可序列化 `canvas_state`，并在生成后返回更新后的 base image、mask、asset 和 text layer 元数据；前端也会把初图标签渲染成轻量 HTML 文本层。这仍然不是报告中的完整 Fabric.js 编辑器：还没有图层拖拽/锁定/重排 UI、项目数据库、可分支版本树、SVG 导出、OCR 校验或长期会话持久化。
+当前生成请求已经可以携带可序列化 `canvas_state`，并在生成后返回更新后的 base image、mask、asset 和 text layer 元数据；前端已经接入首个 Fabric.js 图层编辑器，支持图层模式下选择素材/文字对象、拖动或缩放回写状态，并提供 base、mask、asset、text layer 的可见性、锁定和非 base 图层重排 UI。仍未完成的是完整 Fabric scene JSON 持久化、复杂组合/对齐、SVG/PPT 导出、OCR 校验或多用户长期会话能力。
 
 ### 4. 更细粒度的 SAM-2 交互
 
@@ -80,3 +80,9 @@ Remaining persistence limitations: this is not a multi-user database, it has no 
 The current branch now includes durable file-backed async job snapshots under `JOBS_DIR`. Completed, failed, cancelled, and restart-interrupted jobs are readable after gateway restart, and the front end exposes a cancel action for the active async job.
 
 Remaining async limitations: this is still not Redis/Celery, there is no separate worker service, no multi-worker scheduling or cross-instance coordination, and cancellation remains cooperative at gateway progress checkpoints rather than a hard interruption of an in-flight model call.
+
+## Phase 8 Fabric Layer Note
+
+The current branch now includes a first Fabric.js-backed editor slice. It keeps the existing `canvas_state` contract, adds layer order and per-layer visibility/lock/opacity metadata, and lets users switch into layer mode to select and transform asset/text objects without losing the brush/erase mask workflow.
+
+Remaining layer-editor limitations: Fabric scene JSON is not persisted as the source of truth yet, mask drawing still uses the native mask canvas, SVG/PPT export and OCR reconciliation are not implemented, and advanced editor features such as grouping, snapping, alignment guides, and vector export validation remain future phases.

@@ -418,6 +418,95 @@ Add durable async job state
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
+## Task 19: Fabric.js Layer Editor Slice
+
+**Files:**
+- Modify: `frontend/package.json`
+- Create: `frontend/package-lock.json`
+- Modify: `frontend/src/canvasState.js`
+- Create: `frontend/src/layerState.js`
+- Create: `frontend/tests/layerState.test.mjs`
+- Modify: `frontend/tests/canvasState.test.mjs`
+- Modify: `frontend/src/App.jsx`
+- Modify: `frontend/src/components/ControlPanel.jsx`
+- Modify: `frontend/src/components/EditorStage.jsx`
+- Modify: `frontend/src/styles.css`
+
+- [x] **Step 1: Write failing layer-state tests**
+
+Add frontend helper tests proving that layer ordering keeps the base image at the bottom, preserves valid non-base layer order, drops missing layer ids, and applies visibility/lock/opacity overrides into `canvas_state`.
+
+- [x] **Step 2: Run tests and verify failure**
+
+Run:
+
+```bash
+cd frontend && node tests/layerState.test.mjs && node tests/canvasState.test.mjs
+```
+
+Expected: fails because `layerState.js`, layer ordering helpers, and `createCanvasStateSnapshot(..., layerOrder, layerOverrides)` support do not exist yet.
+
+- [x] **Step 3: Add Fabric dependency**
+
+Install and commit `fabric` as a front-end runtime dependency. Keep `package-lock.json` in the repo so CI installs the same dependency tree.
+
+- [x] **Step 4: Implement layer-state helpers**
+
+Create pure helper functions for editor layer construction, ordering, move-up/move-down, and per-layer metadata overrides. Keep these helpers independent of Fabric so they can be tested in Node.
+
+- [x] **Step 5: Implement Fabric editor shell**
+
+Replace the current React-only image/asset/text overlay path with a Fabric.js canvas for base image, asset, and text objects while preserving the existing native mask canvas for mask painting. Add a layer interaction mode so Fabric selection does not conflict with brush/erase mode.
+
+- [x] **Step 6: Add layer panel actions**
+
+Show base, mask, asset, and text layers in the editor. Support selecting a layer, toggling visibility, toggling lock state, and reordering non-base layers. Dragging or scaling Fabric objects should update asset placement or text layer positions.
+
+- [x] **Step 7: Verify**
+
+Run:
+
+```bash
+cd frontend && node tests/layerState.test.mjs && node tests/canvasState.test.mjs && node tests/projectState.test.mjs && npm run build
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs python -m unittest discover -s backend/tests -p 'test_*.py' -v
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 20: Phase 8 Review, Commit, Push
+
+**Files:**
+- Review: Phase 8 code and docs from Task 19
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Document Phase 8 scope and limitations**
+
+Update docs to say Phase 8 provides a first Fabric.js layer editor for base, mask, asset, and text layers while preserving `canvas_state`, but does not yet include OCR, SVG/PPT export, complex grouping, or full Fabric scene persistence.
+
+- [x] **Step 2: Review**
+
+Request code review for Phase 8 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run frontend helper tests, frontend build, backend tests, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 8 files and commit:
+
+```text
+Add Fabric layer editor
+```
+
+- [ ] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
 ## Task 15: Project Persistence And Version Tree
 
 **Files:**

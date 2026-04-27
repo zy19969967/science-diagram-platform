@@ -9,11 +9,16 @@ import {
   extractTextLayersFromCanvasState,
 } from "./canvasState.js";
 import {
+  buildEditorLayers,
+  moveLayerInOrder,
+  normalizeLayerOrder,
+  patchLayerOverrides,
+} from "./layerState.js";
+import {
   buildProjectCreatePayload,
   buildProjectVersionPayload,
   canSaveReloadableProjectVersion,
   latestProjectVersion,
-  shouldSaveReturnedCanvasState,
 } from "./projectState.js";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -86,6 +91,9 @@ function App() {
   const [initCandidates, setInitCandidates] = useState([]);
   const [selectedInitCandidateId, setSelectedInitCandidateId] = useState("");
   const [textLayers, setTextLayers] = useState([]);
+  const [layerOrder, setLayerOrder] = useState([]);
+  const [layerOverrides, setLayerOverrides] = useState({});
+  const [activeLayerId, setActiveLayerId] = useState("");
   const [latestResult, setLatestResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -112,6 +120,21 @@ function App() {
     () => assets.find((item) => item.id === selectedAssetId) ?? null,
     [assets, selectedAssetId],
   );
+  const editorLayers = useMemo(
+    () =>
+      buildEditorLayers({
+        sourceImage,
+        hasMask: Boolean(sourceImage),
+        selectedAsset,
+        assetPlacement,
+        textLayers,
+        layerOrder,
+        layerOverrides,
+      }),
+    [sourceImage, selectedAsset, assetPlacement, textLayers, layerOrder, layerOverrides],
+  );
+  const editorLayerIds = useMemo(() => editorLayers.map((layer) => layer.id), [editorLayers]);
+
   useEffect(() => {
     async function fetchAssets() {
       try {
@@ -178,6 +201,19 @@ function App() {
     window.requestAnimationFrame(() => syncCanvasToImage(naturalSize.width, naturalSize.height));
   }, [displayScale, naturalSize, sourceImage]);
 
+  useEffect(() => {
+    setLayerOrder((current) => normalizeLayerOrder(current, editorLayerIds));
+    setLayerOverrides((current) =>
+      Object.fromEntries(Object.entries(current).filter(([layerId]) => editorLayerIds.includes(layerId))),
+    );
+    setActiveLayerId((current) => {
+      if (!editorLayerIds.length) {
+        return "";
+      }
+      return editorLayerIds.includes(current) ? current : editorLayerIds[0];
+    });
+  }, [editorLayerIds.join("|")]);
+
   function syncCanvasToImage(width = naturalSize.width, height = naturalSize.height) {
     const image = imageRef.current;
     const canvas = maskCanvasRef.current;
@@ -202,6 +238,80 @@ function App() {
   function invalidateJobPolling() {
     jobTokenRef.current += 1;
     setIsJobGenerating(false);
+  }
+
+  function resetLayerEditorState() {
+    setLayerOrder([]);
+    setLayerOverrides({});
+    setActiveLayerId("");
+  }
+
+  function restoreLayerEditorState(canvasState) {
+    const layers = Array.isArray(canvasState?.layers) ? canvasState.layers : [];
+    setLayerOrder(layers.map((layer) => layer.id).filter(Boolean));
+    setLayerOverrides(
+      layers.reduce((overrides, layer) => {
+        if (!layer?.id || layer.id === "base-image") {
+          return overrides;
+        }
+        const patch = {};
+        if (layer.visible === false) {
+          patch.visible = false;
+        }
+        if (layer.locked) {
+          patch.locked = true;
+        }
+        if (typeof layer.opacity === "number" && layer.opacity !== 1) {
+          patch.opacity = layer.opacity;
+        }
+        if (Object.keys(patch).length > 0) {
+          overrides[layer.id] = patch;
+        }
+        return overrides;
+      }, {}),
+    );
+  }
+
+  function patchEditorLayer(layerId, patch) {
+    setLayerOverrides((current) => patchLayerOverrides(current, layerId, patch));
+    if (layerId.startsWith("text-")) {
+      setTextLayers((current) =>
+        current.map((layer) =>
+          layer.id === layerId
+            ? {
+                ...layer,
+                visible: typeof patch.visible === "boolean" ? patch.visible : layer.visible,
+                locked: typeof patch.locked === "boolean" ? patch.locked : layer.locked,
+                opacity: typeof patch.opacity === "number" ? patch.opacity : layer.opacity,
+              }
+            : layer,
+        ),
+      );
+    }
+  }
+
+  function moveEditorLayer(layerId, direction) {
+    setLayerOrder((current) => moveLayerInOrder(normalizeLayerOrder(current, editorLayerIds), layerId, direction));
+  }
+
+  function updateTextLayerFromFabric(layerId, patch) {
+    setTextLayers((current) =>
+      current.map((layer) =>
+        layer.id === layerId
+          ? {
+              ...layer,
+              data: {
+                ...layer.data,
+                ...patch,
+              },
+            }
+          : layer,
+      ),
+    );
+  }
+
+  function updateAssetPlacementFromFabric(patch) {
+    setAssetPlacement((current) => (current ? { ...current, ...patch } : current));
   }
 
   function clearMask() {
@@ -229,6 +339,7 @@ function App() {
     setInitCandidates([]);
     setSelectedInitCandidateId("");
     setTextLayers([]);
+    resetLayerEditorState();
     setJobSnapshot(null);
     setLatestResult(null);
     setHistory([]);
@@ -260,6 +371,7 @@ function App() {
     setInitCandidates([]);
     setSelectedInitCandidateId("");
     setTextLayers([]);
+    resetLayerEditorState();
     setJobSnapshot(null);
     setHistory([]);
     setCurrentProject(null);
@@ -286,7 +398,7 @@ function App() {
   }
 
   function startDrawing(event) {
-    if (!sourceImage || !maskCanvasRef.current) {
+    if (!sourceImage || drawMode === "layer" || layerOverrides["mask-current"]?.locked || !maskCanvasRef.current) {
       return;
     }
 
@@ -375,9 +487,12 @@ function App() {
     mergedCanvas.width = naturalSize.width;
     mergedCanvas.height = naturalSize.height;
     const mergedContext = mergedCanvas.getContext("2d");
-    mergedContext.drawImage(maskCanvas, 0, 0);
+    if (layerOverrides["mask-current"]?.visible !== false) {
+      mergedContext.drawImage(maskCanvas, 0, 0);
+    }
 
-    if (selectedAsset && assetPlacement) {
+    const assetLayerId = assetPlacement ? `asset-${assetPlacement.asset_id}` : "";
+    if (selectedAsset && assetPlacement && layerOverrides[assetLayerId]?.visible !== false) {
       const assetImage = await loadImage(selectedAsset.image_url);
       const drawWidth = assetPlacement.width * naturalSize.width;
       const drawHeight = assetPlacement.height * naturalSize.height;
@@ -388,7 +503,11 @@ function App() {
       assetCanvas.width = naturalSize.width;
       assetCanvas.height = naturalSize.height;
       const assetContext = assetCanvas.getContext("2d");
-      assetContext.drawImage(assetImage, left, top, drawWidth, drawHeight);
+      assetContext.save();
+      assetContext.translate(assetPlacement.x * naturalSize.width, assetPlacement.y * naturalSize.height);
+      assetContext.rotate(((assetPlacement.rotation ?? 0) * Math.PI) / 180);
+      assetContext.drawImage(assetImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      assetContext.restore();
       const imageData = assetContext.getImageData(0, 0, assetCanvas.width, assetCanvas.height);
       const pixels = imageData.data;
       for (let index = 0; index < pixels.length; index += 4) {
@@ -530,6 +649,8 @@ function App() {
       initPlan,
       seed,
       plan,
+      layerOrder,
+      layerOverrides,
     });
 
     return {
@@ -555,6 +676,7 @@ function App() {
     setLatestResult(data);
     if (data.canvas_state) {
       setTextLayers(extractTextLayersFromCanvasState(data.canvas_state));
+      restoreLayerEditorState(data.canvas_state);
     }
     setHistory((current) => [data, ...current]);
     setStatus(`${statusPrefix}：${data.evaluation.note}`);
@@ -576,9 +698,6 @@ function App() {
   }
 
   async function buildCurrentProjectCanvasState() {
-    if (shouldSaveReturnedCanvasState({ latestResult, sourceImage })) {
-      return latestResult.canvas_state;
-    }
     if (!sourceImage) {
       return null;
     }
@@ -597,6 +716,8 @@ function App() {
       initPlan,
       seed,
       plan,
+      layerOrder,
+      layerOverrides,
     });
   }
 
@@ -710,6 +831,7 @@ function App() {
       setLatestResult(editableResult);
       setHistory(versionResults);
       setTextLayers(extractTextLayersFromCanvasState(latestVersion?.canvas_state));
+      restoreLayerEditorState(latestVersion?.canvas_state);
       setInstruction(latestVersion?.metadata?.instruction || loadedProject.name || "");
       setTask(latestVersion?.metadata?.task || "text-guided");
       setInitPlan(loadedProject.init_plan ?? null);
@@ -866,6 +988,7 @@ function App() {
       setSourceImage(editableImage);
       setLatestResult(editableItem);
       setTextLayers(extractTextLayersFromCanvasState(item.canvas_state));
+      restoreLayerEditorState(item.canvas_state);
       clearMask();
       setStatus(`已切换到历史结果 ${item.run_id}，可以继续多轮编辑。`);
     } catch (historyError) {
@@ -889,6 +1012,7 @@ function App() {
     setCurrentProject(null);
     setSelectedInitCandidateId(candidate.id);
     setTextLayers(createTextLayersFromLabels(initPlan?.labels ?? candidate.metadata?.labels ?? []));
+    resetLayerEditorState();
     setSelectedAssetId("");
     setAssetPlacement(null);
     setDisplayScale(1);
@@ -897,8 +1021,17 @@ function App() {
   }
 
   function removeAsset() {
+    const layerId = assetPlacement ? `asset-${assetPlacement.asset_id}` : "";
     setSelectedAssetId("");
     setAssetPlacement(null);
+    if (layerId) {
+      setLayerOverrides((current) => {
+        const next = { ...current };
+        delete next[layerId];
+        return next;
+      });
+      setLayerOrder((current) => current.filter((item) => item !== layerId));
+    }
     dragActiveRef.current = false;
     setStatus("已移除当前素材");
   }
@@ -955,12 +1088,21 @@ function App() {
           imageRef={imageRef}
           maskCanvasRef={maskCanvasRef}
           syncCanvasToImage={syncCanvasToImage}
+          drawMode={drawMode}
           startDrawing={startDrawing}
           drawOnCanvas={drawOnCanvas}
           stopDrawing={stopDrawing}
           selectedAsset={selectedAsset}
           assetPlacement={assetPlacement}
           textLayers={textLayers}
+          editorLayers={editorLayers}
+          activeLayerId={activeLayerId}
+          setActiveLayerId={setActiveLayerId}
+          patchEditorLayer={patchEditorLayer}
+          moveEditorLayer={moveEditorLayer}
+          updateTextLayerFromFabric={updateTextLayerFromFabric}
+          updateAssetPlacementFromFabric={updateAssetPlacementFromFabric}
+          layerOverrides={layerOverrides}
           dragActiveRef={dragActiveRef}
           clearMask={clearMask}
           clearCanvas={clearCanvasWorkspace}

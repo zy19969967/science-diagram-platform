@@ -44,6 +44,11 @@ const snapshot = createCanvasStateSnapshot({
   },
   seed: 2026,
   plan: null,
+  layerOrder: ["text-2", "asset-arrow", "mask-current", "text-1"],
+  layerOverrides: {
+    "text-2": { visible: false, locked: true, opacity: 0.45 },
+    "asset-arrow": { locked: true },
+  },
 });
 
 assert.equal(snapshot.source, "init-candidate");
@@ -52,11 +57,15 @@ assert.equal(snapshot.width, 1024);
 assert.equal(snapshot.height, 768);
 assert.equal(snapshot.layers.length, 6);
 assert.equal(snapshot.layers[0].type, "base-image");
-assert.equal(snapshot.layers[1].type, "mask");
-assert.equal(snapshot.layers[2].type, "asset");
-assert.equal(snapshot.layers[3].type, "text");
-assert.equal(snapshot.layers[1].data.mask_image, null);
-assert.equal(snapshot.layers[1].data.embedded_mask_image, true);
+assert.equal(snapshot.layers[1].id, "text-2");
+assert.equal(snapshot.layers[1].visible, false);
+assert.equal(snapshot.layers[1].locked, true);
+assert.equal(snapshot.layers[1].opacity, 0.45);
+assert.equal(snapshot.layers[2].id, "asset-arrow");
+assert.equal(snapshot.layers[2].locked, true);
+assert.equal(snapshot.layers[3].id, "mask-current");
+assert.equal(snapshot.layers[3].data.mask_image, null);
+assert.equal(snapshot.layers[3].data.embedded_mask_image, true);
 assert.deepEqual(snapshot.history, ["init_1"]);
 assert.equal(snapshot.metadata.selected_init_candidate_id, "init_1");
 assert.equal(snapshot.metadata.init_provider, "deterministic-fallback");

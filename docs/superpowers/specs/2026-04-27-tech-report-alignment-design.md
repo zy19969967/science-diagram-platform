@@ -98,6 +98,16 @@ Explicitly out of scope for Phase 7: Redis/Celery, a separate worker process, mu
 
 Move from React-only overlays to a real layer editor with selectable/lockable/reorderable base, mask, asset, and text layers. Keep the Phase 3 `canvas_state` contract as the serialization boundary.
 
+Implemented Phase 8 scope:
+
+- The front end now depends on Fabric.js and renders the editable canvas through a Fabric canvas for base image, asset, and text objects.
+- A layer mode separates Fabric selection from brush/erase mask painting, so existing mask drawing remains available.
+- The editor shows base, mask, asset, and text layers with active selection, visibility toggles, lock toggles, and non-base layer reordering.
+- Fabric object modifications write asset placement and text positions/font size back into React state before generation, project save, or history continuation.
+- `canvas_state.layers` now preserves layer order plus visibility/lock/opacity metadata for generated and saved snapshots.
+
+Explicitly out of scope for Phase 8: full Fabric scene JSON persistence, complex grouping, SVG/PPT export, OCR reconciliation, vector text export guarantees, and rich alignment/snapping tools.
+
 ### Phase 9: Rich SAM-2 Interaction
 
 Add positive/negative point prompts, multi-click refinement, and explicit box/point provenance. Preserve the current box-derived fallback so existing brush and asset placement workflows still work.

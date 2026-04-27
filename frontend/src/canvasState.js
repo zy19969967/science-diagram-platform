@@ -8,6 +8,7 @@ const DEFAULT_TEXT_POSITIONS = [
 ];
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const BASE_LAYER_ID = "base-image";
 
 function isDataUrl(value) {
   return typeof value === "string" && value.startsWith("data:");
@@ -73,6 +74,37 @@ function normalizeTextLayer(layer, index) {
   };
 }
 
+function applyLayerOverrides(layer, layerOverrides = {}) {
+  const override = layerOverrides[layer.id] ?? {};
+  return {
+    ...layer,
+    visible: typeof override.visible === "boolean" ? override.visible : layer.visible,
+    locked: typeof override.locked === "boolean" ? override.locked : layer.locked,
+    opacity: typeof override.opacity === "number" ? clamp(override.opacity, 0, 1) : layer.opacity,
+  };
+}
+
+function sortLayersByOrder(layers, layerOrder = []) {
+  const layerIds = layers.map((layer) => layer.id);
+  const layerSet = new Set(layerIds);
+  const orderedIds = [];
+  if (layerSet.has(BASE_LAYER_ID)) {
+    orderedIds.push(BASE_LAYER_ID);
+  }
+  for (const layerId of layerOrder) {
+    if (layerId !== BASE_LAYER_ID && layerSet.has(layerId) && !orderedIds.includes(layerId)) {
+      orderedIds.push(layerId);
+    }
+  }
+  for (const layerId of layerIds) {
+    if (!orderedIds.includes(layerId)) {
+      orderedIds.push(layerId);
+    }
+  }
+  const byId = new Map(layers.map((layer) => [layer.id, layer]));
+  return orderedIds.map((layerId) => byId.get(layerId)).filter(Boolean);
+}
+
 export function createTextLayersFromLabels(labels = []) {
   return labels
     .map((label) => String(label ?? "").trim())
@@ -116,6 +148,8 @@ export function createCanvasStateSnapshot({
   initPlan,
   seed,
   plan,
+  layerOrder,
+  layerOverrides,
 }) {
   const width = Number(naturalSize?.width) || 0;
   const height = Number(naturalSize?.height) || 0;
@@ -177,12 +211,17 @@ export function createCanvasStateSnapshot({
 
   layers.push(...(textLayers ?? []).map((layer, index) => normalizeTextLayer(layer, index)));
 
+  const orderedLayers = sortLayersByOrder(
+    layers.map((layer) => applyLayerOverrides(layer, layerOverrides)),
+    layerOrder,
+  );
+
   return {
     canvas_id: inferCanvasId({ latestResult, selectedInitCandidateId, naturalSize: { width, height }, sourceImage }),
     width,
     height,
     source,
-    layers,
+    layers: orderedLayers,
     history: buildHistory({ source, selectedInitCandidateId, latestResult, sourceImage }),
     metadata: {
       instruction,
