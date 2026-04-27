@@ -126,6 +126,16 @@ Explicitly out of scope for Phase 9: multi-mask candidate selection, automatic t
 
 Add OCR validation for generated labels, vector text layer reconciliation, and SVG/PPT-ready export paths. This should build on the layer editor and not treat bitmap fallback text as editable vector text.
 
+Implemented Phase 10 scope:
+
+- The backend exposes `/api/canvas/validate-text` for deterministic text reconciliation from `canvas_state` vector text layers and optional caller-supplied OCR observations.
+- The backend exposes `/api/canvas/export-svg` and serializes visible base, asset, and text layers into SVG while preserving text layers as editable `<text>` elements.
+- SVG export emits explicit warnings for embedded bitmap-only sources, raster masks, and SAM prompt provenance layers that cannot be represented as editable SVG geometry.
+- The front end can validate current canvas text from a freshly built `canvas_state`, export SVG, show matched/missing labels and warnings, and download the returned SVG.
+- CI now runs backend export tests and the frontend export helper test.
+
+Explicitly out of scope for Phase 10: running a real OCR model in the gateway, validating bitmap-only text without supplied OCR observations, PPTX export, full Fabric scene JSON persistence, and complete vectorization of raster PowerPaint outputs.
+
 ### Phase 11: FLUX Initial Canvas Service
 
 Replace the deterministic fallback with a real initial-canvas generation service, candidate scoring, low-resolution previews, and high-resolution async regeneration. Keep the existing `/api/init-plan` and `/api/init-generate` contracts stable.

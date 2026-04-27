@@ -17,6 +17,11 @@ import {
 } from "./layerState.js";
 import { addRegionPoint, normalizeRegionPoints, removeRegionPoint } from "./regionPrompts.js";
 import {
+  buildCanvasExportPayload,
+  buildSvgDownloadDescriptor,
+  buildTextValidationPayload,
+} from "./exportState.js";
+import {
   buildProjectCreatePayload,
   buildProjectVersionPayload,
   canSaveReloadableProjectVersion,
@@ -109,6 +114,10 @@ function App() {
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [jobSnapshot, setJobSnapshot] = useState(null);
+  const [textValidationReport, setTextValidationReport] = useState(null);
+  const [svgExport, setSvgExport] = useState(null);
+  const [isValidatingText, setIsValidatingText] = useState(false);
+  const [isExportingSvg, setIsExportingSvg] = useState(false);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [displayScale, setDisplayScale] = useState(1);
 
@@ -217,6 +226,11 @@ function App() {
       return editorLayerIds.includes(current) ? current : editorLayerIds[0];
     });
   }, [editorLayerIds.join("|")]);
+
+  useEffect(() => {
+    setTextValidationReport(null);
+    setSvgExport(null);
+  }, [sourceImage, selectedInitCandidateId, latestResult?.run_id, textLayers, assetPlacement, layerOrder, layerOverrides]);
 
   function syncCanvasToImage(width = naturalSize.width, height = naturalSize.height) {
     const image = imageRef.current;
@@ -370,6 +384,8 @@ function App() {
     setPointPrompts([]);
     resetLayerEditorState();
     setJobSnapshot(null);
+    setTextValidationReport(null);
+    setSvgExport(null);
     setLatestResult(null);
     setHistory([]);
     setCurrentProject(null);
@@ -403,6 +419,8 @@ function App() {
     setPointPrompts([]);
     resetLayerEditorState();
     setJobSnapshot(null);
+    setTextValidationReport(null);
+    setSvgExport(null);
     setHistory([]);
     setCurrentProject(null);
     setDisplayScale(1);
@@ -931,6 +949,79 @@ function App() {
     }
   }
 
+  async function validateCanvasText() {
+    setIsValidatingText(true);
+    setError("");
+    setStatus("正在校验画布文本层...");
+    try {
+      const canvasState = await buildCurrentProjectCanvasState();
+      if (!canvasState) {
+        throw new Error("当前没有可校验的画布状态。");
+      }
+      const response = await fetch(apiPath("/api/canvas/validate-text"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildTextValidationPayload({ canvasState })),
+      });
+      const report = await readJsonResponse(response, "文本校验失败");
+      setTextValidationReport(report);
+      setStatus(`文本校验完成：${report.status}`);
+    } catch (validationError) {
+      setError(validationError.message);
+      setStatus("文本校验失败。");
+    } finally {
+      setIsValidatingText(false);
+    }
+  }
+
+  function downloadSvgExport(exportResponse = svgExport) {
+    if (!exportResponse?.svg) {
+      return;
+    }
+    const descriptor = buildSvgDownloadDescriptor(exportResponse);
+    const blob = new Blob([descriptor.content], { type: descriptor.mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = descriptor.filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }
+
+  async function exportCanvasSvg() {
+    setIsExportingSvg(true);
+    setError("");
+    setStatus("正在导出 SVG...");
+    try {
+      const canvasState = await buildCurrentProjectCanvasState();
+      if (!canvasState) {
+        throw new Error("当前没有可导出的画布状态。");
+      }
+      const response = await fetch(apiPath("/api/canvas/export-svg"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          buildCanvasExportPayload({
+            canvasState,
+            filename: `${canvasState.canvas_id || "science-diagram"}.svg`,
+          }),
+        ),
+      });
+      const exportResponse = await readJsonResponse(response, "SVG 导出失败");
+      setSvgExport(exportResponse);
+      setTextValidationReport(exportResponse.text_report ?? null);
+      downloadSvgExport(exportResponse);
+      setStatus(`SVG 导出完成：${exportResponse.filename}`);
+    } catch (exportError) {
+      setError(exportError.message);
+      setStatus("SVG 导出失败。");
+    } finally {
+      setIsExportingSvg(false);
+    }
+  }
+
   async function pollJobUntilComplete(jobId, token) {
     for (let attempt = 0; attempt < 240; attempt += 1) {
       await new Promise((resolve) => {
@@ -1127,9 +1218,13 @@ function App() {
           createInitialCanvas={createInitialCanvas}
           generateResult={generateResult}
           startGenerateJob={startGenerateJob}
+          validateCanvasText={validateCanvasText}
+          exportCanvasSvg={exportCanvasSvg}
           isInitializing={isInitializing}
           isGenerating={isGenerating}
           isJobGenerating={isJobGenerating}
+          isValidatingText={isValidatingText}
+          isExportingSvg={isExportingSvg}
           error={error}
           handleUpload={handleUpload}
         />
@@ -1184,6 +1279,9 @@ function App() {
           isSavingProject={isSavingProject}
           isLoadingProjects={isLoadingProjects}
           canSaveProject={canSaveReloadableProjectVersion({ latestResult })}
+          textValidationReport={textValidationReport}
+          svgExport={svgExport}
+          downloadSvgExport={downloadSvgExport}
         />
       </main>
     </div>

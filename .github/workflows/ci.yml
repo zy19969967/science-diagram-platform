@@ -37,7 +37,9 @@ jobs:
             backend/common/init_logic.py \
             backend/common/canvas_state.py \
             backend/common/quality.py \
+            backend/common/export_logic.py \
             backend/common/utils/masks.py \
+            backend/segmenter/runtime.py \
             backend/gateway/jobs.py \
             backend/gateway/projects.py \
             backend/gateway/main.py
@@ -54,6 +56,7 @@ jobs:
           import common.init_logic
           import common.canvas_state
           import common.quality
+          import common.export_logic
           import gateway.jobs
           import gateway.projects
           import gateway.main
@@ -73,6 +76,7 @@ jobs:
       - name: Run frontend helper tests
         working-directory: frontend
         run: |
+          node tests/exportState.test.mjs
           node tests/regionPrompts.test.mjs
           node tests/layerState.test.mjs
           node tests/canvasState.test.mjs

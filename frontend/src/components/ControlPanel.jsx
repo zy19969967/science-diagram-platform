@@ -31,9 +31,13 @@ function ControlPanel({
   createInitialCanvas,
   generateResult,
   startGenerateJob,
+  validateCanvasText,
+  exportCanvasSvg,
   isInitializing,
   isGenerating,
   isJobGenerating,
+  isValidatingText,
+  isExportingSvg,
   error,
   handleUpload,
 }) {
@@ -211,6 +215,12 @@ function ControlPanel({
         <div className="action-row action-stack">
           <button type="button" className="secondary-button" onClick={analyzePlan}>
             解析任务
+          </button>
+          <button type="button" className="secondary-button" onClick={validateCanvasText} disabled={isValidatingText}>
+            {isValidatingText ? "校验中..." : "校验文本"}
+          </button>
+          <button type="button" className="secondary-button" onClick={exportCanvasSvg} disabled={isExportingSvg}>
+            {isExportingSvg ? "导出中..." : "导出 SVG"}
           </button>
           <button type="button" className="secondary-button" onClick={startGenerateJob} disabled={isJobGenerating || isGenerating}>
             {isJobGenerating ? "异步任务中..." : "异步生成"}

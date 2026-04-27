@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from common.assets import asset_catalog_with_urls
 from common.canvas_state import build_canvas_state_after_generate
+from common.export_logic import build_svg_export, build_text_validation_report
 from common.init_logic import build_init_candidates, build_scene_plan
 from common.planner_logic import build_plan
 from common.quality import build_quality_report
@@ -34,6 +35,10 @@ from common.schemas import (
     ScenePlanResponse,
     SegmentRequest,
     SegmentResponse,
+    SvgExportRequest,
+    SvgExportResponse,
+    TextValidationReport,
+    TextValidationRequest,
 )
 from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image
@@ -107,6 +112,16 @@ async def init_plan(payload: ScenePlanRequest) -> ScenePlanResponse:
 @app.post("/api/init-generate", response_model=InitGenerateResponse)
 async def init_generate(payload: InitGenerateRequest) -> InitGenerateResponse:
     return build_init_candidates(payload)
+
+
+@app.post("/api/canvas/validate-text", response_model=TextValidationReport)
+def validate_canvas_text(payload: TextValidationRequest) -> TextValidationReport:
+    return build_text_validation_report(payload)
+
+
+@app.post("/api/canvas/export-svg", response_model=SvgExportResponse)
+def export_canvas_svg(payload: SvgExportRequest) -> SvgExportResponse:
+    return build_svg_export(payload)
 
 
 @app.get("/api/projects", response_model=list[ProjectSnapshot])

@@ -12,6 +12,7 @@ CanvasLayerType = Literal["base-image", "mask", "asset", "text", "result", "regi
 PointPromptLabel = Literal["positive", "negative"]
 CanvasSource = Literal["upload", "init-candidate", "history", "generated"]
 ProjectVersionKind = Literal["init-candidate", "generate-result", "manual-snapshot"]
+TextValidationStatus = Literal["pass", "warn", "fail"]
 MAX_CANVAS_LAYERS = 64
 MAX_CANVAS_STATE_BYTES = 65536
 MAX_PROJECT_METADATA_BYTES = 65536
@@ -207,6 +208,48 @@ class CanvasState(BaseModel):
         if len(serialized.encode("utf-8")) > MAX_CANVAS_STATE_BYTES:
             raise ValueError(f"canvas_state cannot exceed {MAX_CANVAS_STATE_BYTES} bytes")
         return self
+
+
+class TextObservation(BaseModel):
+    text: str
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    source: str = "provided-ocr"
+    bbox: list[float] | None = None
+
+
+class TextValidationRequest(BaseModel):
+    canvas_state: CanvasState
+    expected_labels: list[str] = Field(default_factory=list, max_length=128)
+    ocr_observations: list[TextObservation] = Field(default_factory=list, max_length=128)
+    include_hidden_layers: bool = False
+
+
+class TextValidationReport(BaseModel):
+    status: TextValidationStatus
+    source: str
+    expected_labels: list[str] = Field(default_factory=list)
+    vector_labels: list[str] = Field(default_factory=list)
+    ocr_labels: list[str] = Field(default_factory=list)
+    matched_labels: list[str] = Field(default_factory=list)
+    missing_labels: list[str] = Field(default_factory=list)
+    extra_vector_labels: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class SvgExportRequest(BaseModel):
+    canvas_state: CanvasState
+    expected_labels: list[str] = Field(default_factory=list, max_length=128)
+    ocr_observations: list[TextObservation] = Field(default_factory=list, max_length=128)
+    include_hidden_layers: bool = False
+    filename: str = "science-diagram.svg"
+
+
+class SvgExportResponse(BaseModel):
+    svg: str
+    mime_type: str = "image/svg+xml"
+    filename: str = "science-diagram.svg"
+    text_report: TextValidationReport
+    warnings: list[str] = Field(default_factory=list)
 
 
 class SegmentRequest(BaseModel):

@@ -25,7 +25,7 @@
 
 ### 3. 画布状态、图层系统与项目级持久化
 
-当前生成请求已经可以携带可序列化 `canvas_state`，并在生成后返回更新后的 base image、mask、asset 和 text layer 元数据；前端已经接入首个 Fabric.js 图层编辑器，支持图层模式下选择素材/文字对象、拖动或缩放回写状态，并提供 base、mask、asset、text layer 的可见性、锁定和非 base 图层重排 UI。仍未完成的是完整 Fabric scene JSON 持久化、复杂组合/对齐、SVG/PPT 导出、OCR 校验或多用户长期会话能力。
+当前生成请求已经可以携带可序列化 `canvas_state`，并在生成后返回更新后的 base image、mask、asset 和 text layer 元数据；前端已经接入首个 Fabric.js 图层编辑器，支持图层模式下选择素材/文字对象、拖动或缩放回写状态，并提供 base、mask、asset、text layer 的可见性、锁定和非 base 图层重排 UI。当前还新增了基于 vector text layer 的文本一致性校验合同和 SVG 导出路径，SVG 中可见文本层会保留为 `<text>`。仍未完成的是完整 Fabric scene JSON 持久化、复杂组合/对齐、PPT 导出、真实 OCR 引擎校验或多用户长期会话能力。
 
 ### 4. 更细粒度的 SAM-2 交互
 
@@ -37,7 +37,7 @@
 
 ### 6. 评估与实验管理
 
-当前生成结果会返回并落盘每轮 `quality_report`，包含 mask 覆盖、mask 内变化、局部化得分、保真得分和 prompt/provenance 元数据。这仍然只是单次运行级别的质量记录：还没有 OCR 校验、人工偏好评分、数据集级 benchmark 聚合、长期实验看板或模型版本对比报表。
+当前生成结果会返回并落盘每轮 `quality_report`，包含 mask 覆盖、mask 内变化、局部化得分、保真得分和 prompt/provenance 元数据。Phase 10 已提供 OCR-ready 文本校验接口：如果调用方提供 OCR observations，后端可以和预期标签/vector text layer 做一致性比较；未提供 OCR 时会明确标记为 vector-text fallback。这仍然不是完整评估平台：还没有内置真实 OCR 模型、人工偏好评分、数据集级 benchmark 聚合、长期实验看板或模型版本对比报表。
 
 ## 当前主要风险
 
@@ -85,10 +85,16 @@ Remaining async limitations: this is still not Redis/Celery, there is no separat
 
 The current branch now includes a first Fabric.js-backed editor slice. It keeps the existing `canvas_state` contract, adds layer order and per-layer visibility/lock/opacity metadata, and lets users switch into layer mode to select and transform asset/text objects without losing the brush/erase mask workflow.
 
-Remaining layer-editor limitations: Fabric scene JSON is not persisted as the source of truth yet, mask drawing still uses the native mask canvas, SVG/PPT export and OCR reconciliation are not implemented, and advanced editor features such as grouping, snapping, alignment guides, and vector export validation remain future phases.
+Remaining layer-editor limitations: Fabric scene JSON is not persisted as the source of truth yet, mask drawing still uses the native mask canvas, SVG export is limited to visible referenced image layers plus vector text layers, PPT export is not implemented, OCR reconciliation requires caller-supplied OCR observations for bitmap text, and advanced editor features such as grouping, snapping, alignment guides, and full vector export validation remain future phases.
 
 ## Phase 9 SAM Point Prompt Note
 
 The current branch now includes normalized positive/negative point prompts across the gateway, segmenter, front end, and `canvas_state` provenance. SAM2.1 receives `input_points` and `input_labels` when available, while the existing mask, box, and asset-placement fallback path remains intact.
 
 Remaining SAM interaction limitations: there is no multi-mask candidate picker, no automatic text-to-region grounding, no instance segmentation list, and no advanced click refinement scoring UI yet.
+
+## Phase 10 OCR-Ready SVG Export Note
+
+The current branch now includes `/api/canvas/validate-text` and `/api/canvas/export-svg`. These endpoints consume the existing `canvas_state`, reconcile visible vector text layers against expected labels and optional OCR observations, and return an SVG document where visible text layers remain editable SVG `<text>` nodes. The front end exposes text validation and SVG export actions from the current workspace state.
+
+Remaining export limitations: there is no built-in OCR model yet, bitmap-only labels from fallback images or PowerPaint output cannot be verified without supplied OCR observations, SVG export warns instead of embedding unavailable data-url source images, and PPTX export remains future work.

@@ -788,6 +788,12 @@ input[type="range"] {
   gap: 10px;
 }
 
+.export-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .canvas-state-grid div {
   display: grid;
   gap: 4px;
@@ -807,12 +813,22 @@ input[type="range"] {
   min-width: 0;
 }
 
+.export-summary div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(41, 85, 132, 0.08);
+  background: rgba(255, 255, 255, 0.68);
+}
+
 .canvas-state-grid span {
   color: var(--muted);
   font-size: 12px;
 }
 
 .project-summary span,
+.export-summary span,
 .project-card small {
   color: var(--muted);
   font-size: 12px;
@@ -823,8 +839,47 @@ input[type="range"] {
 }
 
 .project-summary strong,
+.export-summary strong,
 .project-card strong {
   overflow-wrap: anywhere;
+}
+
+.export-summary p,
+.warning-list p,
+.warning-text {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.warning-list {
+  display: grid;
+  gap: 6px;
+}
+
+.warning-list p,
+.warning-text {
+  color: var(--warning);
+}
+
+.export-status.pass {
+  color: #1d7a50;
+  border-color: rgba(29, 122, 80, 0.22);
+  background: rgba(29, 122, 80, 0.08);
+}
+
+.export-status.warn {
+  color: var(--warning);
+  border-color: rgba(213, 107, 64, 0.24);
+  background: rgba(213, 107, 64, 0.08);
+}
+
+.export-status.fail {
+  color: #b93b3b;
+  border-color: rgba(185, 59, 59, 0.24);
+  background: rgba(185, 59, 59, 0.08);
 }
 
 .split-actions {

@@ -24,6 +24,9 @@ function ResultPanel({
   isSavingProject,
   isLoadingProjects,
   canSaveProject,
+  textValidationReport,
+  svgExport,
+  downloadSvgExport,
 }) {
   const layerCount = canvasState?.layers?.length ?? 0;
   const historyCount = canvasState?.history?.length ?? 0;
@@ -33,6 +36,7 @@ function ResultPanel({
   const qualityPrompt = qualityReport?.prompt ?? {};
   const latestProjectVersionId = currentProject?.latest_version_id ?? "none";
   const canCancelJob = jobSnapshot && !["DONE", "FAILED", "CANCELLED"].includes(jobSnapshot.status);
+  const exportWarnings = Array.from(new Set([...(textValidationReport?.warnings ?? []), ...(svgExport?.warnings ?? [])]));
 
   return (
     <aside className="workbench-panel result-panel">
@@ -120,6 +124,46 @@ function ResultPanel({
               <strong>{historyCount}</strong>
             </div>
           </div>
+        </section>
+      )}
+
+      {(textValidationReport || svgExport) && (
+        <section className="surface-block rail-block export-block">
+          <div className="section-header compact-header">
+            <div>
+              <span className="section-label">Export</span>
+              <strong>文本与 SVG</strong>
+            </div>
+            {textValidationReport && <span className={`section-meta export-status ${textValidationReport.status}`}>{textValidationReport.status}</span>}
+          </div>
+          {textValidationReport && (
+            <div className="export-summary">
+              <div>
+                <span>Matched</span>
+                <strong>{textValidationReport.matched_labels?.length ?? 0}</strong>
+              </div>
+              <div>
+                <span>Missing</span>
+                <strong>{textValidationReport.missing_labels?.length ?? 0}</strong>
+              </div>
+              <p>{(textValidationReport.matched_labels ?? []).join(", ") || "No matched labels yet."}</p>
+              {(textValidationReport.missing_labels ?? []).length > 0 && (
+                <p className="warning-text">Missing: {textValidationReport.missing_labels.join(", ")}</p>
+              )}
+            </div>
+          )}
+          {svgExport && (
+            <button type="button" className="secondary-button full-width" onClick={() => downloadSvgExport(svgExport)}>
+              下载 {svgExport.filename}
+            </button>
+          )}
+          {exportWarnings.length > 0 && (
+            <div className="warning-list">
+              {exportWarnings.slice(0, 3).map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </div>
+          )}
         </section>
       )}
 

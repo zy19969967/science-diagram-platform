@@ -605,6 +605,99 @@ Add SAM point prompt refinement
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
+## Task 23: Phase 10 OCR-Ready Text Reconciliation And SVG Export
+
+**Files:**
+- Modify: `backend/common/schemas.py`
+- Create: `backend/common/export_logic.py`
+- Create: `backend/tests/test_export_logic.py`
+- Modify: `backend/gateway/main.py`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `backend/tests/test_ci_workflow.py`
+- Create: `frontend/src/exportState.js`
+- Create: `frontend/tests/exportState.test.mjs`
+- Modify: `frontend/src/App.jsx`
+- Modify: `frontend/src/components/ControlPanel.jsx`
+- Modify: `frontend/src/components/ResultPanel.jsx`
+- Modify: `frontend/src/styles.css`
+
+- [x] **Step 1: Write failing backend export tests**
+
+Add tests proving a `CanvasState` with vector text layers can produce a text reconciliation report and an SVG document with text preserved as `<text>` elements. Tests should also prove missing expected labels are reported and embedded/data-url-only base images are represented with an explicit warning rather than silently pretending to be a complete export.
+
+- [x] **Step 2: Run backend tests and verify failure**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs python -m unittest backend.tests.test_export_logic -v
+```
+
+Expected: fails because the export schemas and `common.export_logic` do not exist yet.
+
+- [x] **Step 3: Implement backend reconciliation and SVG export**
+
+Add request/response schemas for text validation and SVG export. Implement deterministic, offline text reconciliation from existing vector text layers and optional OCR observations supplied by callers. Implement SVG serialization from `canvas_state.layers`, preserving layer order, visible text layers as vector `<text>`, referenced base/asset images as `<image>`, and warnings for non-exportable embedded bitmap-only sources. Expose:
+
+```text
+POST /api/canvas/validate-text
+POST /api/canvas/export-svg
+```
+
+- [x] **Step 4: Write failing frontend export helper tests**
+
+Add pure helper tests proving the front end can build a validation/export payload from a current `canvas_state`, can derive expected labels from vector text layers, and can safely create a downloadable SVG blob descriptor from the backend response.
+
+- [x] **Step 5: Implement frontend export UI**
+
+Add controls to run text validation and SVG export from the current canvas state. Show the latest reconciliation status, matched/missing labels, warnings, and an SVG download action in the result panel. Keep generation and project-save flows unchanged.
+
+- [x] **Step 6: Verify**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs python -m unittest discover -s backend/tests -p 'test_*.py' -v
+PYTHONPATH=backend python -m py_compile backend/common/schemas.py backend/common/init_logic.py backend/common/canvas_state.py backend/common/quality.py backend/common/export_logic.py backend/common/utils/masks.py backend/gateway/jobs.py backend/gateway/projects.py backend/gateway/main.py backend/segmenter/runtime.py
+cd frontend && node tests/exportState.test.mjs && node tests/regionPrompts.test.mjs && node tests/layerState.test.mjs && node tests/canvasState.test.mjs && node tests/projectState.test.mjs && npm run build
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 24: Phase 10 Review, Commit, Push
+
+**Files:**
+- Review: Phase 10 code and docs from Task 23
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Document Phase 10 scope and limitations**
+
+Update docs to say Phase 10 provides OCR-ready text reconciliation and SVG export from vector text layers, but does not yet run a real OCR model, export PPTX, persist full Fabric scene JSON, or validate generated bitmap text from fallback/PowerPaint images without supplied OCR observations.
+
+- [x] **Step 2: Review**
+
+Request code review for Phase 10 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run backend tests, backend compile checks, frontend helper tests/build, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 10 files and commit:
+
+```text
+Add OCR-ready SVG export
+```
+
+- [ ] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
 ## Task 15: Project Persistence And Version Tree
 
 **Files:**
