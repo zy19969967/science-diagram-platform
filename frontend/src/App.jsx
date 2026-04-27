@@ -8,6 +8,13 @@ import {
   createTextLayersFromLabels,
   extractTextLayersFromCanvasState,
 } from "./canvasState.js";
+import {
+  buildProjectCreatePayload,
+  buildProjectVersionPayload,
+  canSaveReloadableProjectVersion,
+  latestProjectVersion,
+  shouldSaveReturnedCanvasState,
+} from "./projectState.js";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const apiPath = (path) => (API_BASE_URL ? `${API_BASE_URL}${path}` : path);
@@ -39,6 +46,26 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function readBlobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function readImageSourceAsDataUrl(source) {
+  if (!source || source.startsWith("data:")) {
+    return source || "";
+  }
+  const response = await fetch(source);
+  if (!response.ok) {
+    throw new Error("Unable to load saved project image artifact.");
+  }
+  return readBlobAsDataUrl(await response.blob());
+}
+
 function App() {
   const [assets, setAssets] = useState([]);
   const [sourceImage, setSourceImage] = useState("");
@@ -61,11 +88,15 @@ function App() {
   const [textLayers, setTextLayers] = useState([]);
   const [latestResult, setLatestResult] = useState(null);
   const [history, setHistory] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [currentProject, setCurrentProject] = useState(null);
   const [status, setStatus] = useState("等待上传图像与绘制选区");
   const [error, setError] = useState("");
   const [isInitializing, setIsInitializing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isJobGenerating, setIsJobGenerating] = useState(false);
+  const [isSavingProject, setIsSavingProject] = useState(false);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [jobSnapshot, setJobSnapshot] = useState(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [displayScale, setDisplayScale] = useState(1);
@@ -93,6 +124,10 @@ function App() {
     }
 
     fetchAssets();
+  }, []);
+
+  useEffect(() => {
+    refreshProjects();
   }, []);
 
   useEffect(() => {
@@ -197,6 +232,7 @@ function App() {
     setJobSnapshot(null);
     setLatestResult(null);
     setHistory([]);
+    setCurrentProject(null);
     setNaturalSize({ width: 0, height: 0 });
     setDisplayScale(1);
     dragActiveRef.current = false;
@@ -226,6 +262,7 @@ function App() {
     setTextLayers([]);
     setJobSnapshot(null);
     setHistory([]);
+    setCurrentProject(null);
     setDisplayScale(1);
     setStatus("图像已载入，可以开始涂抹 mask 或拖拽素材。");
     setError("");
@@ -459,6 +496,7 @@ function App() {
       setTextLayers([]);
       setLatestResult(null);
       setHistory([]);
+      setCurrentProject(null);
       setStatus(`已生成 ${data.candidates.length} 张初图候选，可选择一张进入编辑闭环。`);
     } catch (initError) {
       setError(initError.message);
@@ -520,6 +558,180 @@ function App() {
     }
     setHistory((current) => [data, ...current]);
     setStatus(`${statusPrefix}：${data.evaluation.note}`);
+  }
+
+  async function refreshProjects() {
+    setIsLoadingProjects(true);
+    try {
+      const response = await fetch(apiPath("/api/projects"));
+      const data = await readJsonResponse(response, "Project list loading failed");
+      setProjects(data);
+      return data;
+    } catch (projectError) {
+      setError(projectError.message);
+      return [];
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }
+
+  async function buildCurrentProjectCanvasState() {
+    if (shouldSaveReturnedCanvasState({ latestResult, sourceImage })) {
+      return latestResult.canvas_state;
+    }
+    if (!sourceImage) {
+      return null;
+    }
+    const maskPayload = await buildMaskPayload();
+    return createCanvasStateSnapshot({
+      sourceImage,
+      naturalSize,
+      selectedInitCandidateId,
+      latestResult,
+      maskPayload,
+      selectedAsset,
+      assetPlacement,
+      textLayers,
+      instruction,
+      task,
+      initPlan,
+      seed,
+      plan,
+    });
+  }
+
+  function mergeProjectIntoList(project) {
+    setProjects((current) => {
+      const withoutProject = current.filter((item) => item.project_id !== project.project_id);
+      return [project, ...withoutProject];
+    });
+  }
+
+  async function saveCurrentProjectVersion() {
+    setIsSavingProject(true);
+    setError("");
+    try {
+      const canvasState = await buildCurrentProjectCanvasState();
+      if (!canvasState) {
+        throw new Error("No canvas state is available to save.");
+      }
+
+      let project = currentProject;
+      if (!project) {
+        const createResponse = await fetch(apiPath("/api/projects"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            buildProjectCreatePayload({
+              instruction,
+              naturalSize,
+              sourceImage,
+              initPlan,
+              selectedInitCandidateId,
+              latestResult,
+            }),
+          ),
+        });
+        project = await readJsonResponse(createResponse, "Project creation failed");
+      }
+
+      const versionResponse = await fetch(apiPath(`/api/projects/${project.project_id}/versions`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          buildProjectVersionPayload({
+            currentProject: project,
+            canvasState,
+            latestResult,
+            selectedInitCandidateId,
+            instruction,
+            task,
+          }),
+        ),
+      });
+      const updatedProject = await readJsonResponse(versionResponse, "Project version saving failed");
+      setCurrentProject(updatedProject);
+      mergeProjectIntoList(updatedProject);
+      setStatus(`Project saved: ${updatedProject.project_id}`);
+    } catch (projectError) {
+      setError(projectError.message);
+      setStatus("Project save failed.");
+    } finally {
+      setIsSavingProject(false);
+    }
+  }
+
+  function resultFromProjectVersion(version) {
+    if (!version) {
+      return null;
+    }
+    const resultImage = version.result_image || version.artifacts?.result || "";
+    if (!resultImage) {
+      return null;
+    }
+    return {
+      run_id: version.run_id || version.version_id,
+      plan: {
+        task: version.metadata?.task || "text-guided",
+        task_prompt: "",
+        negative_prompt: "",
+        reasoning: "Loaded from saved project version",
+      },
+      result_image: resultImage,
+      evaluation: version.quality_report?.evaluation ?? {
+        changed_ratio: 0,
+        outside_mask_change_ratio: 0,
+        note: "Loaded from saved project version",
+      },
+      artifacts: version.artifacts ?? {},
+      canvas_state: version.canvas_state ?? null,
+      quality_report: version.quality_report ?? null,
+    };
+  }
+
+  async function loadProject(project) {
+    invalidateJobPolling();
+    setError("");
+    try {
+      const response = await fetch(apiPath(`/api/projects/${project.project_id}`));
+      const loadedProject = await readJsonResponse(response, "Project loading failed");
+      const latestVersion = latestProjectVersion(loadedProject);
+      const loadedResult = resultFromProjectVersion(latestVersion);
+      const versionResults = [...(loadedProject.versions ?? [])]
+        .reverse()
+        .map((version) => resultFromProjectVersion(version))
+        .filter(Boolean);
+      const editableResult = loadedResult
+        ? { ...loadedResult, result_image: await readImageSourceAsDataUrl(loadedResult.result_image) }
+        : null;
+
+      setCurrentProject(loadedProject);
+      mergeProjectIntoList(loadedProject);
+      setLatestResult(editableResult);
+      setHistory(versionResults);
+      setTextLayers(extractTextLayersFromCanvasState(latestVersion?.canvas_state));
+      setInstruction(latestVersion?.metadata?.instruction || loadedProject.name || "");
+      setTask(latestVersion?.metadata?.task || "text-guided");
+      setInitPlan(loadedProject.init_plan ?? null);
+      setInitCandidates([]);
+      setSelectedInitCandidateId(
+        latestVersion?.metadata?.selected_init_candidate_id || loadedProject.selected_candidate_id || "",
+      );
+      setSelectedAssetId("");
+      setAssetPlacement(null);
+      setPlan(null);
+      setJobSnapshot(null);
+      clearMask();
+      dragActiveRef.current = false;
+      setSourceImage(editableResult?.result_image || "");
+      if (latestVersion?.canvas_state) {
+        setNaturalSize({ width: latestVersion.canvas_state.width, height: latestVersion.canvas_state.height });
+      }
+      setStatus(`Project loaded: ${loadedProject.project_id}`);
+    } catch (projectError) {
+      setError(projectError.message);
+      setStatus("Project load failed.");
+    }
   }
 
   async function generateResult() {
@@ -616,13 +828,21 @@ function App() {
     }
   }
 
-  function continueFromHistory(item) {
+  async function continueFromHistory(item) {
     invalidateJobPolling();
-    setSourceImage(item.result_image);
-    setLatestResult(item);
-    setTextLayers(extractTextLayersFromCanvasState(item.canvas_state));
-    clearMask();
-    setStatus(`已切换到历史结果 ${item.run_id}，可以继续多轮编辑。`);
+    setError("");
+    try {
+      const editableImage = await readImageSourceAsDataUrl(item.result_image);
+      const editableItem = { ...item, result_image: editableImage };
+      setSourceImage(editableImage);
+      setLatestResult(editableItem);
+      setTextLayers(extractTextLayersFromCanvasState(item.canvas_state));
+      clearMask();
+      setStatus(`已切换到历史结果 ${item.run_id}，可以继续多轮编辑。`);
+    } catch (historyError) {
+      setError(historyError.message);
+      setStatus("History result loading failed.");
+    }
   }
 
   function chooseInitCandidate(candidate) {
@@ -637,6 +857,7 @@ function App() {
     setPlan(null);
     setHistory([]);
     setJobSnapshot(null);
+    setCurrentProject(null);
     setSelectedInitCandidateId(candidate.id);
     setTextLayers(createTextLayersFromLabels(initPlan?.labels ?? candidate.metadata?.labels ?? []));
     setSelectedAssetId("");
@@ -729,6 +950,14 @@ function App() {
           chooseInitCandidate={chooseInitCandidate}
           jobSnapshot={jobSnapshot}
           canvasState={latestResult?.canvas_state ?? jobSnapshot?.result?.canvas_state ?? null}
+          projects={projects}
+          currentProject={currentProject}
+          saveCurrentProjectVersion={saveCurrentProjectVersion}
+          loadProject={loadProject}
+          refreshProjects={refreshProjects}
+          isSavingProject={isSavingProject}
+          isLoadingProjects={isLoadingProjects}
+          canSaveProject={canSaveReloadableProjectVersion({ latestResult })}
         />
       </main>
     </div>

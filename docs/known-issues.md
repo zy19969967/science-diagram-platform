@@ -69,3 +69,8 @@ Qwen3.5 输出结构化 JSON 时如果结果不合法，服务会自动回退到
 3. 持久化异步任务队列
 4. Fabric.js 图层编辑与会话级项目持久化
 5. 扩展 CI、端到端测试、OCR 校验和数据集级评估报表
+## Phase 6 Persistence Note
+
+The current branch now includes a lightweight single-user project persistence layer. It stores JSON project snapshots, parent-linked versions, selected initial-candidate metadata, run ids, canvas states, artifact URLs, and optional quality reports. This supersedes the earlier project-persistence part of the canvas-state gap; the remaining gap is full database-backed, multi-user, editor-level persistence.
+
+Remaining persistence limitations: this is not a multi-user database, it has no auth or migration system, it does not make async job state durable, it does not replace the future Fabric.js editor, and initial-candidate data URL images are still treated as session data unless a later generated artifact URL exists.

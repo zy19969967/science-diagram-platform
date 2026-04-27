@@ -341,6 +341,91 @@ Add async generation job skeleton
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
+## Task 15: Project Persistence And Version Tree
+
+**Files:**
+- Create: `backend/gateway/projects.py`
+- Create: `backend/tests/test_projects.py`
+- Modify: `backend/common/schemas.py`
+- Modify: `backend/gateway/main.py`
+- Modify: `.github/workflows/ci.yml`
+- Create: `frontend/src/projectState.js`
+- Create: `frontend/tests/projectState.test.mjs`
+- Modify: `frontend/src/App.jsx`
+- Modify: `frontend/src/components/ResultPanel.jsx`
+- Modify: `frontend/src/styles.css`
+
+- [x] **Step 1: Write failing persistence tests**
+
+Add backend tests that prove a file-backed project store can create a project, append two parent-linked versions, reload from disk, and reject missing parents. Add frontend helper tests that prove the project create/version request payloads contain source metadata, selected initial candidate ids, parent version ids, run ids, canvas state, artifacts, and quality reports without embedding large result data URLs.
+
+- [x] **Step 2: Implement backend project schemas and store**
+
+Add Pydantic models for project creation, version creation, persisted versions, and project snapshots. Implement a JSON-backed `ProjectStore` rooted at `PROJECTS_DIR` with deterministic validation, atomic writes, `create_project`, `list_projects`, `get_project`, and `append_version`.
+
+- [x] **Step 3: Expose project APIs**
+
+Add gateway endpoints:
+
+```text
+GET /api/projects
+POST /api/projects
+GET /api/projects/{project_id}
+POST /api/projects/{project_id}/versions
+```
+
+Keep existing generation and async job APIs compatible.
+
+- [x] **Step 4: Add frontend save/load workflow**
+
+Add a small project panel to the result rail so users can save the current canvas as a project version, see the current project id/latest version, refresh saved projects, and load a saved project/version back into the editing workspace.
+
+- [x] **Step 5: Verify**
+
+Run:
+
+```bash
+PYTHONPATH=backend python -m unittest backend.tests.test_projects -v
+PYTHONPATH=backend python -m unittest discover -s backend/tests -p 'test_*.py' -v
+cd frontend && node tests/projectState.test.mjs && node tests/canvasState.test.mjs && npm run build
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 16: Phase 6 Review, Commit, Push
+
+**Files:**
+- Review: Phase 6 code and docs from Task 15
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Document Phase 6 limitations**
+
+Update known issues and requirements to say Phase 6 provides lightweight single-user file-backed project persistence and parent-linked version lineage, but not multi-user auth, database migrations, durable async queue state, or full Fabric.js editing yet.
+
+- [x] **Step 2: Review**
+
+Request spec and code-quality review for Phase 6 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run backend tests, frontend helper tests, frontend build, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 6 files and commit:
+
+```text
+Add project persistence and version tree
+```
+
+- [ ] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
 ## Task 7: Backend Canvas State Contract
 
 **Files:**

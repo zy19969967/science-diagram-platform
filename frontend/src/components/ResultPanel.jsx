@@ -15,6 +15,14 @@ function ResultPanel({
   chooseInitCandidate,
   jobSnapshot,
   canvasState,
+  projects,
+  currentProject,
+  saveCurrentProjectVersion,
+  loadProject,
+  refreshProjects,
+  isSavingProject,
+  isLoadingProjects,
+  canSaveProject,
 }) {
   const layerCount = canvasState?.layers?.length ?? 0;
   const historyCount = canvasState?.history?.length ?? 0;
@@ -22,6 +30,7 @@ function ResultPanel({
   const qualityMask = qualityReport?.mask ?? {};
   const qualityEvaluation = qualityReport?.evaluation ?? {};
   const qualityPrompt = qualityReport?.prompt ?? {};
+  const latestProjectVersionId = currentProject?.latest_version_id ?? "none";
 
   return (
     <aside className="workbench-panel result-panel">
@@ -102,6 +111,51 @@ function ResultPanel({
           </div>
         </section>
       )}
+
+      <section className="surface-block rail-block project-block">
+        <div className="section-header compact-header">
+          <div>
+            <span className="section-label">Project</span>
+            <strong>Saved versions</strong>
+          </div>
+          {currentProject && <span className="section-meta">{currentProject.project_id}</span>}
+        </div>
+        <div className="project-summary">
+          <div>
+            <span>Latest</span>
+            <strong>{latestProjectVersionId}</strong>
+          </div>
+          <div>
+            <span>Versions</span>
+            <strong>{currentProject?.versions?.length ?? 0}</strong>
+          </div>
+        </div>
+        <div className="action-row split-actions">
+          <button
+            type="button"
+            className="secondary-button full-width"
+            onClick={saveCurrentProjectVersion}
+            disabled={isSavingProject || !canSaveProject}
+          >
+            {isSavingProject ? "Saving..." : "Save version"}
+          </button>
+          <button type="button" className="ghost-button full-width" onClick={refreshProjects} disabled={isLoadingProjects}>
+            {isLoadingProjects ? "Loading..." : "Refresh"}
+          </button>
+        </div>
+        <div className="project-list">
+          {(projects ?? []).length === 0 && <div className="placeholder-card compact-placeholder">No saved projects yet.</div>}
+          {(projects ?? []).map((project) => (
+            <button key={project.project_id} type="button" className="project-card" onClick={() => loadProject(project)}>
+              <span>
+                <strong>{project.name}</strong>
+                <small>{project.project_id}</small>
+              </span>
+              <small>{project.versions?.length ?? 0} versions</small>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="surface-block emphasis-block preview-block">
         <div className="section-header compact-header">

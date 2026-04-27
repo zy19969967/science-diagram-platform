@@ -70,6 +70,15 @@ Add GitHub Actions to run the current backend unit tests, Python import checks, 
 
 Add a lightweight persisted project/session layer that stores source image metadata, selected initial candidates, run ids, canvas states, quality reports, and parent-child version lineage. Start with file-backed JSON or SQLite before adding multi-user database concerns.
 
+Implemented Phase 6 scope:
+
+- `backend/gateway/projects.py` provides a file-backed JSON `ProjectStore`.
+- The gateway exposes `GET /api/projects`, `POST /api/projects`, `GET /api/projects/{project_id}`, and `POST /api/projects/{project_id}/versions`.
+- Project versions store parent version ids, run ids, canvas states, artifact URLs, and optional `quality_report` records.
+- The front end can save the current workspace as a project version, refresh saved projects, and load persisted generated versions back into the editor.
+
+Explicitly out of scope for Phase 6: multi-user auth, database migrations, Redis/Celery job durability, full Fabric.js editing, and durable raw storage for initial-candidate data URLs.
+
 ### Phase 7: Durable Async Jobs
 
 Replace the in-process job store with a durable queue/state backend such as Redis plus a worker process. Add cancellation, retry metadata, resumable status reads, and failure provenance while keeping `/api/jobs` compatible.

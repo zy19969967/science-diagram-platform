@@ -35,6 +35,7 @@ jobs:
             backend/common/quality.py \
             backend/common/utils/masks.py \
             backend/gateway/jobs.py \
+            backend/gateway/projects.py \
             backend/gateway/main.py
       - name: Import backend modules
         env:
@@ -48,6 +49,7 @@ jobs:
           import common.canvas_state
           import common.quality
           import gateway.jobs
+          import gateway.projects
           import gateway.main
           PY
 
@@ -64,7 +66,9 @@ jobs:
         run: npm install
       - name: Run frontend helper tests
         working-directory: frontend
-        run: node tests/canvasState.test.mjs
+        run: |
+          node tests/canvasState.test.mjs
+          node tests/projectState.test.mjs
       - name: Build frontend
         working-directory: frontend
         run: npm run build

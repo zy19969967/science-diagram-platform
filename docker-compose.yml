@@ -28,9 +28,11 @@ services:
       SEGMENTER_URL: http://segmenter:8003
       POWERPAINT_URL: http://powerpaint:8002
       RUNS_DIR: /app/data/runs
+      PROJECTS_DIR: /app/data/projects
       ASSETS_DIR: /app/assets
     volumes:
       - ./data/runs:/app/data/runs
+      - ./data/projects:/app/data/projects
     ports:
       - "${GATEWAY_BIND_HOST:-127.0.0.1}:${GATEWAY_PUBLIC_PORT:-19080}:8000"
     depends_on:

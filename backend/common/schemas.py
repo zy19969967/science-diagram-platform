@@ -10,8 +10,10 @@ InitMode = Literal["create_from_text"]
 JobStatus = Literal["CREATED", "PLANNING", "SEGMENTING", "EXECUTING", "EVALUATING", "DONE", "FAILED"]
 CanvasLayerType = Literal["base-image", "mask", "asset", "text", "result"]
 CanvasSource = Literal["upload", "init-candidate", "history", "generated"]
+ProjectVersionKind = Literal["init-candidate", "generate-result", "manual-snapshot"]
 MAX_CANVAS_LAYERS = 64
 MAX_CANVAS_STATE_BYTES = 65536
+MAX_PROJECT_METADATA_BYTES = 65536
 CANVAS_METADATA_KEYS = {
     "instruction",
     "task",
@@ -293,6 +295,91 @@ class GenerateResponse(BaseModel):
     artifacts: dict[str, str] = Field(default_factory=dict)
     canvas_state: CanvasState | None = None
     quality_report: RunQualityReport | None = None
+
+
+class ProjectCreateRequest(BaseModel):
+    name: str = "Untitled science diagram"
+    source_image_metadata: dict[str, Any] = Field(default_factory=dict)
+    init_plan: dict[str, Any] | None = None
+    selected_candidate_id: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        trimmed = value.strip()
+        return trimmed[:120] if trimmed else "Untitled science diagram"
+
+    @field_validator("source_image_metadata", "init_plan")
+    @classmethod
+    def reject_project_data_urls(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if _contains_data_url(value):
+            raise ValueError("project metadata must reference artifacts, not embedded data URLs")
+        return value
+
+
+class ProjectVersionCreateRequest(BaseModel):
+    kind: ProjectVersionKind = "manual-snapshot"
+    parent_version_id: str | None = None
+    run_id: str | None = None
+    label: str = ""
+    canvas_state: CanvasState
+    quality_report: RunQualityReport | None = None
+    artifacts: dict[str, str] = Field(default_factory=dict)
+    result_image: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("artifacts", "metadata")
+    @classmethod
+    def reject_version_metadata_data_urls(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if _contains_data_url(value):
+            raise ValueError("project version metadata must reference artifacts, not embedded data URLs")
+        return value
+
+    @field_validator("result_image")
+    @classmethod
+    def reject_result_image_data_url(cls, value: str | None) -> str | None:
+        if value and _contains_data_url(value):
+            raise ValueError("project version result_image must reference an artifact URL")
+        return value
+
+    @model_validator(mode="after")
+    def limit_serialized_metadata_size(self) -> "ProjectVersionCreateRequest":
+        if self.kind == "generate-result":
+            if not self.run_id:
+                raise ValueError("generate-result project versions require run_id")
+            if not (self.result_image or self.artifacts.get("result")):
+                raise ValueError("generate-result project versions require a result artifact")
+
+        serialized = json.dumps(
+            {
+                "artifacts": self.artifacts,
+                "metadata": self.metadata,
+                "quality_report": self.quality_report.model_dump() if self.quality_report else None,
+            },
+            ensure_ascii=False,
+            default=str,
+        )
+        if len(serialized.encode("utf-8")) > MAX_PROJECT_METADATA_BYTES:
+            raise ValueError(f"project version metadata cannot exceed {MAX_PROJECT_METADATA_BYTES} bytes")
+        return self
+
+
+class ProjectVersionSnapshot(ProjectVersionCreateRequest):
+    version_id: str
+    project_id: str
+    created_at: str
+
+
+class ProjectSnapshot(BaseModel):
+    project_id: str
+    name: str
+    source_image_metadata: dict[str, Any] = Field(default_factory=dict)
+    init_plan: dict[str, Any] | None = None
+    selected_candidate_id: str | None = None
+    latest_version_id: str | None = None
+    versions: list[ProjectVersionSnapshot] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
 
 
 class JobCreateRequest(BaseModel):

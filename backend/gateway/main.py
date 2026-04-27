@@ -27,6 +27,9 @@ from common.schemas import (
     PlanRequest,
     PlanResponse,
     PowerPaintGenerateRequest,
+    ProjectCreateRequest,
+    ProjectSnapshot,
+    ProjectVersionCreateRequest,
     ScenePlanRequest,
     ScenePlanResponse,
     SegmentRequest,
@@ -37,14 +40,17 @@ from common.utils.images import decode_data_url_to_image
 from common.utils.masks import evaluate_edit
 
 from .jobs import job_store
+from .projects import ProjectStore
 
 PLANNER_URL = os.getenv("PLANNER_URL", "http://127.0.0.1:19081")
 SEGMENTER_URL = os.getenv("SEGMENTER_URL", "http://127.0.0.1:19083")
 POWERPAINT_URL = os.getenv("POWERPAINT_URL", "http://127.0.0.1:19082")
 RUNS_DIR = Path(os.getenv("RUNS_DIR", "/app/data/runs"))
+PROJECTS_DIR = Path(os.getenv("PROJECTS_DIR", str(RUNS_DIR.parent / "projects")))
 ASSETS_DIR = Path(os.getenv("ASSETS_DIR", "/app/assets"))
 
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
+project_store = ProjectStore(PROJECTS_DIR)
 
 app = FastAPI(title="Science Diagram Gateway", version="0.1.0")
 app.add_middleware(
@@ -99,6 +105,41 @@ async def init_plan(payload: ScenePlanRequest) -> ScenePlanResponse:
 @app.post("/api/init-generate", response_model=InitGenerateResponse)
 async def init_generate(payload: InitGenerateRequest) -> InitGenerateResponse:
     return build_init_candidates(payload)
+
+
+@app.get("/api/projects", response_model=list[ProjectSnapshot])
+def list_projects() -> list[ProjectSnapshot]:
+    return project_store.list_projects()
+
+
+@app.post("/api/projects", response_model=ProjectSnapshot)
+def create_project(payload: ProjectCreateRequest) -> ProjectSnapshot:
+    return project_store.create_project(payload)
+
+
+@app.get("/api/projects/{project_id}", response_model=ProjectSnapshot)
+def get_project(project_id: str) -> ProjectSnapshot:
+    try:
+        project = project_store.get_project(project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return project
+
+
+@app.post("/api/projects/{project_id}/versions", response_model=ProjectSnapshot)
+def append_project_version(project_id: str, payload: ProjectVersionCreateRequest) -> ProjectSnapshot:
+    try:
+        project_store.append_version(project_id, payload)
+        project = project_store.get_project(project_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Project not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    return project
 
 
 @app.post("/api/segment", response_model=SegmentResponse)

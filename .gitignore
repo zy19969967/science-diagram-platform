@@ -4,6 +4,8 @@ frontend/dist/
 models/
 data/runs/*
 !data/runs/.gitkeep
+data/projects/*
+!data/projects/.gitkeep
 __pycache__/
 *.pyc
 .env

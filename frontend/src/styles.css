@@ -631,6 +631,12 @@ input[type="range"] {
   gap: 10px;
 }
 
+.project-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .canvas-state-grid div {
   display: grid;
   gap: 4px;
@@ -640,13 +646,72 @@ input[type="range"] {
   background: rgba(255, 255, 255, 0.68);
 }
 
+.project-summary div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(41, 85, 132, 0.08);
+  background: rgba(255, 255, 255, 0.68);
+  min-width: 0;
+}
+
 .canvas-state-grid span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.project-summary span,
+.project-card small {
   color: var(--muted);
   font-size: 12px;
 }
 
 .canvas-state-grid strong {
   font-size: 18px;
+}
+
+.project-summary strong,
+.project-card strong {
+  overflow-wrap: anywhere;
+}
+
+.split-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.project-list {
+  display: grid;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.project-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(143, 198, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text);
+  text-align: left;
+  min-width: 0;
+}
+
+.project-card span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.compact-placeholder {
+  min-height: 92px;
+  padding: 12px;
 }
 
 .history-card img {
@@ -711,7 +776,8 @@ input[type="range"] {
 .ghost-button:hover,
 .secondary-button:hover,
 .primary-button:hover,
-.history-card:hover {
+.history-card:hover,
+.project-card:hover {
   transform: translateY(-1px);
   border-color: rgba(45, 140, 255, 0.24);
 }
