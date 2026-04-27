@@ -878,6 +878,102 @@ Add benchmark experiment dashboard
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
+## Task 29: Phase 13 Auth, Readiness, And Traceability
+
+**Files:**
+- Modify: `backend/common/schemas.py`
+- Create: `backend/gateway/security.py`
+- Create: `backend/gateway/deployment.py`
+- Modify: `backend/gateway/main.py`
+- Create: `backend/tests/test_security.py`
+- Create: `backend/tests/test_traceability.py`
+- Modify: `backend/tests/test_ci_workflow.py`
+- Create: `frontend/src/apiClient.js`
+- Create: `frontend/tests/apiClient.test.mjs`
+- Modify: `frontend/src/App.jsx`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `docker-compose.yml`
+- Modify: `.env.example`
+- Modify: `.env.server.example`
+- Modify: `.env.nodocker.example`
+- Create: `docs/report-traceability.md`
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Write failing backend security/readiness tests**
+
+Add tests proving that the gateway remains open when `GATEWAY_API_TOKEN` is unset, protects non-exempt `/api/*` routes when a token is configured, accepts `Authorization: Bearer <token>` and `X-API-Token`, keeps `/api/health` public, and exposes a readiness summary with auth, storage, service URL, and traceability checks.
+
+- [x] **Step 2: Run backend tests and verify failure**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs BENCHMARKS_DIR=/tmp/science-diagram-test-benchmarks /tmp/science-diagram-phase6-venv/bin/python -m unittest backend.tests.test_security -v
+```
+
+Expected: fails because `gateway.security`, `gateway.deployment`, and `/api/deployment/readiness` do not exist yet.
+
+- [x] **Step 3: Implement optional gateway API token and readiness checks**
+
+Add a small auth middleware that only activates when `GATEWAY_API_TOKEN` is non-empty. Keep health/static routes and CORS preflight exempt. Add `/api/deployment/readiness` returning directory/config/traceability/auth checks without calling external model services.
+
+- [x] **Step 4: Write failing frontend API token helper tests**
+
+Add helper tests proving API URLs are normalized and optional `VITE_API_TOKEN` produces authorization headers without overwriting caller-provided headers.
+
+- [x] **Step 5: Implement frontend API client wiring**
+
+Replace app-local API fetches with `apiFetch` so deployments that set `VITE_API_TOKEN` can reach the protected gateway. Keep non-API artifact fetches unchanged.
+
+- [x] **Step 6: Add final traceability matrix and CI coverage**
+
+Create `docs/report-traceability.md` with phases 1-13 mapped to code paths, tests, and known limitations. Add tests and CI import/compile coverage for the new security/deployment modules and frontend API helper test.
+
+- [x] **Step 7: Verify**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs BENCHMARKS_DIR=/tmp/science-diagram-test-benchmarks /tmp/science-diagram-phase6-venv/bin/python -m unittest discover -s backend/tests -p 'test_*.py' -v
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs BENCHMARKS_DIR=/tmp/science-diagram-test-benchmarks /tmp/science-diagram-phase6-venv/bin/python -m py_compile backend/common/schemas.py backend/common/init_logic.py backend/common/canvas_state.py backend/common/quality.py backend/common/export_logic.py backend/common/utils/masks.py backend/gateway/security.py backend/gateway/deployment.py backend/gateway/init_provider.py backend/gateway/jobs.py backend/gateway/projects.py backend/gateway/benchmarks.py backend/gateway/main.py backend/segmenter/runtime.py
+cd frontend && node tests/apiClient.test.mjs && node tests/benchmarkState.test.mjs && node tests/initCandidates.test.mjs && node tests/exportState.test.mjs && node tests/regionPrompts.test.mjs && node tests/layerState.test.mjs && node tests/canvasState.test.mjs && node tests/projectState.test.mjs && npm run build
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 30: Phase 13 Review, Commit, Push
+
+**Files:**
+- Review: Phase 13 code and docs from Task 29
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+
+- [x] **Step 1: Document Phase 13 scope and limitations**
+
+Update docs to say Phase 13 adds optional single-token gateway access control, read-only deployment readiness checks, frontend token header support, and a final traceability matrix while not shipping multi-user login, role-based permissions, secret rotation, external uptime checks, or full production observability.
+
+- [x] **Step 2: Review**
+
+Request code review for Phase 13 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run backend tests, backend compile checks, frontend helper tests/build, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 13 files and commit:
+
+```text
+Add deployment auth readiness traceability
+```
+
+- [ ] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
 ## Task 15: Project Persistence And Version Tree
 
 **Files:**

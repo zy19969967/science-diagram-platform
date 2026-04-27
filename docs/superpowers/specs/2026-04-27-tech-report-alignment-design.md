@@ -169,6 +169,17 @@ Explicitly out of scope for Phase 12: automatic dataset runners, human preferenc
 
 Add access control, deployment smoke checks, production configuration validation, and a final traceability matrix mapping report claims to implemented code paths, tests, and known limitations.
 
+Implemented Phase 13 scope:
+
+- The gateway supports optional single-token API protection through `GATEWAY_API_TOKEN`. When unset, local development behavior remains open; when set, non-exempt `/api/*` routes require `Authorization: Bearer <token>` or `X-API-Token`.
+- `/api/health`, static assets/artifacts, API docs, and CORS preflight remain exempt so health checks and static serving do not require secrets.
+- `/api/deployment/readiness` returns read-only local checks for auth configuration, storage directories, service URL configuration, asset directory availability, and the traceability matrix file.
+- The front end can include `VITE_API_TOKEN` in API requests through a shared `apiFetch` helper while leaving non-API artifact reads unchanged.
+- `docs/report-traceability.md` maps Phase 1 through Phase 13 claims to concrete code paths, tests, and known limitations.
+- CI compiles/imports the security and deployment modules and runs the frontend API client helper test.
+
+Explicitly out of scope for Phase 13: multi-user login, role-based permissions, token rotation, external model uptime probes, Docker/GPU smoke tests, centralized observability, and production secret management.
+
 ## Phase 1 Architecture
 
 Phase 1 keeps the current service topology. The gateway owns init endpoints and uses shared common logic for deterministic fallback behavior:

@@ -5,6 +5,7 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_API_TOKEN: ${VITE_API_TOKEN:-}
     restart: unless-stopped
     ports:
       - "${FRONTEND_PUBLIC_PORT:-19084}:80"
@@ -28,6 +29,7 @@ services:
       SEGMENTER_URL: http://segmenter:8003
       POWERPAINT_URL: http://powerpaint:8002
       FLUX_INIT_URL: ${FLUX_INIT_URL:-}
+      GATEWAY_API_TOKEN: ${GATEWAY_API_TOKEN:-}
       RUNS_DIR: /app/data/runs
       PROJECTS_DIR: /app/data/projects
       JOBS_DIR: /app/data/jobs

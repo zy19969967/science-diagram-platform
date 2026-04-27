@@ -17,7 +17,7 @@
 
 ### 1. 认证与权限控制
 
-当前平台默认面向内网或受控环境，没有登录、权限隔离或访问令牌机制。如果直接暴露到公网，需要再加网关鉴权。
+当前平台默认面向内网或受控环境。Phase 13 新增了可选的 `GATEWAY_API_TOKEN` 单 token 网关保护；配置后，非豁免 `/api/*` 路由需要 `Authorization: Bearer <token>` 或 `X-API-Token`，前端也可以通过 `VITE_API_TOKEN` 透传同一 token。它仍不是完整账号系统：没有多用户登录、角色权限、token 轮换、审计日志或生产级 secret 管理。`VITE_API_TOKEN` 会进入静态前端 bundle，只适合受控演示或内网边界，不应当视为公网多租户安全方案。
 
 ### 2. 异步任务队列与进度跟踪
 
@@ -61,14 +61,15 @@ Qwen3.5 输出结构化 JSON 时如果结果不合法，服务会自动回退到
 - 真实 Qwen3.5 / SAM-2 / PowerPaint 接入能力
 - 前后端基本联通能力
 - 规则回退兜底能力
+- 可选单 token 网关保护、readiness 配置检查和报告 traceability matrix
 
 但如果要进一步做成“更稳定的长期服务”，下一阶段最值得补的是：
 
 1. 接口集成测试与端到端测试
-2. 鉴权与访问控制
-3. 持久化异步任务队列
-4. Fabric.js 图层编辑与会话级项目持久化
-5. 扩展 CI、端到端测试、OCR 校验和数据集级评估报表
+2. 多用户鉴权、角色权限、secret 管理和审计日志
+3. Redis/Celery 或独立 worker 级持久化异步任务队列
+4. 完整 Fabric scene 持久化、PPT 导出和高级编辑工具
+5. 扩展 CI、端到端测试、OCR 校验和自动数据集评估报表
 ## Phase 6 Persistence Note
 
 The current branch now includes a lightweight single-user project persistence layer. It stores JSON project snapshots, parent-linked versions, selected initial-candidate metadata, run ids, canvas states, artifact URLs, and optional quality reports. This supersedes the earlier project-persistence part of the canvas-state gap; the remaining gap is full database-backed, multi-user, editor-level persistence.
@@ -110,3 +111,9 @@ Remaining initial-canvas limitations: this repository still does not bundle FLUX
 The current branch now includes a lightweight file-backed benchmark ledger under `BENCHMARKS_DIR`. The gateway can record benchmark runs with `quality_report`, optional text validation reports, provider/model metadata, project/version ids, tags, and compact metadata; it can also return aggregate summary metrics and provider-level comparisons. The front end exposes an experiment ledger panel with explicit record and refresh actions.
 
 Remaining evaluation limitations: benchmark entries are recorded explicitly rather than produced by an automated dataset runner, there is no built-in OCR engine or human preference annotation workflow, model-version scheduling is not implemented, and dashboard export is still limited to the JSON API rather than CSV/PDF report files.
+
+## Phase 13 Deployment Hardening Note
+
+The current branch now includes optional single-token gateway protection, a read-only `/api/deployment/readiness` endpoint, frontend `VITE_API_TOKEN` header support, and `docs/report-traceability.md` mapping report claims to code paths, tests, and limitations.
+
+Remaining deployment limitations: this is not multi-user authentication, RBAC, token rotation, production secret management, external uptime monitoring, Docker/GPU smoke testing, or a full observability stack. Static `/assets` and `/artifacts` routes remain intentionally exempt, so generated artifact URLs should still be treated as accessible within the deployment boundary.

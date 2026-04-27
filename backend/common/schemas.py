@@ -14,6 +14,7 @@ PointPromptLabel = Literal["positive", "negative"]
 CanvasSource = Literal["upload", "init-candidate", "history", "generated"]
 ProjectVersionKind = Literal["init-candidate", "generate-result", "manual-snapshot"]
 TextValidationStatus = Literal["pass", "warn", "fail"]
+ReadinessStatus = Literal["pass", "warn", "fail"]
 MAX_CANVAS_LAYERS = 64
 MAX_CANVAS_STATE_BYTES = 65536
 MAX_PROJECT_METADATA_BYTES = 65536
@@ -390,6 +391,27 @@ class BenchmarkSummaryResponse(BaseModel):
     text_pass_rate: float | None = None
     by_provider: list[BenchmarkProviderSummary] = Field(default_factory=list)
     recent_runs: list[BenchmarkRunSnapshot] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GatewayAuthStatus(BaseModel):
+    enabled: bool = False
+    scheme: str = "Bearer token or X-API-Token"
+    protected_paths: list[str] = Field(default_factory=lambda: ["/api/*"])
+    exempt_paths: list[str] = Field(default_factory=list)
+
+
+class DeploymentReadinessCheck(BaseModel):
+    name: str
+    status: ReadinessStatus
+    detail: str
+
+
+class DeploymentReadinessResponse(BaseModel):
+    status: ReadinessStatus
+    checked_at: str
+    auth: GatewayAuthStatus
+    checks: list[DeploymentReadinessCheck] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 

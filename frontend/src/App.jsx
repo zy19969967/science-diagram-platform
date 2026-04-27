@@ -28,9 +28,8 @@ import {
   latestProjectVersion,
 } from "./projectState.js";
 import { buildBenchmarkRecordPayload } from "./benchmarkState.js";
+import { apiFetch } from "./apiClient.js";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
-const apiPath = (path) => (API_BASE_URL ? `${API_BASE_URL}${path}` : path);
 const TASK_OPTIONS = [
   { value: "text-guided", label: "文本插入" },
   { value: "object-removal", label: "对象移除" },
@@ -157,7 +156,7 @@ function App() {
   useEffect(() => {
     async function fetchAssets() {
       try {
-        const response = await fetch(apiPath("/api/assets"));
+        const response = await apiFetch("/api/assets");
         const data = await response.json();
         setAssets(data);
       } catch (fetchError) {
@@ -610,7 +609,7 @@ function App() {
     setError("");
     try {
       const maskPayload = sourceImage ? await buildMaskPayload() : { dataUrl: "", pixelCount: 0 };
-      const response = await fetch(apiPath("/api/plan"), {
+      const response = await apiFetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -656,7 +655,7 @@ function App() {
     setStatus("正在规划无图初始画布...");
 
     try {
-      const planResponse = await fetch(apiPath("/api/init-plan"), {
+      const planResponse = await apiFetch("/api/init-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -670,7 +669,7 @@ function App() {
       });
       const scenePlan = await readJsonResponse(planResponse, "初图规划失败");
 
-      const generateResponse = await fetch(apiPath("/api/init-generate"), {
+      const generateResponse = await apiFetch("/api/init-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -764,7 +763,7 @@ function App() {
   async function refreshProjects() {
     setIsLoadingProjects(true);
     try {
-      const response = await fetch(apiPath("/api/projects"));
+      const response = await apiFetch("/api/projects");
       const data = await readJsonResponse(response, "Project list loading failed");
       setProjects(data);
       return data;
@@ -780,8 +779,8 @@ function App() {
     setIsLoadingBenchmarks(true);
     try {
       const [summaryResponse, runsResponse] = await Promise.all([
-        fetch(apiPath("/api/benchmarks/summary")),
-        fetch(apiPath("/api/benchmarks/runs")),
+        apiFetch("/api/benchmarks/summary"),
+        apiFetch("/api/benchmarks/runs"),
       ]);
       const summary = await readJsonResponse(summaryResponse, "Benchmark summary loading failed");
       const runs = await readJsonResponse(runsResponse, "Benchmark runs loading failed");
@@ -809,7 +808,7 @@ function App() {
         instruction,
         textValidationReport,
       });
-      const response = await fetch(apiPath("/api/benchmarks/runs"), {
+      const response = await apiFetch("/api/benchmarks/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -868,7 +867,7 @@ function App() {
 
       let project = currentProject;
       if (!project) {
-        const createResponse = await fetch(apiPath("/api/projects"), {
+        const createResponse = await apiFetch("/api/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
@@ -885,7 +884,7 @@ function App() {
         project = await readJsonResponse(createResponse, "Project creation failed");
       }
 
-      const versionResponse = await fetch(apiPath(`/api/projects/${project.project_id}/versions`), {
+      const versionResponse = await apiFetch(`/api/projects/${project.project_id}/versions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
@@ -943,7 +942,7 @@ function App() {
     invalidateJobPolling();
     setError("");
     try {
-      const response = await fetch(apiPath(`/api/projects/${project.project_id}`));
+      const response = await apiFetch(`/api/projects/${project.project_id}`);
       const loadedProject = await readJsonResponse(response, "Project loading failed");
       const latestVersion = latestProjectVersion(loadedProject);
       const loadedResult = resultFromProjectVersion(latestVersion);
@@ -995,7 +994,7 @@ function App() {
 
     try {
       const requestPayload = await buildGenerateRequestPayload();
-      const response = await fetch(apiPath("/api/generate"), {
+      const response = await apiFetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestPayload),
@@ -1021,7 +1020,7 @@ function App() {
       if (!canvasState) {
         throw new Error("当前没有可校验的画布状态。");
       }
-      const response = await fetch(apiPath("/api/canvas/validate-text"), {
+      const response = await apiFetch("/api/canvas/validate-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildTextValidationPayload({ canvasState })),
@@ -1062,7 +1061,7 @@ function App() {
       if (!canvasState) {
         throw new Error("当前没有可导出的画布状态。");
       }
-      const response = await fetch(apiPath("/api/canvas/export-svg"), {
+      const response = await apiFetch("/api/canvas/export-svg", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
@@ -1093,7 +1092,7 @@ function App() {
       if (jobTokenRef.current !== token) {
         return null;
       }
-      const response = await fetch(apiPath(`/api/jobs/${jobId}`));
+      const response = await apiFetch(`/api/jobs/${jobId}`);
       const snapshot = await readJsonResponse(response, "任务状态读取失败");
       if (jobTokenRef.current !== token) {
         return null;
@@ -1127,7 +1126,7 @@ function App() {
 
     try {
       const requestPayload = await buildGenerateRequestPayload();
-      const response = await fetch(apiPath("/api/jobs"), {
+      const response = await apiFetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1170,7 +1169,7 @@ function App() {
     setIsJobGenerating(false);
     setError("");
     try {
-      const response = await fetch(apiPath(`/api/jobs/${jobId}/cancel`), {
+      const response = await apiFetch(`/api/jobs/${jobId}/cancel`, {
         method: "POST",
       });
       const snapshot = await readJsonResponse(response, "任务取消失败");

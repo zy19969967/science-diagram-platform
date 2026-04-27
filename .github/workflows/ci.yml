@@ -28,6 +28,7 @@ jobs:
           PROJECTS_DIR: /tmp/science-diagram-projects
           JOBS_DIR: /tmp/science-diagram-jobs
           BENCHMARKS_DIR: /tmp/science-diagram-benchmarks
+          GATEWAY_API_TOKEN: ""
         run: python -m unittest discover -s backend/tests -p 'test_*.py' -v
       - name: Compile backend modules
         env:
@@ -41,6 +42,8 @@ jobs:
             backend/common/export_logic.py \
             backend/common/utils/masks.py \
             backend/segmenter/runtime.py \
+            backend/gateway/security.py \
+            backend/gateway/deployment.py \
             backend/gateway/init_provider.py \
             backend/gateway/jobs.py \
             backend/gateway/projects.py \
@@ -54,6 +57,7 @@ jobs:
           PROJECTS_DIR: /tmp/science-diagram-projects
           JOBS_DIR: /tmp/science-diagram-jobs
           BENCHMARKS_DIR: /tmp/science-diagram-benchmarks
+          GATEWAY_API_TOKEN: ""
         run: |
           python - <<'PY'
           import common.schemas
@@ -61,6 +65,8 @@ jobs:
           import common.canvas_state
           import common.quality
           import common.export_logic
+          import gateway.security
+          import gateway.deployment
           import gateway.init_provider
           import gateway.jobs
           import gateway.projects
@@ -82,6 +88,7 @@ jobs:
       - name: Run frontend helper tests
         working-directory: frontend
         run: |
+          node tests/apiClient.test.mjs
           node tests/benchmarkState.test.mjs
           node tests/initCandidates.test.mjs
           node tests/exportState.test.mjs

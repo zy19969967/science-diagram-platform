@@ -9,6 +9,7 @@ from typing import Callable
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from common.assets import asset_catalog_with_urls
@@ -21,6 +22,7 @@ from common.schemas import (
     BenchmarkRunCreateRequest,
     BenchmarkRunSnapshot,
     BenchmarkSummaryResponse,
+    DeploymentReadinessResponse,
     GenerateRequest,
     GenerateResponse,
     InitGenerateRequest,
@@ -48,9 +50,11 @@ from common.utils.images import decode_data_url_to_image
 from common.utils.masks import evaluate_edit
 
 from .benchmarks import BenchmarkStore
+from .deployment import build_deployment_readiness
 from .jobs import JobCancelled, JobStore
 from .init_provider import InitProviderError, generate_initial_candidates
 from .projects import ProjectStore
+from .security import GatewayAuthConfig, request_is_authorized
 
 PLANNER_URL = os.getenv("PLANNER_URL", "http://127.0.0.1:19081")
 SEGMENTER_URL = os.getenv("SEGMENTER_URL", "http://127.0.0.1:19083")
@@ -61,11 +65,13 @@ JOBS_DIR = Path(os.getenv("JOBS_DIR", str(RUNS_DIR.parent / "jobs")))
 BENCHMARKS_DIR = Path(os.getenv("BENCHMARKS_DIR", str(RUNS_DIR.parent / "benchmarks")))
 ASSETS_DIR = Path(os.getenv("ASSETS_DIR", "/app/assets"))
 FLUX_INIT_URL = os.getenv("FLUX_INIT_URL", "")
+GATEWAY_API_TOKEN = os.getenv("GATEWAY_API_TOKEN", "")
 
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 job_store = JobStore(JOBS_DIR)
 project_store = ProjectStore(PROJECTS_DIR)
 benchmark_store = BenchmarkStore(BENCHMARKS_DIR)
+gateway_auth = GatewayAuthConfig(GATEWAY_API_TOKEN)
 
 app = FastAPI(title="Science Diagram Gateway", version="0.1.0")
 app.add_middleware(
@@ -77,6 +83,13 @@ app.add_middleware(
 )
 app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 app.mount("/artifacts", StaticFiles(directory=RUNS_DIR), name="artifacts")
+
+
+@app.middleware("http")
+async def gateway_auth_middleware(request: Request, call_next):
+    if not request_is_authorized(request, gateway_auth):
+        return JSONResponse(status_code=401, content={"detail": "Gateway API token is required."})
+    return await call_next(request)
 
 
 async def post_json(url: str, payload: dict) -> dict:
@@ -96,6 +109,27 @@ ProgressCallback = Callable[[JobStatus, float, str], None]
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "gateway"}
+
+
+@app.get("/api/deployment/readiness", response_model=DeploymentReadinessResponse)
+def deployment_readiness() -> DeploymentReadinessResponse:
+    repo_root = Path(__file__).resolve().parents[2]
+    return build_deployment_readiness(
+        auth=gateway_auth.status(),
+        storage_dirs={
+            "runs_dir": RUNS_DIR,
+            "projects_dir": PROJECTS_DIR,
+            "jobs_dir": JOBS_DIR,
+            "benchmarks_dir": BENCHMARKS_DIR,
+        },
+        service_urls={
+            "planner_url": PLANNER_URL,
+            "segmenter_url": SEGMENTER_URL,
+            "powerpaint_url": POWERPAINT_URL,
+        },
+        assets_dir=ASSETS_DIR,
+        traceability_path=repo_root / "docs" / "report-traceability.md",
+    )
 
 
 @app.get("/api/assets")
