@@ -218,6 +218,37 @@ class EvaluationResult(BaseModel):
     changed_ratio: float
     outside_mask_change_ratio: float
     note: str
+    inside_mask_change_ratio: float = 0.0
+    mask_coverage_ratio: float = 0.0
+    edit_localization_score: float = 0.0
+    preservation_score: float = 0.0
+
+
+class MaskQualityReport(BaseModel):
+    coverage_ratio: float
+    area_pixels: int
+    bounding_box: list[int] | None = None
+    artifact_url: str | None = None
+
+
+class PromptTrace(BaseModel):
+    instruction: str
+    task: TaskType
+    task_prompt: str
+    negative_prompt: str = ""
+    selected_asset_id: str | None = None
+    seed: int
+    planner_source: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunQualityReport(BaseModel):
+    run_id: str
+    quality_version: str = "phase4-v1"
+    mask: MaskQualityReport
+    prompt: PromptTrace
+    evaluation: EvaluationResult
+    artifacts: dict[str, str] = Field(default_factory=dict)
 
 
 class GenerateRequest(BaseModel):
@@ -261,6 +292,7 @@ class GenerateResponse(BaseModel):
     evaluation: EvaluationResult
     artifacts: dict[str, str] = Field(default_factory=dict)
     canvas_state: CanvasState | None = None
+    quality_report: RunQualityReport | None = None
 
 
 class JobCreateRequest(BaseModel):

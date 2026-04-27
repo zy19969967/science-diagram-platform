@@ -49,6 +49,15 @@ Explicitly out of scope for Phase 3: Fabric.js editing, persisted project databa
 
 Add richer evaluation records, prompt/model metadata, mask quality fields, and CI. OCR/vector text verification can land here or in a separate focused phase depending on dependency availability.
 
+Phase 4 first ships the runtime quality-report slice before adding CI:
+
+- Extend `EvaluationResult` with inside-mask change, mask coverage, edit-localization score, and preservation score.
+- Add a `quality_report` object to `GenerateResponse` and async job results.
+- Save mask quality and prompt/provenance metadata into `metadata.json` for each run.
+- Show the richer metrics in the current React result panel.
+
+Explicitly out of scope for this slice: CI pipelines, OCR validation, human preference scoring, dataset-level benchmark aggregation, and persistent experiment dashboards.
+
 ## Phase 1 Architecture
 
 Phase 1 keeps the current service topology. The gateway owns init endpoints and uses shared common logic for deterministic fallback behavior:

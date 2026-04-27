@@ -1,3 +1,10 @@
+const formatRatio = (value) => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "n/a";
+  }
+  return `${Math.round(value * 1000) / 10}%`;
+};
+
 function ResultPanel({
   latestResult,
   continueFromHistory,
@@ -11,6 +18,10 @@ function ResultPanel({
 }) {
   const layerCount = canvasState?.layers?.length ?? 0;
   const historyCount = canvasState?.history?.length ?? 0;
+  const qualityReport = latestResult?.quality_report ?? null;
+  const qualityMask = qualityReport?.mask ?? {};
+  const qualityEvaluation = qualityReport?.evaluation ?? {};
+  const qualityPrompt = qualityReport?.prompt ?? {};
 
   return (
     <aside className="workbench-panel result-panel">
@@ -131,6 +142,37 @@ function ResultPanel({
               <strong>{latestResult.evaluation.outside_mask_change_ratio}</strong>
               <p>数值越低，代表修改越集中在目标区域。</p>
             </div>
+            {qualityReport && (
+              <>
+                <div className="metric-card">
+                  <span>Mask 覆盖</span>
+                  <strong>{formatRatio(qualityMask.coverage_ratio)}</strong>
+                  <p>{qualityMask.bounding_box ? `bbox ${qualityMask.bounding_box.join(", ")}` : "未检测到有效边界框。"}</p>
+                </div>
+                <div className="metric-card">
+                  <span>Mask 内变化</span>
+                  <strong>{formatRatio(qualityEvaluation.inside_mask_change_ratio)}</strong>
+                  <p>衡量目标选区内部是否发生了足够的编辑变化。</p>
+                </div>
+                <div className="metric-card">
+                  <span>局部化得分</span>
+                  <strong>{formatRatio(qualityEvaluation.edit_localization_score)}</strong>
+                  <p>变化像素落在 mask 内的比例。</p>
+                </div>
+                <div className="metric-card">
+                  <span>保真得分</span>
+                  <strong>{formatRatio(qualityEvaluation.preservation_score)}</strong>
+                  <p>非编辑区域保持程度，越高越稳定。</p>
+                </div>
+                <div className="metric-card">
+                  <span>Prompt Trace</span>
+                  <strong>{qualityPrompt.task ?? "n/a"}</strong>
+                  <p>
+                    {qualityPrompt.planner_source ?? "unknown"} | seed {qualityPrompt.seed ?? "n/a"}
+                  </p>
+                </div>
+              </>
+            )}
             <div className="metric-card">
               <span>评估说明</span>
               <strong>Result Note</strong>

@@ -15,6 +15,7 @@ from common.assets import asset_catalog_with_urls
 from common.canvas_state import build_canvas_state_after_generate
 from common.init_logic import build_init_candidates, build_scene_plan
 from common.planner_logic import build_plan
+from common.quality import build_quality_report
 from common.schemas import (
     GenerateRequest,
     GenerateResponse,
@@ -116,18 +117,23 @@ async def generate_pipeline(
 ) -> GenerateResponse:
     if progress:
         progress("PLANNING", 0.12, "Planning edit instructions")
-    plan_payload = payload.plan or await plan(
-        PlanRequest(
-            source_image=payload.source_image,
-            instruction=payload.instruction,
-            selected_asset_id=payload.selected_asset_id,
-            preferred_task=payload.task,
-            canvas_hints={
-                "has_asset": bool(payload.asset_placement),
-                "has_mask": bool(payload.mask_image),
-            },
+    if payload.plan:
+        plan_payload = payload.plan
+        planner_source = "provided-plan"
+    else:
+        plan_payload = await plan(
+            PlanRequest(
+                source_image=payload.source_image,
+                instruction=payload.instruction,
+                selected_asset_id=payload.selected_asset_id,
+                preferred_task=payload.task,
+                canvas_hints={
+                    "has_asset": bool(payload.asset_placement),
+                    "has_mask": bool(payload.mask_image),
+                },
+            )
         )
-    )
+        planner_source = "planner-service-or-fallback"
 
     source_image = decode_data_url_to_image(payload.source_image, mode="RGB")
 
@@ -188,11 +194,21 @@ async def generate_pipeline(
         "metadata": f"{base_url}/artifacts/{run_id}/metadata.json",
     }
     canvas_state_after = build_canvas_state_after_generate(payload.canvas_state, run_id=run_id, artifacts=artifacts)
+    quality_report = build_quality_report(
+        run_id=run_id,
+        payload=payload,
+        plan=plan_payload,
+        mask=mask_image,
+        evaluation=evaluation,
+        artifacts=artifacts,
+        planner_source=planner_source,
+    )
     metadata = {
         "run_id": run_id,
         "instruction": payload.instruction,
         "plan": plan_payload.model_dump(),
         "evaluation": evaluation.model_dump(),
+        "quality_report": quality_report.model_dump(),
         "selected_asset_id": payload.selected_asset_id,
         "task": payload.task or plan_payload.task,
         "canvas_state_before": payload.canvas_state.model_dump() if payload.canvas_state else None,
@@ -207,6 +223,7 @@ async def generate_pipeline(
         evaluation=evaluation,
         artifacts=artifacts,
         canvas_state=canvas_state_after,
+        quality_report=quality_report,
     )
 
 

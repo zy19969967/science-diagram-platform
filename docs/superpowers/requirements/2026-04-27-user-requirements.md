@@ -23,3 +23,4 @@ Current implementation path:
 - Phase 1 completed: dual-entry MVP with deterministic fallback initial-canvas candidates.
 - Phase 2 completed in the current branch after Phase 1: async job skeleton with `job_id`, status polling, and front-end progress display while preserving synchronous `/api/generate`.
 - Phase 3 completed in the current branch after Phase 2: serializable `canvas_state` with base image, mask, asset, and text layer metadata, plus React-first lightweight text overlays and returned state summaries. This intentionally does not claim full Fabric.js editing, project persistence, branchable versions, SVG export, or OCR validation yet.
+- Phase 4 completed in the current branch after Phase 3: runtime `quality_report`, richer evaluation fields, mask quality metadata, prompt/provenance trace, metadata persistence, and result-panel display. CI, OCR validation, persistent benchmark dashboards, and dataset-level evaluation remain later phases.

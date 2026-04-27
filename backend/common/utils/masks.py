@@ -58,8 +58,18 @@ def evaluate_edit(source: Image.Image, result: Image.Image, mask: Image.Image) -
     changed = pixel_delta > 12
 
     changed_ratio = float(changed.mean())
+    inside_change_ratio = float(changed[mask_arr].mean()) if mask_arr.any() else 0.0
     outside_mask = ~mask_arr
     outside_change_ratio = float(changed[outside_mask].mean()) if outside_mask.any() else 0.0
+    changed_pixels = int(changed.sum())
+    localized_changed_pixels = int((changed & mask_arr).sum())
+    edit_localization_score = (
+        localized_changed_pixels / changed_pixels
+        if changed_pixels > 0
+        else 0.0
+    )
+    mask_coverage_ratio = float(mask_arr.mean())
+    preservation_score = max(0.0, 1.0 - outside_change_ratio)
 
     if outside_change_ratio < 0.02:
         note = "非编辑区域保持较好，可作为论文中的局部控制性示例。"
@@ -72,4 +82,8 @@ def evaluate_edit(source: Image.Image, result: Image.Image, mask: Image.Image) -
         changed_ratio=round(changed_ratio, 4),
         outside_mask_change_ratio=round(outside_change_ratio, 4),
         note=note,
+        inside_mask_change_ratio=round(inside_change_ratio, 4),
+        mask_coverage_ratio=round(mask_coverage_ratio, 4),
+        edit_localization_score=round(edit_localization_score, 4),
+        preservation_score=round(preservation_score, 4),
     )

@@ -1,4 +1,4 @@
-# Tech Report Alignment Implementation Plan
+﻿# Tech Report Alignment Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -41,7 +41,7 @@ from common.schemas import InitGenerateRequest, ScenePlanRequest
 def test_scene_plan_extracts_labels_from_chinese_instruction():
     plan = build_scene_plan(
         ScenePlanRequest(
-            instruction="画一个酶促反应示意图，包含底物、酶、产物和箭头",
+            instruction="鐢讳竴涓叾淇冨弽搴旂ず鎰忓浘锛屽寘鍚簳鐗┿€侀叾銆佷骇鐗╁拰绠ご",
             style="flat-vector",
             candidate_count=2,
         )
@@ -49,16 +49,16 @@ def test_scene_plan_extracts_labels_from_chinese_instruction():
 
     assert plan.mode == "create_from_text"
     assert plan.candidate_count == 2
-    assert "底物" in plan.labels
-    assert "酶" in plan.labels
-    assert "产物" in plan.labels
+    assert "搴曠墿" in plan.labels
+    assert "閰? in plan.labels
+    assert "浜х墿" in plan.labels
     assert "arrow" in plan.positive_prompt.lower()
 
 
 def test_init_candidates_are_deterministic_and_image_data_urls():
     plan = build_scene_plan(
         ScenePlanRequest(
-            instruction="画一个酶促反应示意图，包含底物、酶、产物和箭头",
+            instruction="鐢讳竴涓叾淇冨弽搴旂ず鎰忓浘锛屽寘鍚簳鐗┿€侀叾銆佷骇鐗╁拰绠ご",
             candidate_count=2,
             seed=123,
         )
@@ -124,7 +124,7 @@ Add `initPrompt`, `initCandidates`, `initPlan`, `isInitializing`, and `selectedI
 
 - [x] **Step 3: Add controls**
 
-Add a “无图生成初图” button to `ControlPanel.jsx`, disabled while initializing. Use the existing instruction text as the prompt to avoid duplicating input fields.
+Add a 鈥滄棤鍥剧敓鎴愬垵鍥锯€?button to `ControlPanel.jsx`, disabled while initializing. Use the existing instruction text as the prompt to avoid duplicating input fields.
 
 - [x] **Step 4: Render candidates**
 
@@ -298,7 +298,7 @@ Add `jobSnapshot` and `isJobGenerating` state. Add `startGenerateJob()` that pos
 
 - [x] **Step 3: Render controls**
 
-Add an “异步生成” button next to the existing synchronous PowerPaint button. Keep the existing button so users can compare both flows during development.
+Add an 鈥滃紓姝ョ敓鎴愨€?button next to the existing synchronous PowerPaint button. Keep the existing button so users can compare both flows during development.
 
 - [x] **Step 4: Render progress**
 
@@ -506,5 +506,177 @@ Add serializable canvas state layers
 ```
 
 - [x] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
+## Task 10: Backend Quality Report Contract
+
+**Files:**
+- Modify: `backend/common/schemas.py`
+- Create: `backend/common/quality.py`
+- Modify: `backend/common/utils/masks.py`
+- Modify: `backend/gateway/main.py`
+- Test: `backend/tests/test_quality.py`
+
+- [x] **Step 1: Write failing tests**
+
+```python
+from PIL import Image
+
+from common.quality import build_quality_report
+from common.schemas import GenerateRequest, PlanResponse
+from common.utils.masks import evaluate_edit
+
+
+def test_evaluate_edit_reports_inside_and_localization_metrics():
+    source = Image.new("RGB", (4, 4), "black")
+    result = Image.new("RGB", (4, 4), "black")
+    mask = Image.new("L", (4, 4), 0)
+    for x in range(2):
+        for y in range(2):
+            result.putpixel((x, y), (255, 255, 255))
+            mask.putpixel((x, y), 255)
+
+    evaluation = evaluate_edit(source, result, mask)
+
+    assert evaluation.mask_coverage_ratio == 0.25
+    assert evaluation.inside_mask_change_ratio == 1.0
+    assert evaluation.outside_mask_change_ratio == 0.0
+    assert evaluation.edit_localization_score == 1.0
+    assert evaluation.preservation_score == 1.0
+
+
+def test_quality_report_records_mask_and_prompt_trace():
+    mask = Image.new("L", (4, 4), 0)
+    for x in range(2):
+        for y in range(2):
+            mask.putpixel((x, y), 255)
+
+    payload = GenerateRequest(
+        source_image="data:image/png;base64,source",
+        instruction="add enzyme arrow",
+        task="shape-guided",
+        selected_asset_id="arrow",
+        steps=20,
+        guidance_scale=6.5,
+        fitting_degree=0.75,
+        seed=42,
+    )
+    plan = PlanResponse(
+        task="shape-guided",
+        task_prompt="draw a clean arrow",
+        negative_prompt="blurry",
+        reasoning="test",
+    )
+
+    report = build_quality_report(
+        run_id="run_1",
+        payload=payload,
+        plan=plan,
+        mask=mask,
+        evaluation=evaluate_edit(Image.new("RGB", (4, 4), "black"), Image.new("RGB", (4, 4), "black"), mask),
+        artifacts={"mask": "http://example/mask.png"},
+        planner_source="provided-plan",
+    )
+
+    assert report.run_id == "run_1"
+    assert report.mask.coverage_ratio == 0.25
+    assert report.mask.bounding_box == [0, 0, 1, 1]
+    assert report.prompt.task == "shape-guided"
+    assert report.prompt.seed == 42
+    assert report.prompt.parameters["steps"] == 20
+    assert report.prompt.planner_source == "provided-plan"
+```
+
+- [x] **Step 2: Run tests and verify failure**
+
+Run:
+
+```bash
+PYTHONPATH=backend python -m unittest backend.tests.test_quality -v
+```
+
+Expected: fails because `common.quality` and new evaluation fields do not exist.
+
+- [x] **Step 3: Add quality schemas**
+
+Add `MaskQualityReport`, `PromptTrace`, and `RunQualityReport` to `backend/common/schemas.py`. Add optional `quality_report` to `GenerateResponse`.
+
+- [x] **Step 4: Extend evaluation metrics**
+
+Update `evaluate_edit` in `backend/common/utils/masks.py` to return `inside_mask_change_ratio`, `mask_coverage_ratio`, `edit_localization_score`, and `preservation_score` while preserving existing fields.
+
+- [x] **Step 5: Implement `build_quality_report`**
+
+Create `backend/common/quality.py` to calculate mask quality, bounding box, prompt trace, generation parameters, artifact links, and planner source.
+
+- [x] **Step 6: Wire gateway response and metadata**
+
+In `generate_pipeline`, track whether the plan was supplied or produced by the planner/fallback path. Build `quality_report`, save it in `metadata.json`, and return it on `GenerateResponse`.
+
+- [x] **Step 7: Verify backend**
+
+Run:
+
+```bash
+PYTHONPATH=backend python -m unittest backend.tests.test_quality backend.tests.test_init_logic backend.tests.test_jobs backend.tests.test_canvas_state -v
+PYTHONPATH=backend python -m py_compile backend/common/schemas.py backend/common/quality.py backend/common/utils/masks.py backend/gateway/main.py
+```
+
+Expected: all pass.
+
+## Task 11: Frontend Quality Report Display
+
+**Files:**
+- Modify: `frontend/src/components/ResultPanel.jsx`
+- Reuse existing: `frontend/src/styles.css`
+
+- [x] **Step 1: Add richer metric cards**
+
+In `ResultPanel.jsx`, when `latestResult.quality_report` exists, render mask coverage, inside-mask change, localization score, preservation score, prompt task, planner source, and seed.
+
+- [x] **Step 2: Preserve existing metric fallback**
+
+Keep the existing `latestResult.evaluation` cards so older responses without `quality_report` still render.
+
+- [x] **Step 3: Verify frontend build**
+
+Run:
+
+```bash
+cd frontend && npm run build
+```
+
+Expected: Vite build exits with code 0.
+
+## Task 12: Phase 4 Review, Docs, Commit, Push
+
+**Files:**
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Document Phase 4 limitations**
+
+Update known issues to say the project now records per-run quality reports and prompt/provenance metadata, but still lacks CI, OCR validation, dataset-level benchmark aggregation, and persistent experiment dashboards.
+
+- [x] **Step 2: Review**
+
+Request code review for Phase 4 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run backend unit tests, backend compile checks, frontend build, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 4 files and commit:
+
+```text
+Add generation quality report metadata
+```
+
+- [ ] **Step 5: Push**
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
