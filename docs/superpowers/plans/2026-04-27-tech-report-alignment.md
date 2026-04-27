@@ -406,7 +406,7 @@ Request spec and code-quality review for Phase 7 and fix Critical/Important find
 
 Run backend tests, backend compile checks, frontend helper tests/build, and `git diff --check`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Stage only Phase 7 files and commit:
 
@@ -414,7 +414,7 @@ Stage only Phase 7 files and commit:
 Add durable async job state
 ```
 
-- [ ] **Step 5: Push**
+- [x] **Step 5: Push**
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
