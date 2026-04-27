@@ -12,12 +12,17 @@ from fastapi.staticfiles import StaticFiles
 
 from common.assets import asset_catalog_with_urls
 from common.planner_logic import build_plan
+from common.init_logic import build_init_candidates, build_scene_plan
 from common.schemas import (
     GenerateRequest,
     GenerateResponse,
+    InitGenerateRequest,
+    InitGenerateResponse,
     PlanRequest,
     PlanResponse,
     PowerPaintGenerateRequest,
+    ScenePlanRequest,
+    ScenePlanResponse,
     SegmentRequest,
     SegmentResponse,
 )
@@ -73,6 +78,16 @@ async def plan(payload: PlanRequest) -> PlanResponse:
         return PlanResponse.model_validate(data)
     except Exception:
         return build_plan(payload)
+
+
+@app.post("/api/init-plan", response_model=ScenePlanResponse)
+async def init_plan(payload: ScenePlanRequest) -> ScenePlanResponse:
+    return build_scene_plan(payload)
+
+
+@app.post("/api/init-generate", response_model=InitGenerateResponse)
+async def init_generate(payload: InitGenerateRequest) -> InitGenerateResponse:
+    return build_init_candidates(payload)
 
 
 @app.post("/api/segment", response_model=SegmentResponse)

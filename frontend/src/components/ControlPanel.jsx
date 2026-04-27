@@ -28,7 +28,9 @@ function ControlPanel({
   assetPlacement,
   updateAssetScale,
   analyzePlan,
+  createInitialCanvas,
   generateResult,
+  isInitializing,
   isGenerating,
   error,
   handleUpload,
@@ -61,6 +63,9 @@ function ControlPanel({
           rows={5}
           placeholder="例如：在右侧空白区域加入烧杯与箭头标注，并保持图中文字清晰。"
         />
+        <button type="button" className="secondary-button full-width" onClick={createInitialCanvas} disabled={isInitializing}>
+          {isInitializing ? "生成初图中..." : "无图生成初图"}
+        </button>
         <div className="segmented-grid">
           {taskOptions.map((option) => (
             <button

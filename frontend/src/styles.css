@@ -299,6 +299,7 @@ input[type="range"] {
 
 .segment,
 .asset-card,
+.candidate-card,
 .ghost-button,
 .secondary-button,
 .primary-button,
@@ -320,7 +321,8 @@ input[type="range"] {
 }
 
 .segment.active,
-.asset-card.active {
+.asset-card.active,
+.candidate-card.active {
   border-color: rgba(45, 140, 255, 0.38);
   background: rgba(45, 140, 255, 0.10);
 }
@@ -542,6 +544,13 @@ input[type="range"] {
   overflow: auto;
 }
 
+.candidate-list {
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  overflow: auto;
+}
+
 .history-card {
   display: grid;
   grid-template-columns: 88px 1fr;
@@ -550,6 +559,31 @@ input[type="range"] {
   padding: 8px;
   text-align: left;
   min-width: 0;
+}
+
+.candidate-card {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  text-align: left;
+  min-width: 0;
+  border-radius: 18px;
+  border: 1px solid rgba(143, 198, 255, 0.14);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text);
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.candidate-card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 14px;
+}
+
+.candidate-card span {
+  display: grid;
+  gap: 2px;
 }
 
 .history-card img {
@@ -610,6 +644,7 @@ input[type="range"] {
 
 .segment:hover,
 .asset-card:hover,
+.candidate-card:hover,
 .ghost-button:hover,
 .secondary-button:hover,
 .primary-button:hover,

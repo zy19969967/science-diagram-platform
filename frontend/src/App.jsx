@@ -50,10 +50,14 @@ function App() {
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [assetPlacement, setAssetPlacement] = useState(null);
   const [plan, setPlan] = useState(null);
+  const [initPlan, setInitPlan] = useState(null);
+  const [initCandidates, setInitCandidates] = useState([]);
+  const [selectedInitCandidateId, setSelectedInitCandidateId] = useState("");
   const [latestResult, setLatestResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [status, setStatus] = useState("等待上传图像与绘制选区");
   const [error, setError] = useState("");
+  const [isInitializing, setIsInitializing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [displayScale, setDisplayScale] = useState(1);
@@ -171,6 +175,9 @@ function App() {
     setSelectedAssetId("");
     setAssetPlacement(null);
     setPlan(null);
+    setInitPlan(null);
+    setInitCandidates([]);
+    setSelectedInitCandidateId("");
     setLatestResult(null);
     setHistory([]);
     setNaturalSize({ width: 0, height: 0 });
@@ -195,11 +202,30 @@ function App() {
     setSourceImage(dataUrl);
     setLatestResult(null);
     setPlan(null);
+    setInitPlan(null);
+    setInitCandidates([]);
+    setSelectedInitCandidateId("");
     setHistory([]);
     setDisplayScale(1);
     setStatus("图像已载入，可以开始涂抹 mask 或拖拽素材。");
     setError("");
     resetWorkspace();
+  }
+
+  async function readJsonResponse(response, fallbackMessage) {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.detail ?? fallbackMessage);
+      }
+      return body;
+    }
+    const body = await response.text();
+    if (!response.ok) {
+      throw new Error(body || fallbackMessage);
+    }
+    return body;
   }
 
   function startDrawing(event) {
@@ -370,6 +396,56 @@ function App() {
     }
   }
 
+  async function createInitialCanvas() {
+    const prompt = instruction.trim();
+    if (!prompt) {
+      setError("请输入无图生成的科学示意图需求。");
+      return;
+    }
+
+    setIsInitializing(true);
+    setError("");
+    setStatus("正在规划无图初始画布...");
+
+    try {
+      const planResponse = await fetch(apiPath("/api/init-plan"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instruction: prompt,
+          width: 1024,
+          height: 768,
+          style: "clean scientific illustration, flat vector-like",
+          candidate_count: 3,
+          seed,
+        }),
+      });
+      const scenePlan = await readJsonResponse(planResponse, "初图规划失败");
+
+      const generateResponse = await fetch(apiPath("/api/init-generate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scene_plan: scenePlan,
+          seed,
+        }),
+      });
+      const data = await readJsonResponse(generateResponse, "初图候选生成失败");
+
+      setInitPlan(data.scene_plan);
+      setInitCandidates(data.candidates);
+      setSelectedInitCandidateId("");
+      setLatestResult(null);
+      setHistory([]);
+      setStatus(`已生成 ${data.candidates.length} 张初图候选，可选择一张进入编辑闭环。`);
+    } catch (initError) {
+      setError(initError.message);
+      setStatus("无图初图生成失败，请检查网关服务。");
+    } finally {
+      setIsInitializing(false);
+    }
+  }
+
   async function generateResult() {
     if (!sourceImage) {
       setError("请先上传原始图像。");
@@ -406,10 +482,7 @@ function App() {
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.detail ?? "生成失败");
-      }
+      const data = await readJsonResponse(response, "生成失败");
 
       setPlan(data.plan);
       setLatestResult(data);
@@ -428,6 +501,24 @@ function App() {
     setLatestResult(item);
     clearMask();
     setStatus(`已切换到历史结果 ${item.run_id}，可以继续多轮编辑。`);
+  }
+
+  function chooseInitCandidate(candidate) {
+    const canvas = maskCanvasRef.current;
+    if (canvas) {
+      const context = canvas.getContext("2d");
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    setSourceImage(candidate.image);
+    setLatestResult(null);
+    setPlan(null);
+    setHistory([]);
+    setSelectedInitCandidateId(candidate.id);
+    setSelectedAssetId("");
+    setAssetPlacement(null);
+    setDisplayScale(1);
+    setStatus(`已选择初图候选 ${candidate.id}，现在可以涂抹 mask 或拖拽素材继续编辑。`);
+    setError("");
   }
 
   function removeAsset() {
@@ -473,7 +564,9 @@ function App() {
           assetPlacement={assetPlacement}
           updateAssetScale={updateAssetScale}
           analyzePlan={analyzePlan}
+          createInitialCanvas={createInitialCanvas}
           generateResult={generateResult}
+          isInitializing={isInitializing}
           isGenerating={isGenerating}
           error={error}
           handleUpload={handleUpload}
@@ -498,7 +591,15 @@ function App() {
           setDisplayScale={setDisplayScale}
         />
 
-        <ResultPanel latestResult={latestResult} continueFromHistory={continueFromHistory} history={history} />
+        <ResultPanel
+          latestResult={latestResult}
+          continueFromHistory={continueFromHistory}
+          history={history}
+          initPlan={initPlan}
+          initCandidates={initCandidates}
+          selectedInitCandidateId={selectedInitCandidateId}
+          chooseInitCandidate={chooseInitCandidate}
+        />
       </main>
     </div>
   );

@@ -5,6 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 TaskType = Literal["text-guided", "object-removal", "shape-guided", "image-outpainting"]
+InitMode = Literal["create_from_text"]
 
 
 class AssetMeta(BaseModel):
@@ -44,6 +45,70 @@ class PlanResponse(BaseModel):
     mask_strategy: str = "user-mask"
     reasoning: str
     warnings: list[str] = Field(default_factory=list)
+
+
+class ScenePlanRequest(BaseModel):
+    instruction: str = ""
+    width: int = Field(default=1024, ge=256, le=2048)
+    height: int = Field(default=768, ge=256, le=2048)
+    style: str = "clean scientific illustration, flat vector-like"
+    candidate_count: int = Field(default=3, ge=1, le=4)
+    seed: int = Field(default=2026, ge=0, le=2147483647)
+
+
+class ScenePlanObject(BaseModel):
+    id: str
+    name: str
+    role: str
+    position: str
+    visual: str
+
+
+class ScenePlanRelation(BaseModel):
+    source: str
+    target: str
+    type: str = "arrow"
+
+
+class ScenePlanResponse(BaseModel):
+    mode: InitMode = "create_from_text"
+    diagram_type: str
+    width: int
+    height: int
+    instruction: str
+    objects: list[ScenePlanObject]
+    relations: list[ScenePlanRelation] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
+    style: str
+    positive_prompt: str
+    negative_prompt: str
+    render_text_as_vector: bool = True
+    candidate_count: int = Field(default=3, ge=1, le=4)
+    seed: int = Field(default=2026, ge=0, le=2147483647)
+    provider: str = "deterministic-fallback"
+    warnings: list[str] = Field(default_factory=list)
+
+
+class InitCandidate(BaseModel):
+    id: str
+    image: str
+    seed: int
+    provider: str
+    score: float
+    width: int
+    height: int
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class InitGenerateRequest(BaseModel):
+    scene_plan: ScenePlanResponse
+    seed: int | None = Field(default=None, ge=0, le=2147483647)
+
+
+class InitGenerateResponse(BaseModel):
+    provider: str
+    scene_plan: ScenePlanResponse
+    candidates: list[InitCandidate]
 
 
 class SegmentRequest(BaseModel):

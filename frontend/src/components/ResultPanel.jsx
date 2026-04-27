@@ -1,4 +1,12 @@
-function ResultPanel({ latestResult, continueFromHistory, history }) {
+function ResultPanel({
+  latestResult,
+  continueFromHistory,
+  history,
+  initPlan,
+  initCandidates,
+  selectedInitCandidateId,
+  chooseInitCandidate,
+}) {
   return (
     <aside className="workbench-panel result-panel">
       <div className="panel-heading">
@@ -8,6 +16,34 @@ function ResultPanel({ latestResult, continueFromHistory, history }) {
         </div>
         {latestResult && <span className="status-pill compact">Run {latestResult.run_id}</span>}
       </div>
+
+      {initCandidates.length > 0 && (
+        <section className="surface-block rail-block candidate-block">
+          <div className="section-header compact-header">
+            <div>
+              <span className="section-label">Initial</span>
+              <strong>初图候选</strong>
+            </div>
+            {initPlan && <span className="section-meta">{initPlan.provider}</span>}
+          </div>
+          <div className="candidate-list">
+            {initCandidates.map((candidate) => (
+              <button
+                key={candidate.id}
+                type="button"
+                className={selectedInitCandidateId === candidate.id ? "candidate-card active" : "candidate-card"}
+                onClick={() => chooseInitCandidate(candidate)}
+              >
+                <img src={candidate.image} alt={candidate.id} />
+                <span>
+                  <strong>{candidate.id}</strong>
+                  <small>seed {candidate.seed} | score {candidate.score}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="surface-block emphasis-block preview-block">
         <div className="section-header compact-header">
