@@ -1,32 +1,51 @@
 # 科学示意图交互式生成平台
 
-基于技术报告与 [PowerPaint](https://github.com/open-mmlab/PowerPaint) 搭建的交互式科学示意图生成系统，采用前后端分离和 Docker Compose 编排，支持“上传底图 -> 规划编辑意图 -> 生成/细化 mask -> 调用 PowerPaint -> 回流下一轮编辑”的完整流程。
-
-当前版本已经接入真实模型优先的运行链路：
-
-- `planner`：优先调用官方 Hugging Face `Qwen/Qwen3.5-4B`
-- `segmenter`：优先调用官方 Hugging Face `facebook/sam2.1-hiera-base-plus`
-- `powerpaint_service`：继续调用官方 [PowerPaint](https://github.com/open-mmlab/PowerPaint)
-- 当真实模型不可用、GPU 不可用或模型输出异常时，会自动回退到仓库内的规则逻辑
+基于技术报告与 [PowerPaint](https://github.com/open-mmlab/PowerPaint) 搭建的交互式科学示意图生成系统。当前分支已经完成技术报告对齐的 13 个阶段：从文本初图、局部编辑、异步任务、画布状态、项目持久化、Fabric 图层编辑、SAM 点提示、OCR-ready SVG 导出、FLUX-compatible 初图 provider、实验台账，到部署 readiness 和单 token 网关保护。
 
 仓库地址：<https://github.com/zy19969967/science-diagram-platform>
 
-## 目录结构
+## 当前能力
+
+- 文本初图入口：`/api/init-plan` 和 `/api/init-generate` 支持无底图的初始画布候选；没有远程 FLUX 服务时会回退到确定性候选。
+- 交互式编辑链路：上传底图、绘制 mask、放置素材、添加文字层、使用 SAM 正/负点提示，再调用 PowerPaint 生成局部结果。
+- 同步与异步生成：保留旧的 `/api/generate` 同步接口，同时新增 `/api/jobs`、`/api/jobs/{job_id}` 和取消接口。
+- 可序列化画布状态：base、mask、asset、text layer、point prompts、quality report 和 provenance 可以随请求与项目版本保存。
+- 项目与版本持久化：Gateway 以 JSON 文件保存项目快照和父版本关系，适合单用户演示与毕业设计迭代。
+- 图层编辑器：前端接入首个 Fabric.js 图层编辑切片，支持素材/文字层选择、移动、缩放、显示、锁定和排序。
+- 文本校验与导出：`/api/canvas/validate-text` 支持 OCR-ready 文本一致性合同，`/api/canvas/export-svg` 可导出包含可编辑 `<text>` 的 SVG。
+- 实验台账：`/api/benchmarks/runs` 和 `/api/benchmarks/summary` 记录质量指标、provider、文本校验和项目版本信息。
+- 部署加固：可选 `GATEWAY_API_TOKEN` 单 token 保护、前端 `VITE_API_TOKEN` 透传、`/api/deployment/readiness` 本地配置检查和 traceability matrix。
+
+这些能力仍然是单节点、单用户、文件持久化优先的实现，不等同于生产级多租户系统。完整限制见 [Known Issues](docs/known-issues.md) 和 [Technical Report Traceability Matrix](docs/report-traceability.md)。
+
+## 服务组成
 
 ```text
 backend/
   assets/               科学素材目录
-  common/               共享数据结构与通用逻辑
-  gateway/              API 网关
+  common/               共享 schema、画布状态、质量评估、导出逻辑
+  gateway/              API 网关、任务、项目、实验台账、部署 readiness
   planner/              Qwen3.5 规划服务
   powerpaint_service/   PowerPaint 执行服务
   segmenter/            SAM-2 分割服务
-frontend/               React 前端
-data/runs/              生成结果与中间产物
-docs/                   部署与架构文档
+frontend/               React + Vite + Fabric.js 前端
+data/
+  runs/                 生成结果与中间产物
+  projects/             项目快照
+  jobs/                 异步任务快照
+  benchmarks/           实验台账
+docs/                   部署、架构、traceability 与已知限制
 scripts/                服务器辅助脚本
-docker-compose.yml      服务编排文件
+docker-compose.yml      Docker Compose 编排
 ```
+
+真实模型优先链路：
+
+- `planner`：优先调用 Hugging Face `Qwen/Qwen3.5-4B`
+- `segmenter`：优先调用 Hugging Face `facebook/sam2.1-hiera-base-plus`
+- `powerpaint_service`：调用官方 [PowerPaint](https://github.com/open-mmlab/PowerPaint)
+- `init provider`：可选调用 `FLUX_INIT_URL` 指向的远程初图服务；未配置时使用确定性 fallback
+- 当真实模型不可用、GPU 不可用或模型输出异常时，会回退到仓库内规则逻辑
 
 ## 快速部署
 
@@ -43,7 +62,7 @@ docker-compose.yml      服务编排文件
 - GPU 6：`segmenter`
 - GPU 7：备用
 
-如果服务器可用 Docker，最短部署路径如下：
+Docker 部署：
 
 ```bash
 mkdir -p /home/common/yzhu_2025
@@ -55,7 +74,7 @@ sudo docker compose --env-file .env build
 sudo docker compose --env-file .env up -d
 ```
 
-如果服务器不能使用 Docker、但可以使用 Conda，请改看无 Docker / Conda 文档，并使用 `scripts/setup_conda_envs.sh`、`scripts/start_all_tmux.sh`、`scripts/run_*.sh` 这组脚本。
+如果服务器不能使用 Docker、但可以使用 Conda，请看 [Conda Deployment README](docs/server-conda-deploy.md)，并使用 `scripts/setup_conda_envs.sh`、`scripts/start_all_tmux.sh`、`scripts/run_*.sh` 这组脚本。
 
 浏览器访问：
 
@@ -63,37 +82,58 @@ sudo docker compose --env-file .env up -d
 http://211.87.232.112:19084
 ```
 
-## 推荐先做的检查
+## 部署检查
 
-可以直接运行：
+服务器环境自检：
 
 ```bash
 bash scripts/server-preflight.sh
 ```
 
-它会输出：
+网关基础健康检查：
 
-- 操作系统信息
-- `nvidia-smi`
-- Docker / Docker Compose 版本
-- NVIDIA Container Toolkit
-- 内存、磁盘、网络
-- Docker Root Dir
+```bash
+curl http://127.0.0.1:19080/api/health
+```
 
-## 当前实现说明
+部署 readiness 检查：
 
-- `/api/plan` 会把原图一起发给 `planner`，让 Qwen3.5 参考图像内容生成结构化计划
-- `/api/segment` 和 `/api/generate` 会把原图一起发给 `segmenter`，让 SAM-2 用粗选区外接框做精细分割
-- 如果用户只是拖了素材位置、并没有明确选中图中对象，`segmenter` 会自动回退到几何 mask
-- 前端反向代理已经调大 `/api` 超时，降低模型冷启动时的前端超时概率
-- 对于无 Docker 场景，仓库已经补齐多 Conda 环境安装脚本、启动脚本、tmux 管理脚本和部署文档
+```bash
+curl http://127.0.0.1:19080/api/deployment/readiness
+```
 
-## Docs
+如果配置了 `GATEWAY_API_TOKEN`，除 `/api/health` 等豁免路由外，`/api/*` 请求需要带 token：
 
-- [Docker Deployment README](docs/server-deploy.md): Docker Compose deployment path
-- [Conda Deployment README](docs/server-conda-deploy.md): no-Docker deployment path, including the 4-GPU sample layout and execution steps
-- [Known Issues](docs/known-issues.md)
-- [Architecture](docs/architecture.md)
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/readiness
+```
+
+前端如果需要访问受保护的网关，在构建时设置同一个 `VITE_API_TOKEN`。
+
+## 主要 API
+
+- `GET /api/health`：基础健康检查。
+- `GET /api/deployment/readiness`：本地部署配置、目录、服务 URL、traceability 和 auth 状态检查。
+- `GET /api/assets`：读取内置科学素材。
+- `POST /api/plan`：基于底图和用户意图生成结构化编辑计划。
+- `POST /api/init-plan`：文本初图规划。
+- `POST /api/init-generate`：文本初图候选生成，支持 fallback 或远程 FLUX-compatible provider。
+- `POST /api/segment`：mask/box/素材位置/正负点提示分割。
+- `POST /api/generate`：同步局部生成。
+- `POST /api/jobs`、`GET /api/jobs/{job_id}`、`POST /api/jobs/{job_id}/cancel`：异步生成任务。
+- `GET/POST /api/projects`、`GET /api/projects/{project_id}`、`POST /api/projects/{project_id}/versions`：项目和版本持久化。
+- `POST /api/canvas/validate-text`、`POST /api/canvas/export-svg`：文本校验和 SVG 导出。
+- `GET/POST /api/benchmarks/runs`、`GET /api/benchmarks/summary`：实验台账和聚合指标。
+
+## 文档
+
+- [Architecture](docs/architecture.md)：当前服务链路、数据目录、API 合同和对齐边界。
+- [Docker Deployment README](docs/server-deploy.md)：Docker Compose 部署路径。
+- [Conda Deployment README](docs/server-conda-deploy.md)：无 Docker 部署路径、4-GPU 示例布局和执行步骤。
+- [Technical Report Traceability Matrix](docs/report-traceability.md)：Phase 1-13 对技术报告声明、代码路径、测试和限制的映射。
+- [Known Issues](docs/known-issues.md)：已完成能力之外的剩余缺口和生产化风险。
+- [User Requirements Memory](docs/superpowers/requirements/2026-04-27-user-requirements.md)：用户长期需求记录。
+- [Staged Alignment Plan](docs/superpowers/plans/2026-04-27-tech-report-alignment.md)：分阶段开发与验证记录。
 
 ## PowerPaint Code And Weights
 

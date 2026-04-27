@@ -89,6 +89,13 @@ POWERPAINT_PORT=19082
 SEGMENTER_PORT=19083
 PUBLIC_GATEWAY_BASE_URL=http://211.87.232.112:19080
 FRONTEND_STATIC_PORT=19084
+
+# Optional: keep empty for an open internal demo, or set both to the same value.
+GATEWAY_API_TOKEN=
+VITE_API_TOKEN=
+
+RUNS_DIR=/home/common/yzhu_2025/science-diagram-platform/data/runs
+BENCHMARKS_DIR=/home/common/yzhu_2025/science-diagram-platform/data/benchmarks
 ```
 
 说明：
@@ -96,12 +103,16 @@ FRONTEND_STATIC_PORT=19084
 - `PUBLIC_GATEWAY_BASE_URL` 是给前端构建用的，浏览器会直接访问这个地址
 - `gateway` 默认绑定在 `127.0.0.1:19080`
 - 如果你希望公网直接访问网关，可以把 `GATEWAY_HOST` 改成 `0.0.0.0`
+- `GATEWAY_API_TOKEN` 为空时保持开放内网行为；非空时，除 `/api/health` 等豁免路由外，`/api/*` 需要 token
+- 如果设置了 `GATEWAY_API_TOKEN`，前端构建时也要设置相同的 `VITE_API_TOKEN`
+- `VITE_API_TOKEN` 会进入前端静态 bundle，只适合受控演示或内网边界
 - 如果脚本里找不到 `conda`，可以额外设置 `CONDA_BIN=/你的/miniconda3/bin/conda`
 - `TORCH_INDEX_URL` 必须指向 CUDA wheel 源；如果 PyTorch 装成 CPU 版，模型会显示 `device: cpu`
 - `POWERPAINT_DOWNLOAD_METHOD=git` 会按 Git / Git LFS 方式拉取 `PowerPaint 2.1` 权重
 - `PowerPaint 2.1` 仍然走 BrushNet 的 `ppt-v2` 推理分支，所以 `POWERPAINT_VERSION` 保持 `ppt-v2`
 - 如果你已经提前把模型拉到本地，建议把 `POWERPAINT_LOCAL_FILES_ONLY=true`
 - 如果你已经有统一的 Conda 环境命名规范，可以直接改上面的 `CONDA_ENV_*`
+- `PROJECTS_DIR` 和 `JOBS_DIR` 如果不显式设置，会默认落在 `RUNS_DIR` 的同级目录下，即 `data/projects` 和 `data/jobs`
 
 ## 5. 一次性安装环境
 
@@ -208,6 +219,20 @@ bash scripts/check_services.sh
 
 如果 4 个接口都返回 JSON，说明链路已经连通。
 
+还可以检查 Gateway 部署 readiness：
+
+```bash
+curl http://127.0.0.1:19080/api/deployment/readiness
+```
+
+如果配置了 `GATEWAY_API_TOKEN`：
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/readiness
+```
+
+这个 readiness 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档，不会主动调用 Qwen3.5、SAM2.1、PowerPaint 或远程 FLUX 服务。
+
 ## 9. 首次运行为什么会慢
 
 首次启动或首次请求时，服务会下载或加载：
@@ -235,6 +260,8 @@ bash scripts/check_services.sh
 - `PUBLIC_GATEWAY_BASE_URL` 是否写成了真实服务器 IP
 - `gateway` 是否真的在对应地址监听
 - 防火墙是否放行前端端口
+- 如果启用了 token，`GATEWAY_API_TOKEN` 和构建前端时的 `VITE_API_TOKEN` 是否一致
+- 修改 `VITE_API_TOKEN` 后是否重新运行了 `bash scripts/build_frontend.sh`
 
 ### 10.4 PowerPaint 没启动
 
@@ -245,7 +272,21 @@ bash scripts/check_services.sh
 - `bash scripts/fetch_powerpaint_model.sh` 是否已经把 `PowerPaint 2.1` 权重拉到本地
 - 相关 Python 依赖是否安装完整
 
-## 10.5 PowerPaint Code And Weight Sources
+### 10.5 运行数据在哪里
+
+默认运行数据目录：
+
+```text
+data/runs         生成图、mask、质量报告和中间产物
+data/projects     项目 JSON 快照与版本链
+data/jobs         异步任务 JSON 快照
+data/benchmarks   benchmark run ledger
+models            Hugging Face 与 PowerPaint 权重缓存
+```
+
+迁移服务器或备份毕业设计演示数据时，至少备份 `data/` 和必要的 `models/`。
+
+### 10.6 PowerPaint Code And Weight Sources
 
 - `POWERPAINT_REPO_GIT_URL` points to the PowerPaint code repository, by default `https://github.com/zhuang2002/PowerPaint.git`
 - `POWERPAINT_MODEL_GIT_URL` points to the `PowerPaint 2.1` weight repository, by default `https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1`

@@ -10,6 +10,7 @@
 - `segmenter`：优先调用 `facebook/sam2.1-hiera-base-plus`
 - `powerpaint_service`：调用官方 `PowerPaint`
 - 当真实模型不可用时，会自动回退到仓库内规则逻辑，保证平台还能用于调试和演示
+- Gateway 还包含异步任务、项目版本、benchmark ledger、readiness 检查和可选单 token 保护
 
 ## 1. 部署前提
 
@@ -65,12 +66,16 @@ cd science-diagram-platform
 cp .env.server.example .env
 ```
 
-当前模板已经写好了真实模型配置，最少桮认下面这些项：
+当前模板已经写好了真实模型配置，最少确认下面这些项：
 
 ```bash
 FRONTEND_PUBLIC_PORT=19084
 GATEWAY_BIND_HOST=127.0.0.1
 GATEWAY_PUBLIC_PORT=19080
+
+# Optional: keep empty for an open internal demo, or set both to the same value.
+GATEWAY_API_TOKEN=
+VITE_API_TOKEN=
 
 POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
@@ -87,14 +92,19 @@ POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1
 POWERPAINT_DOWNLOAD_METHOD=git
 POWERPAINT_VERSION=ppt-v2
 POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
+BENCHMARKS_DIR=/app/data/benchmarks
 ```
 
 几个关键说明：
 
 - `GATEWAY_BIND_HOST=127.0.0.1` 表示网关只对本机开放，前端容器通过 Docker 网络反向代理访问它
 - `FRONTEND_PUBLIC_PORT=19084` 表示浏览器最终访问的是前端容器
+- `GATEWAY_API_TOKEN` 为空时保持旧的开放内网行为；非空时，除 `/api/health`、静态素材和文档路由外，`/api/*` 需要 token
+- 如果设置了 `GATEWAY_API_TOKEN`，前端构建也要设置相同的 `VITE_API_TOKEN`，Docker Compose 会把它传给 Vite build
+- `VITE_API_TOKEN` 会进入静态前端 bundle，只适合内网或受控演示边界，不是公网多租户认证方案
 - `PowerPaint 2.1` 仍然复用 BrushNet 的 `ppt-v2` 推理分支，因此 `POWERPAINT_VERSION` 保持 `ppt-v2`
 - `AUX_CUDA_VISIBLE_DEVICES` 目前只是预留备用卡，不会被 Compose 自动绑定到服务
+- Compose 会把 `RUNS_DIR`、`PROJECTS_DIR`、`JOBS_DIR` 和 `BENCHMARKS_DIR` 挂到项目 `data/` 目录下，便于重启后读取生成产物、项目版本、异步任务和实验记录
 
 如果你已经提前下载过模型，也可以开启纯本地模式：
 
@@ -108,7 +118,7 @@ POWERPAINT_LOCAL_FILES_ONLY=true
 
 ## 6. 首次构建
 
-如果你用户涨正是 Docker daemon 权限，请使用 `sudo`：
+如果当前用户没有 Docker daemon 权限，请使用 `sudo`：
 
 ```bash
 sudo docker compose --env-file .env build
@@ -163,6 +173,20 @@ http://211.87.232.112:19084
 curl http://127.0.0.1:19080/api/health
 ```
 
+检查部署 readiness：
+
+```bash
+curl http://127.0.0.1:19080/api/deployment/readiness
+```
+
+如果配置了 `GATEWAY_API_TOKEN`：
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/readiness
+```
+
+`/api/deployment/readiness` 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档是否存在；它不会调用 Qwen3.5、SAM2.1、PowerPaint 或远程 FLUX 服务。
+
 ## 9. 首次请求较慢是正常现象
 
 `planner` 和 `segmenter` 采用惰性加载。也就是说：
@@ -192,6 +216,17 @@ curl http://127.0.0.1:19080/api/health
 ```bash
 sudo docker info | grep 'Docker Root Dir'
 ```
+
+运行数据默认落在：
+
+```text
+./data/runs
+./data/projects
+./data/jobs
+./data/benchmarks
+```
+
+这些目录是当前项目的文件持久化基础；如果迁移服务器，需要一起备份。
 
 ## 11. 更新项目
 
@@ -258,6 +293,14 @@ sudo docker compose --env-file .env up -d --build
 
 这通常不是死机，而是冷启动。
 
-### 12.6 Where PowerPaint 2.1 Weights Come From
+### 12.6 Token 配置后前端请求 401
+
+优先确认：
+
+- `.env` 中 `GATEWAY_API_TOKEN` 和 `VITE_API_TOKEN` 是否一致
+- 修改 token 后是否重新执行了 `sudo docker compose --env-file .env up -d --build`
+- 请求是否访问的是 `/api/*`；`/assets` 与 `/artifacts` 是静态资源路由，当前仍然 intentionally exempt
+
+### 12.7 Where PowerPaint 2.1 Weights Come From
 
 `POWERPAINT_REPO_GIT_URL` only pulls the PowerPaint code repository. The `PowerPaint 2.1` weights are not stored in the GitHub code repository. They still need to come from the Hugging Face Git LFS repository referenced by `POWERPAINT_MODEL_GIT_URL`, or be copied into the model directory ahead of time.
