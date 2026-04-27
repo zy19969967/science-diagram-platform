@@ -495,7 +495,7 @@ Request code review for Phase 8 and fix Critical/Important findings.
 
 Run frontend helper tests, frontend build, backend tests, and `git diff --check`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Stage only Phase 8 files and commit:
 
@@ -503,7 +503,7 @@ Stage only Phase 8 files and commit:
 Add Fabric layer editor
 ```
 
-- [ ] **Step 5: Push**
+- [x] **Step 5: Push**
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
