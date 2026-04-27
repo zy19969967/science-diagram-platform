@@ -58,6 +58,46 @@ Phase 4 first ships the runtime quality-report slice before adding CI:
 
 Explicitly out of scope for this slice: CI pipelines, OCR validation, human preference scoring, dataset-level benchmark aggregation, and persistent experiment dashboards.
 
+## Remaining Completion Roadmap
+
+The rest of the report alignment should continue as reviewable phases. Each phase must keep the existing upload/edit path working, update this design and the implementation plan, run verification, request code review when useful, and push a scoped commit.
+
+### Phase 5: CI Validation Baseline
+
+Add GitHub Actions to run the current backend unit tests, Python import checks, frontend helper tests, frontend build, and diff hygiene on every pull request and push to the report-alignment branch. This phase does not install model weights or run GPU inference.
+
+### Phase 6: Project Persistence And Version Tree
+
+Add a lightweight persisted project/session layer that stores source image metadata, selected initial candidates, run ids, canvas states, quality reports, and parent-child version lineage. Start with file-backed JSON or SQLite before adding multi-user database concerns.
+
+### Phase 7: Durable Async Jobs
+
+Replace the in-process job store with a durable queue/state backend such as Redis plus a worker process. Add cancellation, retry metadata, resumable status reads, and failure provenance while keeping `/api/jobs` compatible.
+
+### Phase 8: Fabric.js Layer Editor
+
+Move from React-only overlays to a real layer editor with selectable/lockable/reorderable base, mask, asset, and text layers. Keep the Phase 3 `canvas_state` contract as the serialization boundary.
+
+### Phase 9: Rich SAM-2 Interaction
+
+Add positive/negative point prompts, multi-click refinement, and explicit box/point provenance. Preserve the current box-derived fallback so existing brush and asset placement workflows still work.
+
+### Phase 10: OCR, Vector Text, And SVG Export
+
+Add OCR validation for generated labels, vector text layer reconciliation, and SVG/PPT-ready export paths. This should build on the layer editor and not treat bitmap fallback text as editable vector text.
+
+### Phase 11: FLUX Initial Canvas Service
+
+Replace the deterministic fallback with a real initial-canvas generation service, candidate scoring, low-resolution previews, and high-resolution async regeneration. Keep the existing `/api/init-plan` and `/api/init-generate` contracts stable.
+
+### Phase 12: Benchmark And Experiment Dashboard
+
+Aggregate `quality_report` records across runs into dataset-level metrics, model/prompt comparisons, and exportable experiment summaries. This phase turns Phase 4 per-run records into report-ready evaluation evidence.
+
+### Phase 13: Auth, Deployment Hardening, And Final Report Traceability
+
+Add access control, deployment smoke checks, production configuration validation, and a final traceability matrix mapping report claims to implemented code paths, tests, and known limitations.
+
 ## Phase 1 Architecture
 
 Phase 1 keeps the current service topology. The gateway owns init endpoints and uses shared common logic for deterministic fallback behavior:

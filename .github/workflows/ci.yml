@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - codex/report-alignment-phase1
+
+jobs:
+  backend:
+    name: Backend validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/gateway/requirements.txt
+      - name: Run backend tests
+        env:
+          PYTHONPATH: backend
+        run: python -m unittest discover -s backend/tests -p 'test_*.py' -v
+      - name: Compile backend modules
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m py_compile \
+            backend/common/schemas.py \
+            backend/common/init_logic.py \
+            backend/common/canvas_state.py \
+            backend/common/quality.py \
+            backend/common/utils/masks.py \
+            backend/gateway/jobs.py \
+            backend/gateway/main.py
+      - name: Import backend modules
+        env:
+          PYTHONPATH: backend
+          ASSETS_DIR: backend/assets
+          RUNS_DIR: /tmp/science-diagram-runs
+        run: |
+          python - <<'PY'
+          import common.schemas
+          import common.init_logic
+          import common.canvas_state
+          import common.quality
+          import gateway.jobs
+          import gateway.main
+          PY
+
+  frontend:
+    name: Frontend validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+      - name: Run frontend helper tests
+        working-directory: frontend
+        run: node tests/canvasState.test.mjs
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  hygiene:
+    name: Diff hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check whitespace
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            git fetch --no-tags --depth=1 origin "$BASE_REF"
+            git diff --check "origin/$BASE_REF...HEAD"
+          elif [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            git diff --check "$BEFORE_SHA" HEAD
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^ HEAD
+          else
+            echo "No base commit available for whitespace diff."
+          fi

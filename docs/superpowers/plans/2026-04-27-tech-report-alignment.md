@@ -680,3 +680,202 @@ Add generation quality report metadata
 - [x] **Step 5: Push**
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
+## Remaining Phase Roadmap
+
+The rest of the report alignment should proceed in this order:
+
+1. Phase 5: CI validation baseline.
+2. Phase 6: persisted projects and version tree.
+3. Phase 7: durable async queue and worker state.
+4. Phase 8: Fabric.js layer editor.
+5. Phase 9: richer SAM-2 point/box interaction.
+6. Phase 10: OCR, vector text reconciliation, and SVG export.
+7. Phase 11: real FLUX initial-canvas service and candidate scoring.
+8. Phase 12: benchmark and experiment dashboard.
+9. Phase 13: auth, deployment hardening, and final traceability matrix.
+
+## Task 13: CI Validation Baseline
+
+**Files:**
+- Create: `.github/workflows/ci.yml`
+- Test: `backend/tests/test_ci_workflow.py`
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Write failing workflow test**
+
+```python
+from pathlib import Path
+
+
+def test_ci_workflow_runs_backend_and_frontend_checks():
+    workflow = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
+    text = workflow.read_text(encoding="utf-8")
+
+    assert "Backend validation" in text
+    assert "Frontend validation" in text
+    assert "python -m unittest discover -s backend/tests -p 'test_*.py' -v" in text
+    assert "python -m py_compile" in text
+    assert "node tests/canvasState.test.mjs" in text
+    assert "npm run build" in text
+    assert "git diff --check" in text
+```
+
+- [x] **Step 2: Run test and verify failure**
+
+Run:
+
+```bash
+PYTHONPATH=backend python -m unittest backend.tests.test_ci_workflow -v
+```
+
+Expected: fails because `.github/workflows/ci.yml` does not exist.
+
+- [x] **Step 3: Add GitHub Actions workflow**
+
+Create `.github/workflows/ci.yml` with:
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - codex/report-alignment-phase1
+
+jobs:
+  backend:
+    name: Backend validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/gateway/requirements.txt
+      - name: Run backend tests
+        env:
+          PYTHONPATH: backend
+        run: python -m unittest discover -s backend/tests -p 'test_*.py' -v
+      - name: Compile backend modules
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m py_compile \
+            backend/common/schemas.py \
+            backend/common/init_logic.py \
+            backend/common/canvas_state.py \
+            backend/common/quality.py \
+            backend/common/utils/masks.py \
+            backend/gateway/jobs.py \
+            backend/gateway/main.py
+      - name: Import backend modules
+        env:
+          PYTHONPATH: backend
+          ASSETS_DIR: backend/assets
+          RUNS_DIR: /tmp/science-diagram-runs
+        run: |
+          python - <<'PY'
+          import common.schemas
+          import common.init_logic
+          import common.canvas_state
+          import common.quality
+          import gateway.jobs
+          import gateway.main
+          PY
+
+  frontend:
+    name: Frontend validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+      - name: Run frontend helper tests
+        working-directory: frontend
+        run: node tests/canvasState.test.mjs
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  hygiene:
+    name: Diff hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check whitespace
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            git fetch --no-tags --depth=1 origin "$BASE_REF"
+            git diff --check "origin/$BASE_REF...HEAD"
+          elif [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            git diff --check "$BEFORE_SHA" HEAD
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^ HEAD
+          else
+            echo "No base commit available for whitespace diff."
+          fi
+```
+
+- [x] **Step 4: Run test and local verification**
+
+Run:
+
+```bash
+PYTHONPATH=backend python -m unittest backend.tests.test_ci_workflow -v
+PYTHONPATH=backend python -m unittest discover -s backend/tests -p 'test_*.py' -v
+cd frontend && node tests/canvasState.test.mjs && npm run build
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 14: Phase 5 Review, Commit, Push
+
+**Files:**
+- Review: `.github/workflows/ci.yml`
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Document Phase 5 limitations**
+
+Update known issues to say CI now covers lightweight backend/frontend validation, but does not run GPU/model inference, Docker builds, OCR validation, or end-to-end browser tests yet.
+
+- [x] **Step 2: Review**
+
+Request code review for Phase 5 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run backend unit tests, backend compile checks, frontend helper test, frontend build, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 5 files and commit:
+
+```text
+Add CI validation baseline
+```
+
+- [ ] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
