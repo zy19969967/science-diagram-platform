@@ -9,6 +9,7 @@ function EditorStage({
   stopDrawing,
   selectedAsset,
   assetPlacement,
+  textLayers,
   dragActiveRef,
   clearMask,
   clearCanvas,
@@ -79,6 +80,28 @@ function EditorStage({
                   <img src={selectedAsset.image_url} alt={selectedAsset.name} crossOrigin="anonymous" draggable="false" />
                 </div>
               )}
+              {(textLayers ?? [])
+                .filter((layer) => layer.visible !== false)
+                .map((layer) => {
+                  const data = layer.data ?? {};
+                  return (
+                    <div
+                      key={layer.id}
+                      className="text-layer-overlay"
+                      style={{
+                        left: `${Number(data.x ?? 0.5) * 100}%`,
+                        top: `${Number(data.y ?? 0.5) * 100}%`,
+                        opacity: layer.opacity ?? 1,
+                        color: data.color ?? "#18324c",
+                        background: data.background ?? "rgba(255, 255, 255, 0.82)",
+                        fontSize: `${Math.max(12, Number(data.font_size ?? 22) * displayScale)}px`,
+                        textAlign: data.align ?? "center",
+                      }}
+                    >
+                      {data.text}
+                    </div>
+                  );
+                })}
             </div>
           ) : (
             <div className="empty-stage">

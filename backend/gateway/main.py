@@ -12,8 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from common.assets import asset_catalog_with_urls
-from common.planner_logic import build_plan
+from common.canvas_state import build_canvas_state_after_generate
 from common.init_logic import build_init_candidates, build_scene_plan
+from common.planner_logic import build_plan
 from common.schemas import (
     GenerateRequest,
     GenerateResponse,
@@ -180,6 +181,13 @@ async def generate_pipeline(
     source_image.save(run_dir / "source.png")
     mask_image.save(run_dir / "mask.png")
     result_image.save(run_dir / "result.png")
+    artifacts = {
+        "source": f"{base_url}/artifacts/{run_id}/source.png",
+        "mask": f"{base_url}/artifacts/{run_id}/mask.png",
+        "result": f"{base_url}/artifacts/{run_id}/result.png",
+        "metadata": f"{base_url}/artifacts/{run_id}/metadata.json",
+    }
+    canvas_state_after = build_canvas_state_after_generate(payload.canvas_state, run_id=run_id, artifacts=artifacts)
     metadata = {
         "run_id": run_id,
         "instruction": payload.instruction,
@@ -187,15 +195,10 @@ async def generate_pipeline(
         "evaluation": evaluation.model_dump(),
         "selected_asset_id": payload.selected_asset_id,
         "task": payload.task or plan_payload.task,
+        "canvas_state_before": payload.canvas_state.model_dump() if payload.canvas_state else None,
+        "canvas_state_after": canvas_state_after.model_dump() if canvas_state_after else None,
     }
     (run_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    artifacts = {
-        "source": f"{base_url}/artifacts/{run_id}/source.png",
-        "mask": f"{base_url}/artifacts/{run_id}/mask.png",
-        "result": f"{base_url}/artifacts/{run_id}/result.png",
-        "metadata": f"{base_url}/artifacts/{run_id}/metadata.json",
-    }
 
     return GenerateResponse(
         run_id=run_id,
@@ -203,6 +206,7 @@ async def generate_pipeline(
         result_image=result_image_data,
         evaluation=evaluation,
         artifacts=artifacts,
+        canvas_state=canvas_state_after,
     )
 
 

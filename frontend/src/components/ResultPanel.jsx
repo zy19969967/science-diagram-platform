@@ -7,7 +7,11 @@ function ResultPanel({
   selectedInitCandidateId,
   chooseInitCandidate,
   jobSnapshot,
+  canvasState,
 }) {
+  const layerCount = canvasState?.layers?.length ?? 0;
+  const historyCount = canvasState?.history?.length ?? 0;
+
   return (
     <aside className="workbench-panel result-panel">
       <div className="panel-heading">
@@ -62,6 +66,28 @@ function ResultPanel({
             </div>
             <progress value={jobSnapshot.progress} max="1" />
             <p>{jobSnapshot.error || jobSnapshot.message}</p>
+          </div>
+        </section>
+      )}
+
+      {canvasState && (
+        <section className="surface-block rail-block canvas-state-block">
+          <div className="section-header compact-header">
+            <div>
+              <span className="section-label">State</span>
+              <strong>画布状态</strong>
+            </div>
+            <span className="section-meta">{canvasState.source}</span>
+          </div>
+          <div className="canvas-state-grid">
+            <div>
+              <span>Layers</span>
+              <strong>{layerCount}</strong>
+            </div>
+            <div>
+              <span>History</span>
+              <strong>{historyCount}</strong>
+            </div>
           </div>
         </section>
       )}

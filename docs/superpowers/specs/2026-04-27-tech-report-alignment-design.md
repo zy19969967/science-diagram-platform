@@ -33,6 +33,18 @@ Phase 2 keeps `/api/generate` intact and adds `POST /api/jobs` plus `GET /api/jo
 
 Introduce a serializable canvas state with base image, mask layer, asset layer, and vector text layer. The front end can stay React-first initially; Fabric.js should be added only when the layer model is stable.
 
+Phase 3 stores a `canvas_state` snapshot with generation requests and returns an updated snapshot after generation. The snapshot records layer metadata and artifact references, not a full Fabric.js scene yet. Text layers are represented as editable metadata and rendered as lightweight HTML overlays in the current React editor.
+
+Implemented Phase 3 scope:
+
+- `GenerateRequest` and `GenerateResponse` carry optional `canvas_state`.
+- Gateway metadata stores `canvas_state_before` and `canvas_state_after`.
+- The front end serializes base image, mask, asset, and text layers before synchronous and asynchronous generation.
+- Initial-canvas labels become lightweight React text overlays, and history results restore text layers from returned state.
+- Result UI displays the latest returned canvas state source, layer count, and history count.
+
+Explicitly out of scope for Phase 3: Fabric.js editing, persisted project database, branchable version trees, SVG export, and OCR validation.
+
 ### Phase 4: Quality And Evaluation
 
 Add richer evaluation records, prompt/model metadata, mask quality fields, and CI. OCR/vector text verification can land here or in a separate focused phase depending on dependency availability.

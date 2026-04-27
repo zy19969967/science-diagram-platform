@@ -1,12 +1,40 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 TaskType = Literal["text-guided", "object-removal", "shape-guided", "image-outpainting"]
 InitMode = Literal["create_from_text"]
 JobStatus = Literal["CREATED", "PLANNING", "SEGMENTING", "EXECUTING", "EVALUATING", "DONE", "FAILED"]
+CanvasLayerType = Literal["base-image", "mask", "asset", "text", "result"]
+CanvasSource = Literal["upload", "init-candidate", "history", "generated"]
+MAX_CANVAS_LAYERS = 64
+MAX_CANVAS_STATE_BYTES = 65536
+CANVAS_METADATA_KEYS = {
+    "instruction",
+    "task",
+    "seed",
+    "selected_asset_id",
+    "selected_init_candidate_id",
+    "init_provider",
+    "init_diagram_type",
+    "latest_run_id",
+    "latest_result_url",
+    "latest_mask_url",
+    "plan_task",
+}
+
+
+def _contains_data_url(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.lstrip().lower().startswith("data:")
+    if isinstance(value, dict):
+        return any(_contains_data_url(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_data_url(item) for item in value)
+    return False
 
 
 class AssetMeta(BaseModel):
@@ -112,6 +140,65 @@ class InitGenerateResponse(BaseModel):
     candidates: list[InitCandidate]
 
 
+class CanvasLayer(BaseModel):
+    id: str
+    type: CanvasLayerType
+    name: str
+    visible: bool = True
+    locked: bool = False
+    opacity: float = Field(default=1.0, ge=0.0, le=1.0)
+    data: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("data")
+    @classmethod
+    def reject_embedded_data_urls(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if _contains_data_url(value):
+            raise ValueError("canvas layer data must reference artifacts, not embedded data URLs")
+        return value
+
+
+class CanvasState(BaseModel):
+    canvas_id: str
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    source: CanvasSource = "upload"
+    layers: list[CanvasLayer] = Field(default_factory=list)
+    history: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("layers")
+    @classmethod
+    def limit_layers(cls, value: list[CanvasLayer]) -> list[CanvasLayer]:
+        if len(value) > MAX_CANVAS_LAYERS:
+            raise ValueError(f"canvas_state layers cannot exceed {MAX_CANVAS_LAYERS}")
+        return value
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def allow_known_metadata_keys(cls, value: Any) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            return {}
+        return {
+            str(key): item
+            for key, item in value.items()
+            if str(key) in CANVAS_METADATA_KEYS
+        }
+
+    @field_validator("metadata")
+    @classmethod
+    def reject_metadata_data_urls(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if _contains_data_url(value):
+            raise ValueError("canvas_state metadata must reference artifacts, not embedded data URLs")
+        return value
+
+    @model_validator(mode="after")
+    def limit_serialized_size(self) -> "CanvasState":
+        serialized = json.dumps(self.model_dump(), ensure_ascii=False, default=str)
+        if len(serialized.encode("utf-8")) > MAX_CANVAS_STATE_BYTES:
+            raise ValueError(f"canvas_state cannot exceed {MAX_CANVAS_STATE_BYTES} bytes")
+        return self
+
+
 class SegmentRequest(BaseModel):
     source_image: str | None = None
     width: int = Field(gt=0)
@@ -149,6 +236,7 @@ class GenerateRequest(BaseModel):
     local_files_only: bool = False
     horizontal_expansion_ratio: float = Field(default=1.0, ge=1.0, le=4.0)
     vertical_expansion_ratio: float = Field(default=1.0, ge=1.0, le=4.0)
+    canvas_state: CanvasState | None = None
 
 
 class PowerPaintGenerateRequest(BaseModel):
@@ -172,6 +260,7 @@ class GenerateResponse(BaseModel):
     result_image: str
     evaluation: EvaluationResult
     artifacts: dict[str, str] = Field(default_factory=dict)
+    canvas_state: CanvasState | None = None
 
 
 class JobCreateRequest(BaseModel):

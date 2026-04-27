@@ -462,6 +462,21 @@ input[type="range"] {
   box-shadow: none;
 }
 
+.text-layer-overlay {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  max-width: 30%;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(41, 85, 132, 0.14);
+  box-shadow: 0 8px 20px rgba(23, 50, 77, 0.10);
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  white-space: normal;
+}
+
 .empty-stage,
 .placeholder-card {
   display: grid;
@@ -608,6 +623,30 @@ input[type="range"] {
 
 .job-progress p {
   margin: 0;
+}
+
+.canvas-state-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.canvas-state-grid div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(41, 85, 132, 0.08);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.canvas-state-grid span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.canvas-state-grid strong {
+  font-size: 18px;
 }
 
 .history-card img {

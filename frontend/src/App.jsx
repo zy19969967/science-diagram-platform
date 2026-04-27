@@ -3,6 +3,11 @@ import ControlPanel from "./components/ControlPanel";
 import EditorStage from "./components/EditorStage";
 import HeaderBar from "./components/HeaderBar";
 import ResultPanel from "./components/ResultPanel";
+import {
+  createCanvasStateSnapshot,
+  createTextLayersFromLabels,
+  extractTextLayersFromCanvasState,
+} from "./canvasState.js";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const apiPath = (path) => (API_BASE_URL ? `${API_BASE_URL}${path}` : path);
@@ -53,6 +58,7 @@ function App() {
   const [initPlan, setInitPlan] = useState(null);
   const [initCandidates, setInitCandidates] = useState([]);
   const [selectedInitCandidateId, setSelectedInitCandidateId] = useState("");
+  const [textLayers, setTextLayers] = useState([]);
   const [latestResult, setLatestResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [status, setStatus] = useState("等待上传图像与绘制选区");
@@ -187,6 +193,7 @@ function App() {
     setInitPlan(null);
     setInitCandidates([]);
     setSelectedInitCandidateId("");
+    setTextLayers([]);
     setJobSnapshot(null);
     setLatestResult(null);
     setHistory([]);
@@ -216,6 +223,7 @@ function App() {
     setInitPlan(null);
     setInitCandidates([]);
     setSelectedInitCandidateId("");
+    setTextLayers([]);
     setJobSnapshot(null);
     setHistory([]);
     setDisplayScale(1);
@@ -448,6 +456,7 @@ function App() {
       setInitPlan(data.scene_plan);
       setInitCandidates(data.candidates);
       setSelectedInitCandidateId("");
+      setTextLayers([]);
       setLatestResult(null);
       setHistory([]);
       setStatus(`已生成 ${data.candidates.length} 张初图候选，可选择一张进入编辑闭环。`);
@@ -469,6 +478,22 @@ function App() {
       throw new Error("当前没有有效的 mask 或素材位置，请先绘制或选择素材。");
     }
 
+    const canvasState = createCanvasStateSnapshot({
+      sourceImage,
+      naturalSize,
+      selectedInitCandidateId,
+      latestResult,
+      maskPayload,
+      selectedAsset,
+      assetPlacement,
+      textLayers,
+      instruction,
+      task,
+      initPlan,
+      seed,
+      plan,
+    });
+
     return {
       source_image: sourceImage,
       instruction,
@@ -483,12 +508,16 @@ function App() {
       seed,
       horizontal_expansion_ratio: horizontalExpansionRatio,
       vertical_expansion_ratio: verticalExpansionRatio,
+      canvas_state: canvasState,
     };
   }
 
   function applyGenerateResult(data, statusPrefix = "生成完成") {
     setPlan(data.plan);
     setLatestResult(data);
+    if (data.canvas_state) {
+      setTextLayers(extractTextLayersFromCanvasState(data.canvas_state));
+    }
     setHistory((current) => [data, ...current]);
     setStatus(`${statusPrefix}：${data.evaluation.note}`);
   }
@@ -591,6 +620,7 @@ function App() {
     invalidateJobPolling();
     setSourceImage(item.result_image);
     setLatestResult(item);
+    setTextLayers(extractTextLayersFromCanvasState(item.canvas_state));
     clearMask();
     setStatus(`已切换到历史结果 ${item.run_id}，可以继续多轮编辑。`);
   }
@@ -608,6 +638,7 @@ function App() {
     setHistory([]);
     setJobSnapshot(null);
     setSelectedInitCandidateId(candidate.id);
+    setTextLayers(createTextLayersFromLabels(initPlan?.labels ?? candidate.metadata?.labels ?? []));
     setSelectedAssetId("");
     setAssetPlacement(null);
     setDisplayScale(1);
@@ -679,6 +710,7 @@ function App() {
           stopDrawing={stopDrawing}
           selectedAsset={selectedAsset}
           assetPlacement={assetPlacement}
+          textLayers={textLayers}
           dragActiveRef={dragActiveRef}
           clearMask={clearMask}
           clearCanvas={clearCanvasWorkspace}
@@ -696,6 +728,7 @@ function App() {
           selectedInitCandidateId={selectedInitCandidateId}
           chooseInitCandidate={chooseInitCandidate}
           jobSnapshot={jobSnapshot}
+          canvasState={latestResult?.canvas_state ?? jobSnapshot?.result?.canvas_state ?? null}
         />
       </main>
     </div>
