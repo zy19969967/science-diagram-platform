@@ -329,7 +329,7 @@ Request code review for Phase 2 and fix Critical/Important findings.
 
 Run backend unit tests, backend compile checks, frontend build, and `git diff --check`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Stage only Phase 2 files and commit:
 
@@ -337,6 +337,6 @@ Stage only Phase 2 files and commit:
 Add async generation job skeleton
 ```
 
-- [ ] **Step 5: Push**
+- [x] **Step 5: Push**
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
