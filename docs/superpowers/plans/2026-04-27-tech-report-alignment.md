@@ -868,7 +868,7 @@ Request code review for Phase 5 and fix Critical/Important findings.
 
 Run backend unit tests, backend compile checks, frontend helper test, frontend build, and `git diff --check`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Stage only Phase 5 files and commit:
 
@@ -876,6 +876,6 @@ Stage only Phase 5 files and commit:
 Add CI validation baseline
 ```
 
-- [ ] **Step 5: Push**
+- [x] **Step 5: Push**
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
