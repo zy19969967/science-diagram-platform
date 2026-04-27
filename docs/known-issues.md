@@ -37,7 +37,7 @@
 
 ### 6. 评估与实验管理
 
-当前生成结果会返回并落盘每轮 `quality_report`，包含 mask 覆盖、mask 内变化、局部化得分、保真得分和 prompt/provenance 元数据。Phase 10 已提供 OCR-ready 文本校验接口：如果调用方提供 OCR observations，后端可以和预期标签/vector text layer 做一致性比较；未提供 OCR 时会明确标记为 vector-text fallback。这仍然不是完整评估平台：还没有内置真实 OCR 模型、人工偏好评分、数据集级 benchmark 聚合、长期实验看板或模型版本对比报表。
+当前生成结果会返回并落盘每轮 `quality_report`，包含 mask 覆盖、mask 内变化、局部化得分、保真得分和 prompt/provenance 元数据。Phase 10 已提供 OCR-ready 文本校验接口：如果调用方提供 OCR observations，后端可以和预期标签/vector text layer 做一致性比较；未提供 OCR 时会明确标记为 vector-text fallback。Phase 12 又新增了 file-backed benchmark ledger、`/api/benchmarks/runs`、`/api/benchmarks/summary` 和前端实验看板，可以显式记录当前 run 并查看总体均值、provider 对比、文本通过率和最近记录。剩余缺口是内置真实 OCR 模型、人工偏好评分、自动数据集 runner、模型版本调度、CSV/PDF 报告导出和多用户实验管理。
 
 ## 当前主要风险
 
@@ -104,3 +104,9 @@ Remaining export limitations: there is no built-in OCR model yet, bitmap-only la
 The current branch now includes a configurable FLUX-compatible initial-canvas provider path. `/api/init-generate` keeps the same endpoint shape, but `InitGenerateRequest.provider` can request `auto`, `deterministic-fallback`, or `flux-remote`; when `FLUX_INIT_URL` is configured, `auto` calls the remote provider and reranks returned candidates, otherwise it falls back with explicit warnings. The front end shows provider, fallback, rank, score, label coverage, and source metadata for each initial candidate.
 
 Remaining initial-canvas limitations: this repository still does not bundle FLUX weights or a GPU model server, remote provider response quality depends on the separately deployed service, high-resolution async regeneration is not implemented yet, and init candidates are still session data URLs rather than durable artifact files.
+
+## Phase 12 Benchmark Ledger Note
+
+The current branch now includes a lightweight file-backed benchmark ledger under `BENCHMARKS_DIR`. The gateway can record benchmark runs with `quality_report`, optional text validation reports, provider/model metadata, project/version ids, tags, and compact metadata; it can also return aggregate summary metrics and provider-level comparisons. The front end exposes an experiment ledger panel with explicit record and refresh actions.
+
+Remaining evaluation limitations: benchmark entries are recorded explicitly rather than produced by an automated dataset runner, there is no built-in OCR engine or human preference annotation workflow, model-version scheduling is not implemented, and dashboard export is still limited to the JSON API rather than CSV/PDF report files.

@@ -27,6 +27,7 @@ import {
   canSaveReloadableProjectVersion,
   latestProjectVersion,
 } from "./projectState.js";
+import { buildBenchmarkRecordPayload } from "./benchmarkState.js";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const apiPath = (path) => (API_BASE_URL ? `${API_BASE_URL}${path}` : path);
@@ -107,6 +108,8 @@ function App() {
   const [history, setHistory] = useState([]);
   const [projects, setProjects] = useState([]);
   const [currentProject, setCurrentProject] = useState(null);
+  const [benchmarkRuns, setBenchmarkRuns] = useState([]);
+  const [benchmarkSummary, setBenchmarkSummary] = useState(null);
   const [status, setStatus] = useState("等待上传图像与绘制选区");
   const [error, setError] = useState("");
   const [isInitializing, setIsInitializing] = useState(false);
@@ -114,6 +117,8 @@ function App() {
   const [isJobGenerating, setIsJobGenerating] = useState(false);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState(false);
+  const [isRecordingBenchmark, setIsRecordingBenchmark] = useState(false);
   const [jobSnapshot, setJobSnapshot] = useState(null);
   const [textValidationReport, setTextValidationReport] = useState(null);
   const [svgExport, setSvgExport] = useState(null);
@@ -165,6 +170,10 @@ function App() {
 
   useEffect(() => {
     refreshProjects();
+  }, []);
+
+  useEffect(() => {
+    refreshBenchmarks();
   }, []);
 
   useEffect(() => {
@@ -767,6 +776,55 @@ function App() {
     }
   }
 
+  async function refreshBenchmarks() {
+    setIsLoadingBenchmarks(true);
+    try {
+      const [summaryResponse, runsResponse] = await Promise.all([
+        fetch(apiPath("/api/benchmarks/summary")),
+        fetch(apiPath("/api/benchmarks/runs")),
+      ]);
+      const summary = await readJsonResponse(summaryResponse, "Benchmark summary loading failed");
+      const runs = await readJsonResponse(runsResponse, "Benchmark runs loading failed");
+      setBenchmarkSummary(summary);
+      setBenchmarkRuns(runs);
+      return { summary, runs };
+    } catch (benchmarkError) {
+      setError(benchmarkError.message);
+      return { summary: null, runs: [] };
+    } finally {
+      setIsLoadingBenchmarks(false);
+    }
+  }
+
+  async function recordBenchmarkRun() {
+    setIsRecordingBenchmark(true);
+    setError("");
+    try {
+      const payload = buildBenchmarkRecordPayload({
+        latestResult,
+        currentProject,
+        selectedInitCandidateId,
+        initGeneration,
+        task,
+        instruction,
+        textValidationReport,
+      });
+      const response = await fetch(apiPath("/api/benchmarks/runs"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const recorded = await readJsonResponse(response, "Benchmark recording failed");
+      await refreshBenchmarks();
+      setStatus(`Benchmark recorded: ${recorded.benchmark_id}`);
+    } catch (benchmarkError) {
+      setError(benchmarkError.message);
+      setStatus("Benchmark recording failed.");
+    } finally {
+      setIsRecordingBenchmark(false);
+    }
+  }
+
   async function buildCurrentProjectCanvasState() {
     if (!sourceImage) {
       return null;
@@ -1288,6 +1346,13 @@ function App() {
           textValidationReport={textValidationReport}
           svgExport={svgExport}
           downloadSvgExport={downloadSvgExport}
+          benchmarkSummary={benchmarkSummary}
+          benchmarkRuns={benchmarkRuns}
+          recordBenchmarkRun={recordBenchmarkRun}
+          refreshBenchmarks={refreshBenchmarks}
+          isRecordingBenchmark={isRecordingBenchmark}
+          isLoadingBenchmarks={isLoadingBenchmarks}
+          canRecordBenchmark={Boolean(latestResult?.quality_report)}
         />
       </main>
     </div>

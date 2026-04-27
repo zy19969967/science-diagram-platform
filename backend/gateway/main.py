@@ -18,6 +18,9 @@ from common.init_logic import build_scene_plan
 from common.planner_logic import build_plan
 from common.quality import build_quality_report
 from common.schemas import (
+    BenchmarkRunCreateRequest,
+    BenchmarkRunSnapshot,
+    BenchmarkSummaryResponse,
     GenerateRequest,
     GenerateResponse,
     InitGenerateRequest,
@@ -44,6 +47,7 @@ from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image
 from common.utils.masks import evaluate_edit
 
+from .benchmarks import BenchmarkStore
 from .jobs import JobCancelled, JobStore
 from .init_provider import InitProviderError, generate_initial_candidates
 from .projects import ProjectStore
@@ -54,12 +58,14 @@ POWERPAINT_URL = os.getenv("POWERPAINT_URL", "http://127.0.0.1:19082")
 RUNS_DIR = Path(os.getenv("RUNS_DIR", "/app/data/runs"))
 PROJECTS_DIR = Path(os.getenv("PROJECTS_DIR", str(RUNS_DIR.parent / "projects")))
 JOBS_DIR = Path(os.getenv("JOBS_DIR", str(RUNS_DIR.parent / "jobs")))
+BENCHMARKS_DIR = Path(os.getenv("BENCHMARKS_DIR", str(RUNS_DIR.parent / "benchmarks")))
 ASSETS_DIR = Path(os.getenv("ASSETS_DIR", "/app/assets"))
 FLUX_INIT_URL = os.getenv("FLUX_INIT_URL", "")
 
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 job_store = JobStore(JOBS_DIR)
 project_store = ProjectStore(PROJECTS_DIR)
+benchmark_store = BenchmarkStore(BENCHMARKS_DIR)
 
 app = FastAPI(title="Science Diagram Gateway", version="0.1.0")
 app.add_middleware(
@@ -162,6 +168,21 @@ def append_project_version(project_id: str, payload: ProjectVersionCreateRequest
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
     return project
+
+
+@app.get("/api/benchmarks/runs", response_model=list[BenchmarkRunSnapshot])
+def list_benchmark_runs(limit: int = 50) -> list[BenchmarkRunSnapshot]:
+    return benchmark_store.list_runs(limit=limit)
+
+
+@app.post("/api/benchmarks/runs", response_model=BenchmarkRunSnapshot)
+def record_benchmark_run(payload: BenchmarkRunCreateRequest) -> BenchmarkRunSnapshot:
+    return benchmark_store.record_run(payload)
+
+
+@app.get("/api/benchmarks/summary", response_model=BenchmarkSummaryResponse)
+def get_benchmark_summary() -> BenchmarkSummaryResponse:
+    return benchmark_store.summary()
 
 
 @app.post("/api/segment", response_model=SegmentResponse)

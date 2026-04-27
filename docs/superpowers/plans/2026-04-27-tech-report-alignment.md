@@ -787,6 +787,97 @@ Add FLUX init provider adapter
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
+## Task 27: Phase 12 Benchmark Store And Experiment Dashboard
+
+**Files:**
+- Modify: `backend/common/schemas.py`
+- Create: `backend/gateway/benchmarks.py`
+- Modify: `backend/gateway/main.py`
+- Create: `backend/tests/test_benchmarks.py`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `backend/tests/test_ci_workflow.py`
+- Create: `frontend/src/benchmarkState.js`
+- Create: `frontend/tests/benchmarkState.test.mjs`
+- Modify: `frontend/src/App.jsx`
+- Modify: `frontend/src/components/ResultPanel.jsx`
+- Modify: `frontend/src/styles.css`
+- Modify: `docker-compose.yml`
+- Modify: `.env.example`
+- Modify: `.env.server.example`
+- Modify: `.env.nodocker.example`
+
+- [x] **Step 1: Write failing backend benchmark tests**
+
+Add tests proving a file-backed benchmark store can record generation runs with `quality_report`, optional text validation, provider/model metadata, and can compute aggregate averages plus provider breakdowns. Add API tests for `POST /api/benchmarks/runs`, `GET /api/benchmarks/runs`, and `GET /api/benchmarks/summary`.
+
+- [x] **Step 2: Run backend tests and verify failure**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs BENCHMARKS_DIR=/tmp/science-diagram-test-benchmarks python -m unittest backend.tests.test_benchmarks -v
+```
+
+Expected: fails because benchmark schemas, store, and gateway routes do not exist yet.
+
+- [x] **Step 3: Implement backend benchmark persistence and summary**
+
+Add benchmark request/response schemas, a JSON file-backed `BenchmarkStore`, gateway routes, environment variable `BENCHMARKS_DIR`, Docker volume wiring, and CI import/compile coverage. Keep this intentionally single-node and file-backed like the existing project/job stores.
+
+- [x] **Step 4: Write failing frontend benchmark helper tests**
+
+Add helper tests proving the front end can build a compact benchmark-record payload from the latest result, current project, init provider metadata, task/instruction, and optional text-validation report; also prove summary formatting handles empty and populated dashboards.
+
+- [x] **Step 5: Implement frontend experiment dashboard slice**
+
+Add benchmark state, refresh/record actions, and a result-panel section showing total runs, average localization/preservation/text pass rate, provider breakdown, and recent recorded runs. Keep generation behavior unchanged; recording is an explicit user action.
+
+- [x] **Step 6: Verify**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs BENCHMARKS_DIR=/tmp/science-diagram-test-benchmarks python -m unittest discover -s backend/tests -p 'test_*.py' -v
+PYTHONPATH=backend python -m py_compile backend/common/schemas.py backend/common/init_logic.py backend/common/canvas_state.py backend/common/quality.py backend/common/export_logic.py backend/common/utils/masks.py backend/gateway/init_provider.py backend/gateway/jobs.py backend/gateway/projects.py backend/gateway/benchmarks.py backend/gateway/main.py backend/segmenter/runtime.py
+cd frontend && node tests/benchmarkState.test.mjs && node tests/initCandidates.test.mjs && node tests/exportState.test.mjs && node tests/regionPrompts.test.mjs && node tests/layerState.test.mjs && node tests/canvasState.test.mjs && node tests/projectState.test.mjs && npm run build
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 28: Phase 12 Review, Commit, Push
+
+**Files:**
+- Review: Phase 12 code and docs from Task 27
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Document Phase 12 scope and limitations**
+
+Update docs to say Phase 12 adds a lightweight file-backed experiment ledger, benchmark summary aggregation, and front-end dashboard/record action while not shipping dataset runners, human preference annotation, real OCR execution, or model-version experiment scheduling.
+
+- [x] **Step 2: Review**
+
+Request code review for Phase 12 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run backend tests, backend compile checks, frontend helper tests/build, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 12 files and commit:
+
+```text
+Add benchmark experiment dashboard
+```
+
+- [ ] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
 ## Task 15: Project Persistence And Version Tree
 
 **Files:**

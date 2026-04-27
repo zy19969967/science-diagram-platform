@@ -154,6 +154,17 @@ Explicitly out of scope for Phase 11: bundling FLUX weights, running a local GPU
 
 Aggregate `quality_report` records across runs into dataset-level metrics, model/prompt comparisons, and exportable experiment summaries. This phase turns Phase 4 per-run records into report-ready evaluation evidence.
 
+Implemented Phase 12 scope:
+
+- `BenchmarkRunCreateRequest` records a generated run, its `quality_report`, optional text validation report, provider/model metadata, project/version ids, seed, tags, and compact metadata.
+- `backend/gateway/benchmarks.py` provides a file-backed JSON `BenchmarkStore` rooted at `BENCHMARKS_DIR`, with one atomic snapshot per recorded run.
+- The gateway exposes `POST /api/benchmarks/runs`, `GET /api/benchmarks/runs`, and `GET /api/benchmarks/summary`.
+- Benchmark summary aggregation computes total runs, average change/localization/preservation/mask metrics, text pass rate when text reports are present, provider-level summaries, recent runs, and empty-ledger warnings.
+- The front end adds an explicit experiment ledger panel with record/refresh actions, overall summary metrics, provider comparison rows, and recent run rows. Recording is explicit and does not alter synchronous or async generation behavior.
+- Docker Compose, environment examples, and CI include `BENCHMARKS_DIR`, backend benchmark tests, module import/compile checks, and the frontend benchmark helper test.
+
+Explicitly out of scope for Phase 12: automatic dataset runners, human preference annotation, embedded OCR execution, GPU inference benchmarking, model-version experiment scheduling, CSV/PDF report export, and auth-protected multi-user experiment management.
+
 ### Phase 13: Auth, Deployment Hardening, And Final Report Traceability
 
 Add access control, deployment smoke checks, production configuration validation, and a final traceability matrix mapping report claims to implemented code paths, tests, and known limitations.

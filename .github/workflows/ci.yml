@@ -27,6 +27,7 @@ jobs:
           RUNS_DIR: /tmp/science-diagram-runs
           PROJECTS_DIR: /tmp/science-diagram-projects
           JOBS_DIR: /tmp/science-diagram-jobs
+          BENCHMARKS_DIR: /tmp/science-diagram-benchmarks
         run: python -m unittest discover -s backend/tests -p 'test_*.py' -v
       - name: Compile backend modules
         env:
@@ -43,6 +44,7 @@ jobs:
             backend/gateway/init_provider.py \
             backend/gateway/jobs.py \
             backend/gateway/projects.py \
+            backend/gateway/benchmarks.py \
             backend/gateway/main.py
       - name: Import backend modules
         env:
@@ -51,6 +53,7 @@ jobs:
           RUNS_DIR: /tmp/science-diagram-runs
           PROJECTS_DIR: /tmp/science-diagram-projects
           JOBS_DIR: /tmp/science-diagram-jobs
+          BENCHMARKS_DIR: /tmp/science-diagram-benchmarks
         run: |
           python - <<'PY'
           import common.schemas
@@ -61,6 +64,7 @@ jobs:
           import gateway.init_provider
           import gateway.jobs
           import gateway.projects
+          import gateway.benchmarks
           import gateway.main
           PY
 
@@ -78,6 +82,7 @@ jobs:
       - name: Run frontend helper tests
         working-directory: frontend
         run: |
+          node tests/benchmarkState.test.mjs
           node tests/initCandidates.test.mjs
           node tests/exportState.test.mjs
           node tests/regionPrompts.test.mjs

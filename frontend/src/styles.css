@@ -827,6 +827,12 @@ input[type="range"] {
   gap: 10px;
 }
 
+.benchmark-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .export-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -852,6 +858,16 @@ input[type="range"] {
   min-width: 0;
 }
 
+.benchmark-summary-grid div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(41, 85, 132, 0.08);
+  background: rgba(255, 255, 255, 0.68);
+  min-width: 0;
+}
+
 .export-summary div {
   display: grid;
   gap: 4px;
@@ -867,6 +883,7 @@ input[type="range"] {
 }
 
 .project-summary span,
+.benchmark-summary-grid span,
 .export-summary span,
 .project-card small {
   color: var(--muted);
@@ -878,6 +895,7 @@ input[type="range"] {
 }
 
 .project-summary strong,
+.benchmark-summary-grid strong,
 .export-summary strong,
 .project-card strong {
   overflow-wrap: anywhere;
@@ -932,6 +950,40 @@ input[type="range"] {
   gap: 8px;
   max-height: 240px;
   overflow: auto;
+}
+
+.benchmark-provider-list,
+.benchmark-run-list {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.benchmark-provider-row,
+.benchmark-run-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(143, 198, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  min-width: 0;
+}
+
+.benchmark-provider-row span,
+.benchmark-run-row span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.benchmark-provider-row small,
+.benchmark-run-row small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .project-card {

@@ -17,6 +17,7 @@ TextValidationStatus = Literal["pass", "warn", "fail"]
 MAX_CANVAS_LAYERS = 64
 MAX_CANVAS_STATE_BYTES = 65536
 MAX_PROJECT_METADATA_BYTES = 65536
+MAX_BENCHMARK_METADATA_BYTES = 65536
 CANVAS_METADATA_KEYS = {
     "instruction",
     "task",
@@ -309,6 +310,87 @@ class RunQualityReport(BaseModel):
     prompt: PromptTrace
     evaluation: EvaluationResult
     artifacts: dict[str, str] = Field(default_factory=dict)
+
+
+class BenchmarkMetricAverages(BaseModel):
+    changed_ratio: float = 0.0
+    outside_mask_change_ratio: float = 0.0
+    inside_mask_change_ratio: float = 0.0
+    mask_coverage_ratio: float = 0.0
+    edit_localization_score: float = 0.0
+    preservation_score: float = 0.0
+
+
+class BenchmarkRunCreateRequest(BaseModel):
+    run_id: str
+    project_id: str | None = None
+    version_id: str | None = None
+    label: str = ""
+    scenario: str = ""
+    provider: str = "unknown"
+    model: str = ""
+    task: TaskType | None = None
+    seed: int | None = Field(default=None, ge=0, le=2147483647)
+    quality_report: RunQualityReport
+    text_report: TextValidationReport | None = None
+    tags: list[str] = Field(default_factory=list, max_length=32)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("run_id", "project_id", "version_id", "label", "scenario", "provider", "model")
+    @classmethod
+    def trim_short_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip()[:160]
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str]) -> list[str]:
+        tags = []
+        for item in value:
+            tag = str(item).strip()[:48]
+            if tag and tag not in tags:
+                tags.append(tag)
+        return tags
+
+    @field_validator("metadata")
+    @classmethod
+    def reject_benchmark_metadata_data_urls(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if _contains_data_url(value):
+            raise ValueError("benchmark metadata must reference artifacts, not embedded data URLs")
+        serialized = json.dumps(value, ensure_ascii=False, default=str)
+        if len(serialized.encode("utf-8")) > MAX_BENCHMARK_METADATA_BYTES:
+            raise ValueError(f"benchmark metadata cannot exceed {MAX_BENCHMARK_METADATA_BYTES} bytes")
+        return value
+
+    @field_validator("quality_report", "text_report")
+    @classmethod
+    def reject_benchmark_report_data_urls(cls, value: Any) -> Any:
+        if value is not None and _contains_data_url(value.model_dump()):
+            raise ValueError("benchmark reports must reference artifacts, not embedded data URLs")
+        return value
+
+
+class BenchmarkRunSnapshot(BenchmarkRunCreateRequest):
+    benchmark_id: str
+    created_at: str
+    updated_at: str
+
+
+class BenchmarkProviderSummary(BaseModel):
+    provider: str
+    run_count: int = 0
+    average_metrics: BenchmarkMetricAverages = Field(default_factory=BenchmarkMetricAverages)
+    text_pass_rate: float | None = None
+
+
+class BenchmarkSummaryResponse(BaseModel):
+    total_runs: int = 0
+    average_metrics: BenchmarkMetricAverages = Field(default_factory=BenchmarkMetricAverages)
+    text_pass_rate: float | None = None
+    by_provider: list[BenchmarkProviderSummary] = Field(default_factory=list)
+    recent_runs: list[BenchmarkRunSnapshot] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class GenerateRequest(BaseModel):

@@ -1,4 +1,5 @@
 import { candidateScoreSummary, summarizeInitGeneration } from "../initCandidates.js";
+import { formatBenchmarkScore, summarizeBenchmarkSummary } from "../benchmarkState.js";
 
 const formatRatio = (value) => {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -30,6 +31,13 @@ function ResultPanel({
   textValidationReport,
   svgExport,
   downloadSvgExport,
+  benchmarkSummary,
+  benchmarkRuns,
+  recordBenchmarkRun,
+  refreshBenchmarks,
+  isRecordingBenchmark,
+  isLoadingBenchmarks,
+  canRecordBenchmark,
 }) {
   const layerCount = canvasState?.layers?.length ?? 0;
   const historyCount = canvasState?.history?.length ?? 0;
@@ -41,6 +49,7 @@ function ResultPanel({
   const canCancelJob = jobSnapshot && !["DONE", "FAILED", "CANCELLED"].includes(jobSnapshot.status);
   const exportWarnings = Array.from(new Set([...(textValidationReport?.warnings ?? []), ...(svgExport?.warnings ?? [])]));
   const initSummary = summarizeInitGeneration(initGeneration);
+  const benchmarkDashboard = summarizeBenchmarkSummary(benchmarkSummary);
 
   return (
     <aside className="workbench-panel result-panel">
@@ -231,6 +240,78 @@ function ResultPanel({
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="surface-block rail-block benchmark-block">
+        <div className="section-header compact-header">
+          <div>
+            <span className="section-label">Benchmark</span>
+            <strong>Experiment ledger</strong>
+          </div>
+          <span className="section-meta">{benchmarkDashboard.totalRuns} runs</span>
+        </div>
+        <div className="benchmark-summary-grid">
+          <div>
+            <span>Localization</span>
+            <strong>{benchmarkDashboard.localizationLabel}</strong>
+          </div>
+          <div>
+            <span>Preservation</span>
+            <strong>{benchmarkDashboard.preservationLabel}</strong>
+          </div>
+          <div>
+            <span>Text pass</span>
+            <strong>{benchmarkDashboard.textPassRateLabel}</strong>
+          </div>
+        </div>
+        <div className="action-row split-actions">
+          <button
+            type="button"
+            className="secondary-button full-width"
+            onClick={recordBenchmarkRun}
+            disabled={isRecordingBenchmark || !canRecordBenchmark}
+          >
+            {isRecordingBenchmark ? "Recording..." : "Record run"}
+          </button>
+          <button type="button" className="ghost-button full-width" onClick={refreshBenchmarks} disabled={isLoadingBenchmarks}>
+            {isLoadingBenchmarks ? "Loading..." : "Refresh"}
+          </button>
+        </div>
+        {benchmarkDashboard.providers.length > 0 && (
+          <div className="benchmark-provider-list">
+            {benchmarkDashboard.providers.slice(0, 3).map((provider) => (
+              <div key={provider.provider} className="benchmark-provider-row">
+                <span>
+                  <strong>{provider.provider}</strong>
+                  <small>{provider.run_count} runs</small>
+                </span>
+                <small>
+                  loc {formatBenchmarkScore(provider.average_metrics?.edit_localization_score)} | keep{" "}
+                  {formatBenchmarkScore(provider.average_metrics?.preservation_score)}
+                </small>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="benchmark-run-list">
+          {(benchmarkRuns ?? []).slice(0, 3).map((run) => (
+            <div key={run.benchmark_id} className="benchmark-run-row">
+              <span>
+                <strong>{run.run_id}</strong>
+                <small>{run.provider}</small>
+              </span>
+              <small>{formatBenchmarkScore(run.quality_report?.evaluation?.edit_localization_score)}</small>
+            </div>
+          ))}
+          {(benchmarkRuns ?? []).length === 0 && <div className="placeholder-card compact-placeholder">No benchmark runs yet.</div>}
+        </div>
+        {benchmarkDashboard.warnings.length > 0 && (
+          <div className="warning-list">
+            {benchmarkDashboard.warnings.slice(0, 2).map((warning) => (
+              <p key={warning}>{warning}</p>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="surface-block emphasis-block preview-block">

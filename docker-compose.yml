@@ -31,11 +31,13 @@ services:
       RUNS_DIR: /app/data/runs
       PROJECTS_DIR: /app/data/projects
       JOBS_DIR: /app/data/jobs
+      BENCHMARKS_DIR: ${BENCHMARKS_DIR:-/app/data/benchmarks}
       ASSETS_DIR: /app/assets
     volumes:
       - ./data/runs:/app/data/runs
       - ./data/projects:/app/data/projects
       - ./data/jobs:/app/data/jobs
+      - ./data/benchmarks:/app/data/benchmarks
     ports:
       - "${GATEWAY_BIND_HOST:-127.0.0.1}:${GATEWAY_PUBLIC_PORT:-19080}:8000"
     depends_on:
