@@ -39,7 +39,7 @@ from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image
 from common.utils.masks import evaluate_edit
 
-from .jobs import job_store
+from .jobs import JobCancelled, JobStore
 from .projects import ProjectStore
 
 PLANNER_URL = os.getenv("PLANNER_URL", "http://127.0.0.1:19081")
@@ -47,9 +47,11 @@ SEGMENTER_URL = os.getenv("SEGMENTER_URL", "http://127.0.0.1:19083")
 POWERPAINT_URL = os.getenv("POWERPAINT_URL", "http://127.0.0.1:19082")
 RUNS_DIR = Path(os.getenv("RUNS_DIR", "/app/data/runs"))
 PROJECTS_DIR = Path(os.getenv("PROJECTS_DIR", str(RUNS_DIR.parent / "projects")))
+JOBS_DIR = Path(os.getenv("JOBS_DIR", str(RUNS_DIR.parent / "jobs")))
 ASSETS_DIR = Path(os.getenv("ASSETS_DIR", "/app/assets"))
 
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
+job_store = JobStore(JOBS_DIR)
 project_store = ProjectStore(PROJECTS_DIR)
 
 app = FastAPI(title="Science Diagram Gateway", version="0.1.0")
@@ -273,47 +275,90 @@ async def generate(payload: GenerateRequest, request: Request) -> GenerateRespon
     return await generate_pipeline(payload, current_base_url(request))
 
 
-async def run_generate_job(job_id: str, payload: GenerateRequest, base_url: str) -> None:
+async def run_generate_job(job_id: str, payload: GenerateRequest, base_url: str, max_attempts: int = 1) -> None:
     def update(status: JobStatus, progress: float, message: str) -> None:
+        if job_store.is_cancel_requested(job_id):
+            raise JobCancelled()
         job_store.update(job_id, status=status, progress=progress, message=message)
 
-    try:
-        result = await generate_pipeline(payload, base_url, progress=update)
-        job_store.update(
-            job_id,
-            status="DONE",
-            progress=1.0,
-            message="Generation complete",
-            result=result,
-        )
-    except HTTPException as exc:
-        job_store.update(
-            job_id,
-            status="FAILED",
-            progress=1.0,
-            message="Generation failed",
-            error=str(exc.detail),
-        )
-    except Exception as exc:
-        job_store.update(
-            job_id,
-            status="FAILED",
-            progress=1.0,
-            message="Generation failed",
-            error=str(exc),
-        )
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if job_store.is_cancel_requested(job_id):
+                raise JobCancelled()
+            job_store.update(job_id, attempt=attempt)
+            result = await generate_pipeline(payload, base_url, progress=update)
+            if job_store.is_cancel_requested(job_id):
+                raise JobCancelled()
+            job_store.update(
+                job_id,
+                status="DONE",
+                progress=1.0,
+                message="Generation complete",
+                result=result,
+            )
+            return
+        except JobCancelled:
+            job_store.cancel(job_id)
+            return
+        except HTTPException as exc:
+            if attempt < max_attempts:
+                job_store.update(
+                    job_id,
+                    status="CREATED",
+                    progress=0.0,
+                    message=f"Retrying generation ({attempt + 1}/{max_attempts})",
+                    error=str(exc.detail),
+                    attempt=attempt + 1,
+                )
+                continue
+            job_store.update(
+                job_id,
+                status="FAILED",
+                progress=1.0,
+                message="Generation failed",
+                error=str(exc.detail),
+            )
+            return
+        except Exception as exc:
+            if attempt < max_attempts:
+                job_store.update(
+                    job_id,
+                    status="CREATED",
+                    progress=0.0,
+                    message=f"Retrying generation ({attempt + 1}/{max_attempts})",
+                    error=str(exc),
+                    attempt=attempt + 1,
+                )
+                continue
+            job_store.update(
+                job_id,
+                status="FAILED",
+                progress=1.0,
+                message="Generation failed",
+                error=str(exc),
+            )
+            return
 
 
 @app.post("/api/jobs", response_model=JobSnapshot)
 async def create_job(payload: JobCreateRequest, request: Request, background_tasks: BackgroundTasks) -> JobSnapshot:
-    snapshot = job_store.create("Queued for generation")
+    snapshot = job_store.create("Queued for generation", max_attempts=payload.max_attempts)
     background_tasks.add_task(
         run_generate_job,
         snapshot.job_id,
         payload.generate_request,
         current_base_url(request),
+        payload.max_attempts,
     )
     return snapshot
+
+
+@app.post("/api/jobs/{job_id}/cancel", response_model=JobSnapshot)
+async def cancel_job(job_id: str) -> JobSnapshot:
+    try:
+        return job_store.cancel(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Job not found.") from exc
 
 
 @app.get("/api/jobs/{job_id}", response_model=JobSnapshot)

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 TaskType = Literal["text-guided", "object-removal", "shape-guided", "image-outpainting"]
 InitMode = Literal["create_from_text"]
-JobStatus = Literal["CREATED", "PLANNING", "SEGMENTING", "EXECUTING", "EVALUATING", "DONE", "FAILED"]
+JobStatus = Literal["CREATED", "PLANNING", "SEGMENTING", "EXECUTING", "EVALUATING", "DONE", "FAILED", "CANCELLED"]
 CanvasLayerType = Literal["base-image", "mask", "asset", "text", "result"]
 CanvasSource = Literal["upload", "init-candidate", "history", "generated"]
 ProjectVersionKind = Literal["init-candidate", "generate-result", "manual-snapshot"]
@@ -385,6 +385,7 @@ class ProjectSnapshot(BaseModel):
 class JobCreateRequest(BaseModel):
     kind: Literal["generate"] = "generate"
     generate_request: GenerateRequest
+    max_attempts: int = Field(default=1, ge=1, le=3)
 
 
 class JobSnapshot(BaseModel):
@@ -396,3 +397,7 @@ class JobSnapshot(BaseModel):
     error: str | None = None
     created_at: str
     updated_at: str
+    attempt: int = Field(default=1, ge=1)
+    max_attempts: int = Field(default=1, ge=1, le=3)
+    cancel_requested: bool = False
+    failure_stage: JobStatus | None = None

@@ -21,7 +21,7 @@
 
 ### 2. 异步任务队列与进度跟踪
 
-当前已经补入 in-process 异步任务骨架，前端可以通过 `POST /api/jobs` 创建生成任务，并通过 `GET /api/jobs/{job_id}` 轮询状态、进度和结果；原有 `/api/generate` 同步接口仍然保留。但这还不是 Redis/Celery 级别的持久化队列：进程重启会丢失任务状态，也没有取消任务、多 worker 调度、失败重试或跨实例共享进度。
+当前已经补入异步任务骨架并升级为 file-backed 状态持久化：前端可以通过 `POST /api/jobs` 创建生成任务，通过 `GET /api/jobs/{job_id}` 轮询状态、进度和结果，并通过 `POST /api/jobs/{job_id}/cancel` 发起取消；原有 `/api/generate` 同步接口仍然保留。Gateway 会把 job snapshot 写入 `JOBS_DIR`，重启后可继续读取已完成、失败或取消的任务状态；重启时仍处于执行中的任务会被标记为 `FAILED` 并记录 `failure_stage`。但这还不是 Redis/Celery 级别的外部队列：没有独立 worker、多 worker 调度、跨实例锁、真正的后台恢复执行，也不能硬中断已经进入模型调用内部的请求。
 
 ### 3. 画布状态、图层系统与项目级持久化
 
@@ -73,4 +73,10 @@ Qwen3.5 输出结构化 JSON 时如果结果不合法，服务会自动回退到
 
 The current branch now includes a lightweight single-user project persistence layer. It stores JSON project snapshots, parent-linked versions, selected initial-candidate metadata, run ids, canvas states, artifact URLs, and optional quality reports. This supersedes the earlier project-persistence part of the canvas-state gap; the remaining gap is full database-backed, multi-user, editor-level persistence.
 
-Remaining persistence limitations: this is not a multi-user database, it has no auth or migration system, it does not make async job state durable, it does not replace the future Fabric.js editor, and initial-candidate data URL images are still treated as session data unless a later generated artifact URL exists.
+Remaining persistence limitations: this is not a multi-user database, it has no auth or migration system, it does not replace the future Fabric.js editor, and initial-candidate data URL images are still treated as session data unless a later generated artifact URL exists.
+
+## Phase 7 Durable Job Note
+
+The current branch now includes durable file-backed async job snapshots under `JOBS_DIR`. Completed, failed, cancelled, and restart-interrupted jobs are readable after gateway restart, and the front end exposes a cancel action for the active async job.
+
+Remaining async limitations: this is still not Redis/Celery, there is no separate worker service, no multi-worker scheduling or cross-instance coordination, and cancellation remains cooperative at gateway progress checkpoints rather than a hard interruption of an in-flight model call.

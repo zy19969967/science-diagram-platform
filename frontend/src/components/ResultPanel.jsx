@@ -14,6 +14,7 @@ function ResultPanel({
   selectedInitCandidateId,
   chooseInitCandidate,
   jobSnapshot,
+  cancelGenerateJob,
   canvasState,
   projects,
   currentProject,
@@ -31,6 +32,7 @@ function ResultPanel({
   const qualityEvaluation = qualityReport?.evaluation ?? {};
   const qualityPrompt = qualityReport?.prompt ?? {};
   const latestProjectVersionId = currentProject?.latest_version_id ?? "none";
+  const canCancelJob = jobSnapshot && !["DONE", "FAILED", "CANCELLED"].includes(jobSnapshot.status);
 
   return (
     <aside className="workbench-panel result-panel">
@@ -86,6 +88,15 @@ function ResultPanel({
             </div>
             <progress value={jobSnapshot.progress} max="1" />
             <p>{jobSnapshot.error || jobSnapshot.message}</p>
+            <p>
+              Attempt {jobSnapshot.attempt ?? 1}/{jobSnapshot.max_attempts ?? 1}
+              {jobSnapshot.failure_stage ? ` | failed at ${jobSnapshot.failure_stage}` : ""}
+            </p>
+            {canCancelJob && (
+              <button type="button" className="ghost-button full-width" onClick={cancelGenerateJob}>
+                Cancel job
+              </button>
+            )}
           </div>
         </section>
       )}

@@ -15,6 +15,7 @@ class CIWorkflowTest(unittest.TestCase):
         self.assertIn("python -m unittest discover -s backend/tests -p 'test_*.py' -v", text)
         self.assertIn("python -m py_compile", text)
         self.assertIn("backend/gateway/projects.py", text)
+        self.assertIn("JOBS_DIR", text)
         self.assertIn("Import backend modules", text)
         self.assertIn("import gateway.projects", text)
         self.assertIn("import gateway.main", text)

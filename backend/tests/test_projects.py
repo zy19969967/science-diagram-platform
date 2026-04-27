@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
+
+os.environ.setdefault("ASSETS_DIR", str(Path(__file__).resolve().parents[1] / "assets"))
+os.environ.setdefault("RUNS_DIR", "/tmp/science-diagram-test-runs")
+os.environ.setdefault("PROJECTS_DIR", "/tmp/science-diagram-test-projects")
+os.environ.setdefault("JOBS_DIR", "/tmp/science-diagram-test-jobs")
 
 from fastapi.testclient import TestClient
 from common.schemas import (

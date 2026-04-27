@@ -23,6 +23,10 @@ jobs:
       - name: Run backend tests
         env:
           PYTHONPATH: backend
+          ASSETS_DIR: backend/assets
+          RUNS_DIR: /tmp/science-diagram-runs
+          PROJECTS_DIR: /tmp/science-diagram-projects
+          JOBS_DIR: /tmp/science-diagram-jobs
         run: python -m unittest discover -s backend/tests -p 'test_*.py' -v
       - name: Compile backend modules
         env:
@@ -42,6 +46,8 @@ jobs:
           PYTHONPATH: backend
           ASSETS_DIR: backend/assets
           RUNS_DIR: /tmp/science-diagram-runs
+          PROJECTS_DIR: /tmp/science-diagram-projects
+          JOBS_DIR: /tmp/science-diagram-jobs
         run: |
           python - <<'PY'
           import common.schemas

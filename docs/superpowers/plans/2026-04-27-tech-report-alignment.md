@@ -341,6 +341,83 @@ Add async generation job skeleton
 
 Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
 
+## Task 17: Durable Async Job State
+
+**Files:**
+- Modify: `backend/common/schemas.py`
+- Modify: `backend/gateway/jobs.py`
+- Modify: `backend/gateway/main.py`
+- Modify: `backend/tests/test_jobs.py`
+- Modify: `backend/tests/test_ci_workflow.py`
+- Modify: `.github/workflows/ci.yml`
+- Modify: `docker-compose.yml`
+- Modify: `.gitignore`
+- Create: `data/jobs/.gitkeep`
+- Modify: `frontend/src/App.jsx`
+- Modify: `frontend/src/components/ResultPanel.jsx`
+
+- [x] **Step 1: Write failing durable job tests**
+
+Add backend tests proving that file-backed jobs persist to disk, terminal results reload across a new `JobStore`, active jobs recovered after restart are marked failed with failure provenance instead of disappearing, cancellation is persisted, and missing job cancellation returns an error. Add an API-level test for `POST /api/jobs/{job_id}/cancel`.
+
+- [x] **Step 2: Implement file-backed durable job store**
+
+Extend `JobStore` to accept a `JOBS_DIR` path, write each job snapshot atomically to JSON, reload snapshots at startup, preserve existing in-memory behavior for tests that construct `JobStore()` with no path, and guard writes with a lock.
+
+- [x] **Step 3: Add cancellation and retry metadata**
+
+Extend `JobStatus` and `JobSnapshot` with cancellation and attempt metadata while keeping existing fields compatible. Add `POST /api/jobs/{job_id}/cancel`. Keep automatic retries conservative: store attempt/max-attempt metadata and preserve status provenance without introducing Redis/Celery in this phase.
+
+- [x] **Step 4: Frontend cancel action**
+
+Add a cancel button for the currently tracked async job. It should invalidate polling consistently and display the cancelled snapshot when the gateway accepts the cancel request.
+
+- [x] **Step 5: Verify**
+
+Run:
+
+```bash
+PYTHONPATH=backend ASSETS_DIR=backend/assets RUNS_DIR=/tmp/science-diagram-test-runs PROJECTS_DIR=/tmp/science-diagram-test-projects JOBS_DIR=/tmp/science-diagram-test-jobs python -m unittest discover -s backend/tests -p 'test_*.py' -v
+PYTHONPATH=backend python -m py_compile backend/common/schemas.py backend/common/init_logic.py backend/common/canvas_state.py backend/common/quality.py backend/common/utils/masks.py backend/gateway/jobs.py backend/gateway/projects.py backend/gateway/main.py
+cd frontend && node tests/projectState.test.mjs && node tests/canvasState.test.mjs && npm run build
+git diff --check
+```
+
+Expected: all pass.
+
+## Task 18: Phase 7 Review, Commit, Push
+
+**Files:**
+- Review: Phase 7 code and docs from Task 17
+- Modify: `docs/known-issues.md`
+- Modify: `docs/superpowers/requirements/2026-04-27-user-requirements.md`
+- Modify: `docs/superpowers/plans/2026-04-27-tech-report-alignment.md`
+- Modify: `docs/superpowers/specs/2026-04-27-tech-report-alignment-design.md`
+
+- [x] **Step 1: Document Phase 7 limitations**
+
+Update docs to say Phase 7 provides durable file-backed async job status, cancellation metadata, startup recovery behavior, and resumable status reads, but not Redis/Celery, multi-worker scheduling, true process-external execution, or hard interruption of an in-flight model call yet.
+
+- [x] **Step 2: Review**
+
+Request spec and code-quality review for Phase 7 and fix Critical/Important findings.
+
+- [x] **Step 3: Verify**
+
+Run backend tests, backend compile checks, frontend helper tests/build, and `git diff --check`.
+
+- [ ] **Step 4: Commit**
+
+Stage only Phase 7 files and commit:
+
+```text
+Add durable async job state
+```
+
+- [ ] **Step 5: Push**
+
+Push `codex/report-alignment-phase1` and update PR #2 with the new commit.
+
 ## Task 15: Project Persistence And Version Tree
 
 **Files:**

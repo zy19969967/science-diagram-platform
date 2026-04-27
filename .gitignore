@@ -6,6 +6,8 @@ data/runs/*
 !data/runs/.gitkeep
 data/projects/*
 !data/projects/.gitkeep
+data/jobs/*
+!data/jobs/.gitkeep
 __pycache__/
 *.pyc
 .env

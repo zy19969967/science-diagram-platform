@@ -781,6 +781,9 @@ function App() {
         }
         return snapshot;
       }
+      if (snapshot.status === "CANCELLED") {
+        return snapshot;
+      }
       if (snapshot.status === "FAILED") {
         throw new Error(snapshot.error || snapshot.message || "异步生成失败");
       }
@@ -817,6 +820,10 @@ function App() {
       if (!completed) {
         return;
       }
+      if (completed.status === "CANCELLED") {
+        setStatus("Async generation job cancelled.");
+        return;
+      }
       applyGenerateResult(completed.result, "异步生成完成");
     } catch (jobError) {
       setError(jobError.message);
@@ -825,6 +832,28 @@ function App() {
       if (jobTokenRef.current === token) {
         setIsJobGenerating(false);
       }
+    }
+  }
+
+  async function cancelGenerateJob() {
+    if (!jobSnapshot?.job_id) {
+      return;
+    }
+    const jobId = jobSnapshot.job_id;
+    invalidateJobPolling();
+    setIsJobGenerating(false);
+    setError("");
+    try {
+      const response = await fetch(apiPath(`/api/jobs/${jobId}/cancel`), {
+        method: "POST",
+      });
+      const snapshot = await readJsonResponse(response, "任务取消失败");
+      setJobSnapshot(snapshot);
+      setStatus(`任务已取消：${snapshot.job_id}`);
+    } catch (cancelError) {
+      setIsJobGenerating(false);
+      setError(cancelError.message);
+      setStatus("任务取消失败。");
     }
   }
 
@@ -949,6 +978,7 @@ function App() {
           selectedInitCandidateId={selectedInitCandidateId}
           chooseInitCandidate={chooseInitCandidate}
           jobSnapshot={jobSnapshot}
+          cancelGenerateJob={cancelGenerateJob}
           canvasState={latestResult?.canvas_state ?? jobSnapshot?.result?.canvas_state ?? null}
           projects={projects}
           currentProject={currentProject}

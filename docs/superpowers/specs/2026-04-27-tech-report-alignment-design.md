@@ -81,7 +81,18 @@ Explicitly out of scope for Phase 6: multi-user auth, database migrations, Redis
 
 ### Phase 7: Durable Async Jobs
 
-Replace the in-process job store with a durable queue/state backend such as Redis plus a worker process. Add cancellation, retry metadata, resumable status reads, and failure provenance while keeping `/api/jobs` compatible.
+Move the Phase 2 in-process job store toward durable status reads while keeping `/api/jobs` compatible. Start with file-backed snapshots, cancellation, retry metadata, and failure provenance before introducing Redis/Celery or a separate worker process.
+
+Implemented Phase 7 scope:
+
+- `JobStore` now supports a file-backed mode rooted at `JOBS_DIR`, with one atomic JSON snapshot per job.
+- The gateway initializes durable job state from `JOBS_DIR`, so terminal job status and results remain readable after restart.
+- Active non-terminal jobs found during startup are marked `FAILED` with `failure_stage` and an interruption error instead of disappearing silently.
+- `JobSnapshot` includes `attempt`, `max_attempts`, `cancel_requested`, and `failure_stage` metadata while preserving the existing polling fields.
+- `POST /api/jobs/{job_id}/cancel` records cancellation, and the front end can cancel the currently tracked async job.
+- Docker Compose mounts `./data/jobs` and CI sets `JOBS_DIR` for backend tests/import checks.
+
+Explicitly out of scope for Phase 7: Redis/Celery, a separate worker process, multi-worker scheduling, cross-instance locking, and hard interruption of a model call that is already executing. Cancellation is cooperative at gateway progress checkpoints.
 
 ### Phase 8: Fabric.js Layer Editor
 
