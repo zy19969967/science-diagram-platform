@@ -6,7 +6,7 @@ import os
 import threading
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from common.schemas import GenerateResponse, JobSnapshot, JobStatus
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 class JobCancelled(Exception):
