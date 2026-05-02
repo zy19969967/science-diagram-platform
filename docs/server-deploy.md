@@ -9,7 +9,7 @@
 - `planner`：优先调用 `Qwen/Qwen3.5-4B`
 - `segmenter`：优先调用 `facebook/sam2.1-hiera-base-plus`
 - `powerpaint_service`：调用官方 `PowerPaint`
-- `flux`：本地 diffusers FLUX-compatible 初图服务，默认 `black-forest-labs/FLUX.1-schnell`
+- `flux`：本地 diffusers FLUX-compatible 初图服务，默认 `black-forest-labs/FLUX.2-klein-4B`
 - 当真实模型不可用时，会自动回退到仓库内规则逻辑，保证平台还能用于调试和演示
 - Gateway 还包含异步任务、项目版本、benchmark ledger、readiness 检查和可选单 token 保护
 
@@ -121,10 +121,11 @@ BENCHMARKS_DIR=/app/data/benchmarks
 
 # Gateway defaults to the Compose-local flux service if this stays empty.
 FLUX_INIT_URL=
-FLUX_MODEL_REPO=black-forest-labs/FLUX.1-schnell
+FLUX_MODEL_REPO=black-forest-labs/FLUX.2-klein-4B
 FLUX_MODEL_DTYPE=bfloat16
 FLUX_NUM_INFERENCE_STEPS=4
-FLUX_GUIDANCE_SCALE=0.0
+FLUX_GUIDANCE_SCALE=1.0
+FLUX_MAX_SEQUENCE_LENGTH=512
 FLUX_LOCAL_FILES_ONLY=false
 ```
 
@@ -137,6 +138,7 @@ FLUX_LOCAL_FILES_ONLY=false
 - `VITE_API_TOKEN` 会进入静态前端 bundle，只适合内网或受控演示边界，不是公网多租户认证方案
 - `PowerPaint 2.1` 仍然复用 BrushNet 的 `ppt-v2` 推理分支，因此 `POWERPAINT_VERSION` 保持 `ppt-v2`
 - `flux` 是本地初图服务，Compose 内部默认把 `FLUX_INIT_URL` 设置为 `http://flux:8004`
+- 默认 FLUX 模型是 Apache 2.0 开源的 `black-forest-labs/FLUX.2-klein-4B`，通常需要约 13GB VRAM
 - 初图生成阶段不会调用外部 FLUX API；只有首次下载或更新模型权重时可能访问 Hugging Face
 - `FLUX_MODEL_REPO` 可以是 Hugging Face repo，也可以是服务器上的本地模型目录；如果已提前准备权重，可以设置 `FLUX_LOCAL_FILES_ONLY=true`
 - Compose 会把 `RUNS_DIR`、`PROJECTS_DIR`、`JOBS_DIR` 和 `BENCHMARKS_DIR` 挂到项目 `data/` 目录下，便于重启后读取生成产物、项目版本、异步任务和实验记录

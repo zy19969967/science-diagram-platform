@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import logging
 import os
 import threading
@@ -16,6 +17,11 @@ from common.utils.images import encode_image_to_data_url
 
 LOGGER = logging.getLogger(__name__)
 PipelineLoader = Callable[["FluxRuntimeConfig"], Any]
+DEFAULT_FLUX_MODEL_REPO = "black-forest-labs/FLUX.2-klein-4B"
+DEFAULT_FLUX_GUIDANCE_SCALE = 1.0
+DEFAULT_FLUX_MAX_SEQUENCE_LENGTH = 512
+DEFAULT_FLUX1_GUIDANCE_SCALE = 0.0
+DEFAULT_FLUX1_MAX_SEQUENCE_LENGTH = 256
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -38,26 +44,59 @@ def _as_float(value: str | None, default: float) -> float:
         return default
 
 
+def _is_flux1_model_repo(model_repo: str) -> bool:
+    return "flux.1" in model_repo.strip().lower()
+
+
+def _default_guidance_scale_for_model(model_repo: str) -> float:
+    if _is_flux1_model_repo(model_repo):
+        return DEFAULT_FLUX1_GUIDANCE_SCALE
+    return DEFAULT_FLUX_GUIDANCE_SCALE
+
+
+def _default_max_sequence_length_for_model(model_repo: str) -> int:
+    if _is_flux1_model_repo(model_repo):
+        return DEFAULT_FLUX1_MAX_SEQUENCE_LENGTH
+    return DEFAULT_FLUX_MAX_SEQUENCE_LENGTH
+
+
 @dataclass(frozen=True)
 class FluxRuntimeConfig:
     backend: str = "diffusers"
-    model_repo: str = "black-forest-labs/FLUX.1-schnell"
+    model_repo: str = DEFAULT_FLUX_MODEL_REPO
     model_dtype: str = "bfloat16"
     local_files_only: bool = False
     num_inference_steps: int = 4
-    guidance_scale: float = 0.0
-    max_sequence_length: int = 256
+    guidance_scale: float | None = None
+    max_sequence_length: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.guidance_scale is None:
+            object.__setattr__(self, "guidance_scale", _default_guidance_scale_for_model(self.model_repo))
+        if self.max_sequence_length is None:
+            object.__setattr__(self, "max_sequence_length", _default_max_sequence_length_for_model(self.model_repo))
 
     @classmethod
     def from_env(cls) -> "FluxRuntimeConfig":
+        model_repo = os.getenv("FLUX_MODEL_REPO", DEFAULT_FLUX_MODEL_REPO)
+        guidance_scale = (
+            None
+            if os.getenv("FLUX_GUIDANCE_SCALE") is None
+            else _as_float(os.getenv("FLUX_GUIDANCE_SCALE"), _default_guidance_scale_for_model(model_repo))
+        )
+        max_sequence_length = (
+            None
+            if os.getenv("FLUX_MAX_SEQUENCE_LENGTH") is None
+            else _as_int(os.getenv("FLUX_MAX_SEQUENCE_LENGTH"), _default_max_sequence_length_for_model(model_repo))
+        )
         return cls(
             backend=os.getenv("FLUX_BACKEND", "diffusers"),
-            model_repo=os.getenv("FLUX_MODEL_REPO", "black-forest-labs/FLUX.1-schnell"),
+            model_repo=model_repo,
             model_dtype=os.getenv("FLUX_MODEL_DTYPE", "bfloat16"),
             local_files_only=_as_bool(os.getenv("FLUX_LOCAL_FILES_ONLY"), default=False),
             num_inference_steps=_as_int(os.getenv("FLUX_NUM_INFERENCE_STEPS"), 4),
-            guidance_scale=_as_float(os.getenv("FLUX_GUIDANCE_SCALE"), 0.0),
-            max_sequence_length=_as_int(os.getenv("FLUX_MAX_SEQUENCE_LENGTH"), 256),
+            guidance_scale=guidance_scale,
+            max_sequence_length=max_sequence_length,
         )
 
 
@@ -96,7 +135,16 @@ def build_flux_prompt(plan: ScenePlanResponse) -> str:
 def _load_diffusers_pipeline(config: FluxRuntimeConfig) -> Any:
     torch_module = importlib.import_module("torch")
     diffusers = importlib.import_module("diffusers")
-    pipeline_cls = getattr(diffusers, "FluxPipeline", None) or getattr(diffusers, "AutoPipelineForText2Image")
+    pipeline_cls = (
+        getattr(diffusers, "Flux2KleinPipeline", None)
+        or getattr(diffusers, "FluxPipeline", None)
+        or getattr(diffusers, "AutoPipelineForText2Image", None)
+    )
+    if pipeline_cls is None:
+        raise RuntimeError(
+            "Installed diffusers does not provide Flux2KleinPipeline, FluxPipeline, "
+            "or AutoPipelineForText2Image."
+        )
     load_kwargs: dict[str, Any] = {"local_files_only": config.local_files_only}
     torch_dtype = _resolve_torch_dtype(torch_module, config.model_dtype)
     if torch_dtype is not None:
@@ -108,6 +156,20 @@ def _load_diffusers_pipeline(config: FluxRuntimeConfig) -> Any:
     else:
         pipeline.to("cpu")
     return pipeline
+
+
+def _supports_pipeline_kwarg(pipeline: Any, key: str) -> bool:
+    try:
+        signature = inspect.signature(pipeline.__call__)
+    except (TypeError, ValueError):
+        return True
+    return key in signature.parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
+    )
+
+
+def _filter_pipeline_kwargs(pipeline: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in kwargs.items() if _supports_pipeline_kwarg(pipeline, key)}
 
 
 class FluxRuntime:
@@ -167,7 +229,7 @@ class FluxRuntime:
         generator = self._generator(seed)
         if generator is not None:
             kwargs["generator"] = generator
-        result = pipeline(**kwargs)
+        result = pipeline(**_filter_pipeline_kwargs(pipeline, kwargs))
         images = getattr(result, "images", None)
         if not images:
             raise RuntimeError("Local FLUX pipeline returned no images.")

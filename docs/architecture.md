@@ -60,9 +60,9 @@
 ### Flux Service
 
 - 本地 FastAPI 服务，接口为 `GET /health` 和 `POST /generate`。
-- 使用 diffusers 懒加载 `FLUX_MODEL_REPO`，默认 `black-forest-labs/FLUX.1-schnell`，也可以配置成本地模型目录或报告指定模型。
+- 使用 diffusers 懒加载 `FLUX_MODEL_REPO`，默认 `black-forest-labs/FLUX.2-klein-4B` 和 `Flux2KleinPipeline`，也可以配置成本地模型目录或兼容模型。
 - 返回与 `/api/init-generate` 相同形状的 `InitGenerateResponse`，provider 标记为 `flux-local`。
-- 不把 FLUX 权重提交进仓库；部署时通过 Hugging Face 缓存、`models/` 挂载或服务器本地路径提供权重。
+- 不把 FLUX 权重提交进仓库；FLUX.2-klein-4B 为 Apache 2.0 开源权重，约需 13GB VRAM，部署时通过 Hugging Face 缓存、`models/` 挂载或服务器本地路径提供权重，首次运行或更新时可能需要下载。
 
 ## 数据目录
 

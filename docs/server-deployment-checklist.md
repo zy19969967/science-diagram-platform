@@ -123,10 +123,11 @@ POWERPAINT_VERSION=ppt-v2
 POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
 
 FLUX_INIT_URL=
-FLUX_MODEL_REPO=black-forest-labs/FLUX.1-schnell
+FLUX_MODEL_REPO=black-forest-labs/FLUX.2-klein-4B
 FLUX_MODEL_DTYPE=bfloat16
 FLUX_NUM_INFERENCE_STEPS=4
-FLUX_GUIDANCE_SCALE=0.0
+FLUX_GUIDANCE_SCALE=1.0
+FLUX_MAX_SEQUENCE_LENGTH=512
 
 GATEWAY_API_TOKEN=
 VITE_API_TOKEN=
@@ -136,6 +137,7 @@ VITE_API_TOKEN=
 
 - `FLUX_INIT_URL` 留空时，Docker Compose 会默认让 Gateway 调用本地 `http://flux:8004`。
 - 初图生成不会调用外部 FLUX API；Gateway 只访问 Compose 内部的本地 `flux` 服务。
+- 默认 FLUX 模型是 Apache 2.0 开源的 `black-forest-labs/FLUX.2-klein-4B`，通常需要约 13GB VRAM；首次启动或模型更新时可能需要从 Hugging Face 下载权重。
 - 如果你已经有服务器本地 FLUX 模型目录，可以把 `FLUX_MODEL_REPO` 改成那个目录。
 - 如果设置 `GATEWAY_API_TOKEN`，必须把 `VITE_API_TOKEN` 设置成同一个值，并重新 build 前端。
 - 如果只是内网演示，可以先保持 token 为空，确认链路跑通后再加 token。

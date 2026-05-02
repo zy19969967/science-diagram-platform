@@ -14,7 +14,7 @@
 
 ### 0. FLUX 初图服务与候选重排
 
-当前已经补入无图文本入口的 API 合同和确定性 fallback 初图候选，便于前端先进入“文本初图 -> 后续局部编辑”的闭环。Phase 11 新增了 `FLUX_INIT_URL` 可配置 FLUX-compatible provider、`auto`/`flux-local`/`flux-remote`/`deterministic-fallback` provider 选择、候选评分重排和前端 provider/score 展示。当前分支又补入了仓库内 `backend/flux_service`、Docker Compose `flux` 服务和 Conda/tmux 启动脚本，使默认部署路径改为本地 FLUX 服务。仍未完成的是在本仓库内捆绑 FLUX.2 [klein] 4B 权重、低清预览/高清异步二阶段生成和长期候选 artifact 存储；fallback 画面中的文字仍是位图提示，第三阶段新增的文本层只覆盖前端轻量标签元数据。
+当前已经补入无图文本入口的 API 合同和确定性 fallback 初图候选，便于前端先进入“文本初图 -> 后续局部编辑”的闭环。Phase 11 新增了 `FLUX_INIT_URL` 可配置 FLUX-compatible provider、`auto`/`flux-local`/`flux-remote`/`deterministic-fallback` provider 选择、候选评分重排和前端 provider/score 展示。当前分支又补入了仓库内 `backend/flux_service`、Docker Compose `flux` 服务和 Conda/tmux 启动脚本，使默认部署路径改为本地 FLUX.2-klein-4B 服务。仍未完成的是在本仓库内捆绑 FLUX.2-klein-4B 权重、低清预览/高清异步二阶段生成和长期候选 artifact 存储；默认权重为 Apache 2.0 开源模型，通常需要约 13GB VRAM，首次运行或更新时仍可能需要从 Hugging Face 下载。fallback 画面中的文字仍是位图提示，第三阶段新增的文本层只覆盖前端轻量标签元数据。
 
 ### 1. 认证与权限控制
 

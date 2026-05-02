@@ -45,7 +45,7 @@ docker-compose.yml      Docker Compose 编排
 - `planner`：优先调用 Hugging Face `Qwen/Qwen3.5-4B`
 - `segmenter`：优先调用 Hugging Face `facebook/sam2.1-hiera-base-plus`
 - `powerpaint_service`：调用官方 [PowerPaint](https://github.com/open-mmlab/PowerPaint)
-- `flux_service`：本地 diffusers FLUX-compatible 初图服务，默认模型为 `black-forest-labs/FLUX.1-schnell`，生成阶段不调用外部 FLUX API，可通过 `FLUX_MODEL_REPO` 改为服务器已有模型路径或报告指定模型
+- `flux_service`：本地 diffusers FLUX-compatible 初图服务，默认模型为 `black-forest-labs/FLUX.2-klein-4B`，通过 `Flux2KleinPipeline` 加载；模型为 Apache 2.0 开源权重，约需 13GB VRAM，权重不提交进仓库，首次运行或更新时可能需要从 Hugging Face 下载
 - `init provider`：Gateway 默认通过 `FLUX_INIT_URL=http://flux:8004` 调用本地 `flux_service`；服务不可用时 `auto` 模式回退到确定性 fallback
 - 当真实模型不可用、GPU 不可用或模型输出异常时，会回退到仓库内规则逻辑
 
