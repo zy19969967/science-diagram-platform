@@ -15,8 +15,8 @@ function LayerPanel({ layers, activeLayerId, setActiveLayerId, patchEditorLayer,
   return (
     <div className="layer-panel">
       <div className="layer-panel-header">
-        <span className="section-label">Layers</span>
-        <strong>{layers.length}</strong>
+        <span className="section-label">图层</span>
+        <strong>{layers.length} 层</strong>
       </div>
       <div className="layer-list">
         {[...layers].reverse().map((layer) => (
@@ -31,36 +31,36 @@ function LayerPanel({ layers, activeLayerId, setActiveLayerId, patchEditorLayer,
                 className="icon-button"
                 onClick={() => patchEditorLayer(layer.id, { visible: !layer.visible })}
                 disabled={layer.id === "base-image"}
-                title={layer.visible ? "Hide layer" : "Show layer"}
+                title={layer.visible ? "隐藏图层" : "显示图层"}
               >
-                {layer.visible ? "On" : "Off"}
+                {layer.visible ? "显" : "隐"}
               </button>
               <button
                 type="button"
                 className="icon-button"
                 onClick={() => patchEditorLayer(layer.id, { locked: !layer.locked })}
                 disabled={layer.id === "base-image"}
-                title={layer.locked ? "Unlock layer" : "Lock layer"}
+                title={layer.locked ? "解锁图层" : "锁定图层"}
               >
-                {layer.locked ? "Lock" : "Free"}
+                {layer.locked ? "锁" : "开"}
               </button>
               <button
                 type="button"
                 className="icon-button"
                 onClick={() => moveEditorLayer(layer.id, "up")}
                 disabled={!layer.reorderable}
-                title="Move layer up"
+                title="上移图层"
               >
-                Up
+                上
               </button>
               <button
                 type="button"
                 className="icon-button"
                 onClick={() => moveEditorLayer(layer.id, "down")}
                 disabled={!layer.reorderable}
-                title="Move layer down"
+                title="下移图层"
               >
-                Down
+                下
               </button>
             </div>
           </div>
@@ -350,7 +350,7 @@ function EditorStage({
       <div className="editor-stage-shell">
         <div className="canvas-toolbar">
           <div className="canvas-toolbar-title">
-            <p className="panel-eyebrow">Canvas</p>
+            <p className="panel-eyebrow">主画布</p>
             <h2>交互画布</h2>
           </div>
           <label className="scale-control">
@@ -367,7 +367,7 @@ function EditorStage({
           </label>
           <div className="toolbar-actions">
             <button type="button" className="ghost-button" onClick={clearMask}>
-              清空 Mask
+              清空选区
             </button>
             <button type="button" className="ghost-button" onClick={clearCanvas}>
               清除画布
@@ -431,7 +431,7 @@ function EditorStage({
                             removePointPrompt(point.id);
                           }
                         }}
-                        title={point.label === "positive" ? "Positive SAM point" : "Negative SAM point"}
+                        title={point.label === "positive" ? "正向提示点" : "反向提示点"}
                       >
                         {point.label === "positive" ? "+" : "-"}
                       </button>

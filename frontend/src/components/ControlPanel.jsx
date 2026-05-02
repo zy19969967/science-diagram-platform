@@ -45,16 +45,22 @@ function ControlPanel({
     <aside className="workbench-panel control-panel">
       <div className="panel-heading">
         <div>
-          <p className="panel-eyebrow">Tools</p>
-          <h2>编辑控制</h2>
+          <p className="panel-eyebrow">工作流</p>
+          <h2>编辑控制台</h2>
         </div>
-        <span className="status-pill compact">{status}</span>
+        <span className="status-pill compact soft-state">{status}</span>
+      </div>
+
+      <div className="workflow-strip" aria-label="主要流程">
+        <span>1 输入</span>
+        <span>2 标注</span>
+        <span>3 生成</span>
       </div>
 
       <section className="surface-block rail-block primary-rail-block">
         <div className="section-header compact-header">
           <div>
-            <span className="section-label">Source</span>
+            <span className="section-label">输入</span>
             <strong>上传与描述</strong>
           </div>
         </div>
@@ -89,7 +95,7 @@ function ControlPanel({
       <section className="surface-block rail-block">
         <div className="section-header compact-header">
           <div>
-            <span className="section-label">Canvas</span>
+            <span className="section-label">画布</span>
             <strong>标注与素材</strong>
           </div>
         </div>
@@ -119,7 +125,7 @@ function ControlPanel({
         </div>
         <div className="section-header compact-header">
           <div>
-            <span className="section-label">Assets</span>
+            <span className="section-label">素材</span>
             <strong>科学素材库</strong>
           </div>
           {selectedAsset && <span className="section-meta">{selectedAsset.name}</span>}
@@ -157,24 +163,24 @@ function ControlPanel({
 
       <details className="surface-block rail-block advanced-block">
         <summary className="details-summary">
-          <span className="section-label">Advanced</span>
-          <strong>高级推理参数</strong>
+          <span className="section-label">参数</span>
+          <strong>高级生成参数</strong>
         </summary>
         <div className="advanced-grid">
           <div className="field-group compact">
-            <label>Steps</label>
+            <label>迭代步数</label>
             <input type="number" min="1" max="60" value={steps} onChange={(event) => setSteps(Number(event.target.value))} />
           </div>
           <div className="field-group compact">
-            <label>Guidance</label>
+            <label>引导强度</label>
             <input type="number" min="0.1" max="30" step="0.1" value={guidanceScale} onChange={(event) => setGuidanceScale(Number(event.target.value))} />
           </div>
           <div className="field-group compact">
-            <label>Fitting</label>
+            <label>贴合程度</label>
             <input type="number" min="0" max="1" step="0.05" value={fittingDegree} onChange={(event) => setFittingDegree(Number(event.target.value))} />
           </div>
           <div className="field-group compact">
-            <label>Seed</label>
+            <label>随机种子</label>
             <div className="seed-row">
               <input type="number" min="0" max="2147483647" value={seed} onChange={(event) => setSeed(Number(event.target.value))} />
               <button type="button" className="ghost-button" onClick={() => setSeed(Math.floor(Math.random() * 2147483647))}>
@@ -226,7 +232,7 @@ function ControlPanel({
             {isJobGenerating ? "异步任务中..." : "异步生成"}
           </button>
           <button type="button" className="primary-button" onClick={generateResult} disabled={isGenerating || isJobGenerating}>
-            {isGenerating ? "生成中..." : "调用 PowerPaint"}
+            {isGenerating ? "生成中..." : "局部生成"}
           </button>
         </div>
         {error && <p className="error-text">{error}</p>}

@@ -50,29 +50,43 @@ function ResultPanel({
   const exportWarnings = Array.from(new Set([...(textValidationReport?.warnings ?? []), ...(svgExport?.warnings ?? [])]));
   const initSummary = summarizeInitGeneration(initGeneration);
   const benchmarkDashboard = summarizeBenchmarkSummary(benchmarkSummary);
+  const projectVersionCount = currentProject?.versions?.length ?? 0;
 
   return (
     <aside className="workbench-panel result-panel">
-      <div className="panel-heading">
+      <div className="panel-heading result-heading">
         <div>
-          <p className="panel-eyebrow">Result</p>
-          <h2>结果预览</h2>
+          <p className="panel-eyebrow">输出</p>
+          <h2>结果与版本</h2>
         </div>
-        {latestResult && <span className="status-pill compact">Run {latestResult.run_id}</span>}
+        <span className={latestResult ? "status-pill compact success-state" : "status-pill compact"}>{latestResult ? "结果已生成" : "等待结果"}</span>
       </div>
+
+      <section className="surface-block emphasis-block preview-block">
+        <div className="section-header compact-header">
+          <div>
+            <span className="section-label">预览</span>
+            <strong>最新结果</strong>
+          </div>
+        </div>
+        <div className="result-preview">
+          {latestResult ? <img src={latestResult.result_image} alt="生成结果" /> : <div className="placeholder-card">生成结果会显示在这里</div>}
+        </div>
+        {latestResult && (
+          <button type="button" className="secondary-button full-width" onClick={() => continueFromHistory(latestResult)}>
+            继续编辑当前结果
+          </button>
+        )}
+      </section>
 
       {initCandidates.length > 0 && (
         <section className="surface-block rail-block candidate-block">
           <div className="section-header compact-header">
             <div>
-              <span className="section-label">Initial</span>
+              <span className="section-label">初图</span>
               <strong>初图候选</strong>
             </div>
-            {initPlan && <span className="section-meta">{initSummary.usedProvider}</span>}
-          </div>
-          <div className={initSummary.fallbackUsed ? "candidate-provider-summary fallback" : "candidate-provider-summary"}>
-            <span>Requested {initSummary.requestedProvider}</span>
-            <strong>{initSummary.fallbackUsed ? "Fallback active" : initSummary.provider}</strong>
+            {initPlan && <span className="section-meta">{initSummary.fallbackUsed ? "回退候选" : "候选已就绪"}</span>}
           </div>
           {initSummary.warnings.length > 0 && (
             <div className="candidate-warning-list">
@@ -93,11 +107,9 @@ function ResultPanel({
                 >
                   <img src={candidate.image} alt={candidate.id} />
                   <span>
-                    <strong>{score.rank ? `#${score.rank} ${candidate.id}` : candidate.id}</strong>
-                    <small>seed {candidate.seed} | score {score.scoreLabel}</small>
-                    <small className="candidate-meta">
-                      {score.providerSource} | labels {score.labelCoverageLabel}
-                    </small>
+                    <strong>{score.rank ? `候选 #${score.rank}` : "候选图"}</strong>
+                    <small>种子 {candidate.seed} | 评分 {score.scoreLabel}</small>
+                    <small className="candidate-meta">标签覆盖 {score.labelCoverageLabel}</small>
                   </span>
                 </button>
               );
@@ -110,49 +122,23 @@ function ResultPanel({
         <section className="surface-block rail-block job-block">
           <div className="section-header compact-header">
             <div>
-              <span className="section-label">Job</span>
+              <span className="section-label">任务</span>
               <strong>异步任务</strong>
             </div>
             <span className="section-meta">{jobSnapshot.status}</span>
           </div>
           <div className="job-progress">
             <div>
-              <span>{jobSnapshot.job_id}</span>
+              <span>生成进度</span>
               <strong>{Math.round(jobSnapshot.progress * 100)}%</strong>
             </div>
             <progress value={jobSnapshot.progress} max="1" />
             <p>{jobSnapshot.error || jobSnapshot.message}</p>
-            <p>
-              Attempt {jobSnapshot.attempt ?? 1}/{jobSnapshot.max_attempts ?? 1}
-              {jobSnapshot.failure_stage ? ` | failed at ${jobSnapshot.failure_stage}` : ""}
-            </p>
             {canCancelJob && (
               <button type="button" className="ghost-button full-width" onClick={cancelGenerateJob}>
-                Cancel job
+                取消任务
               </button>
             )}
-          </div>
-        </section>
-      )}
-
-      {canvasState && (
-        <section className="surface-block rail-block canvas-state-block">
-          <div className="section-header compact-header">
-            <div>
-              <span className="section-label">State</span>
-              <strong>画布状态</strong>
-            </div>
-            <span className="section-meta">{canvasState.source}</span>
-          </div>
-          <div className="canvas-state-grid">
-            <div>
-              <span>Layers</span>
-              <strong>{layerCount}</strong>
-            </div>
-            <div>
-              <span>History</span>
-              <strong>{historyCount}</strong>
-            </div>
           </div>
         </section>
       )}
@@ -161,7 +147,7 @@ function ResultPanel({
         <section className="surface-block rail-block export-block">
           <div className="section-header compact-header">
             <div>
-              <span className="section-label">Export</span>
+              <span className="section-label">导出</span>
               <strong>文本与 SVG</strong>
             </div>
             {textValidationReport && <span className={`section-meta export-status ${textValidationReport.status}`}>{textValidationReport.status}</span>}
@@ -169,16 +155,16 @@ function ResultPanel({
           {textValidationReport && (
             <div className="export-summary">
               <div>
-                <span>Matched</span>
+                <span>已匹配</span>
                 <strong>{textValidationReport.matched_labels?.length ?? 0}</strong>
               </div>
               <div>
-                <span>Missing</span>
+                <span>缺失</span>
                 <strong>{textValidationReport.missing_labels?.length ?? 0}</strong>
               </div>
-              <p>{(textValidationReport.matched_labels ?? []).join(", ") || "No matched labels yet."}</p>
+              <p>{(textValidationReport.matched_labels ?? []).join(", ") || "暂无匹配文本。"}</p>
               {(textValidationReport.missing_labels ?? []).length > 0 && (
-                <p className="warning-text">Missing: {textValidationReport.missing_labels.join(", ")}</p>
+                <p className="warning-text">缺失：{textValidationReport.missing_labels.join(", ")}</p>
               )}
             </div>
           )}
@@ -200,19 +186,19 @@ function ResultPanel({
       <section className="surface-block rail-block project-block">
         <div className="section-header compact-header">
           <div>
-            <span className="section-label">Project</span>
-            <strong>Saved versions</strong>
+            <span className="section-label">项目</span>
+            <strong>项目版本</strong>
           </div>
-          {currentProject && <span className="section-meta">{currentProject.project_id}</span>}
+          <span className="section-meta">{currentProject ? `${projectVersionCount} 个版本` : "未保存"}</span>
         </div>
         <div className="project-summary">
           <div>
-            <span>Latest</span>
-            <strong>{latestProjectVersionId}</strong>
+            <span>当前状态</span>
+            <strong>{currentProject ? "已保存项目" : "临时编辑"}</strong>
           </div>
           <div>
-            <span>Versions</span>
-            <strong>{currentProject?.versions?.length ?? 0}</strong>
+            <span>版本数量</span>
+            <strong>{projectVersionCount}</strong>
           </div>
         </div>
         <div className="action-row split-actions">
@@ -222,45 +208,43 @@ function ResultPanel({
             onClick={saveCurrentProjectVersion}
             disabled={isSavingProject || !canSaveProject}
           >
-            {isSavingProject ? "Saving..." : "Save version"}
+            {isSavingProject ? "保存中..." : "保存版本"}
           </button>
           <button type="button" className="ghost-button full-width" onClick={refreshProjects} disabled={isLoadingProjects}>
-            {isLoadingProjects ? "Loading..." : "Refresh"}
+            {isLoadingProjects ? "刷新中..." : "刷新"}
           </button>
         </div>
         <div className="project-list">
-          {(projects ?? []).length === 0 && <div className="placeholder-card compact-placeholder">No saved projects yet.</div>}
+          {(projects ?? []).length === 0 && <div className="placeholder-card compact-placeholder">暂无保存项目。</div>}
           {(projects ?? []).map((project) => (
-            <button key={project.project_id} type="button" className="project-card" onClick={() => loadProject(project)}>
+            <button key={project.project_id} type="button" className="project-card" onClick={() => loadProject(project)} title={project.project_id}>
               <span>
                 <strong>{project.name}</strong>
-                <small>{project.project_id}</small>
+                <small>点击载入项目</small>
               </span>
-              <small>{project.versions?.length ?? 0} versions</small>
+              <small>{project.versions?.length ?? 0} 版</small>
             </button>
           ))}
         </div>
       </section>
 
-      <section className="surface-block rail-block benchmark-block">
-        <div className="section-header compact-header">
-          <div>
-            <span className="section-label">Benchmark</span>
-            <strong>Experiment ledger</strong>
-          </div>
-          <span className="section-meta">{benchmarkDashboard.totalRuns} runs</span>
-        </div>
+      <details className="surface-block rail-block result-details">
+        <summary className="details-summary">
+          <span className="section-label">实验</span>
+          <strong>实验记录</strong>
+          <span className="section-meta">{benchmarkDashboard.totalRuns} 次</span>
+        </summary>
         <div className="benchmark-summary-grid">
           <div>
-            <span>Localization</span>
+            <span>局部化</span>
             <strong>{benchmarkDashboard.localizationLabel}</strong>
           </div>
           <div>
-            <span>Preservation</span>
+            <span>保真</span>
             <strong>{benchmarkDashboard.preservationLabel}</strong>
           </div>
           <div>
-            <span>Text pass</span>
+            <span>文本通过</span>
             <strong>{benchmarkDashboard.textPassRateLabel}</strong>
           </div>
         </div>
@@ -271,10 +255,10 @@ function ResultPanel({
             onClick={recordBenchmarkRun}
             disabled={isRecordingBenchmark || !canRecordBenchmark}
           >
-            {isRecordingBenchmark ? "Recording..." : "Record run"}
+            {isRecordingBenchmark ? "记录中..." : "记录本轮"}
           </button>
           <button type="button" className="ghost-button full-width" onClick={refreshBenchmarks} disabled={isLoadingBenchmarks}>
-            {isLoadingBenchmarks ? "Loading..." : "Refresh"}
+            {isLoadingBenchmarks ? "刷新中..." : "刷新"}
           </button>
         </div>
         {benchmarkDashboard.providers.length > 0 && (
@@ -283,7 +267,7 @@ function ResultPanel({
               <div key={provider.provider} className="benchmark-provider-row">
                 <span>
                   <strong>{provider.provider}</strong>
-                  <small>{provider.run_count} runs</small>
+                  <small>{provider.run_count} 次</small>
                 </span>
                 <small>
                   loc {formatBenchmarkScore(provider.average_metrics?.edit_localization_score)} | keep{" "}
@@ -303,7 +287,7 @@ function ResultPanel({
               <small>{formatBenchmarkScore(run.quality_report?.evaluation?.edit_localization_score)}</small>
             </div>
           ))}
-          {(benchmarkRuns ?? []).length === 0 && <div className="placeholder-card compact-placeholder">No benchmark runs yet.</div>}
+          {(benchmarkRuns ?? []).length === 0 && <div className="placeholder-card compact-placeholder">暂无实验记录。</div>}
         </div>
         {benchmarkDashboard.warnings.length > 0 && (
           <div className="warning-list">
@@ -312,34 +296,12 @@ function ResultPanel({
             ))}
           </div>
         )}
-      </section>
-
-      <section className="surface-block emphasis-block preview-block">
-        <div className="section-header compact-header">
-          <div>
-            <span className="section-label">Preview</span>
-            <strong>最新结果</strong>
-          </div>
-        </div>
-        <div className="result-preview">
-          {latestResult ? <img src={latestResult.result_image} alt="result" /> : <div className="placeholder-card">生成结果会显示在这里</div>}
-        </div>
-      </section>
-
-      <section className="surface-block rail-block">
-        <div className="action-row">
-          {latestResult && (
-            <button type="button" className="secondary-button full-width" onClick={() => continueFromHistory(latestResult)}>
-              继续编辑当前结果
-            </button>
-          )}
-        </div>
-      </section>
+      </details>
 
       {latestResult?.evaluation && (
         <details className="surface-block rail-block result-details">
           <summary className="details-summary">
-            <span className="section-label">Metrics</span>
+            <span className="section-label">指标</span>
             <strong>结果指标</strong>
           </summary>
           <section className="metrics-grid single-column">
@@ -376,7 +338,7 @@ function ResultPanel({
                   <p>非编辑区域保持程度，越高越稳定。</p>
                 </div>
                 <div className="metric-card">
-                  <span>Prompt Trace</span>
+                  <span>提示追踪</span>
                   <strong>{qualityPrompt.task ?? "n/a"}</strong>
                   <p>
                     {qualityPrompt.planner_source ?? "unknown"} | seed {qualityPrompt.seed ?? "n/a"}
@@ -386,16 +348,43 @@ function ResultPanel({
             )}
             <div className="metric-card">
               <span>评估说明</span>
-              <strong>Result Note</strong>
+              <strong>结果说明</strong>
               <p>{latestResult.evaluation.note}</p>
             </div>
           </section>
         </details>
       )}
 
+      {canvasState && (
+        <details className="surface-block rail-block result-details">
+          <summary className="details-summary">
+            <span className="section-label">诊断</span>
+            <strong>画布状态</strong>
+          </summary>
+          <div className="canvas-state-grid">
+            <div>
+              <span>图层</span>
+              <strong>{layerCount}</strong>
+            </div>
+            <div>
+              <span>历史</span>
+              <strong>{historyCount}</strong>
+            </div>
+            <div>
+              <span>来源</span>
+              <strong>{canvasState.source}</strong>
+            </div>
+            <div>
+              <span>最近版本</span>
+              <strong>{latestProjectVersionId}</strong>
+            </div>
+          </div>
+        </details>
+      )}
+
       <details className="surface-block rail-block result-details">
         <summary className="details-summary">
-          <span className="section-label">History</span>
+          <span className="section-label">历史</span>
           <strong>历史版本</strong>
         </summary>
         <div className="history-list">
