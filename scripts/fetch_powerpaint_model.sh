@@ -7,49 +7,41 @@ source "${SCRIPT_DIR}/_conda_common.sh"
 
 load_platform_env
 ensure_runtime_dirs
+ensure_conda
 
 POWERPAINT_CHECKPOINT_DIR="${MODELS_DIR}/powerpaint/${POWERPAINT_MODEL_DIR_NAME}"
-POWERPAINT_MODEL_GIT_URL="${POWERPAINT_MODEL_GIT_URL:-https://huggingface.co/${POWERPAINT_MODEL_REPO}}"
+export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
 
 cat <<EOF
 PowerPaint code repo:
   ${POWERPAINT_REPO_GIT_URL}
-PowerPaint weight repo (Git LFS on Hugging Face):
-  ${POWERPAINT_MODEL_GIT_URL}
+PowerPaint weight repo:
+  ${POWERPAINT_MODEL_REPO}
+PowerPaint weight download target:
+  ${POWERPAINT_CHECKPOINT_DIR}
 
 This script only prepares the model weights. Cloning the GitHub code repo alone does not include the PowerPaint 2.1 checkpoints.
 EOF
 
-if ! command -v git >/dev/null 2>&1; then
-  echo "git is required for fetch_powerpaint_model.sh." >&2
-  exit 1
-fi
-
-if ! git lfs version >/dev/null 2>&1; then
-  echo "git-lfs is required for fetch_powerpaint_model.sh. Please install git-lfs first." >&2
-  exit 1
-fi
+require_conda_env "${CONDA_ENV_POWERPAINT}"
 
 mkdir -p "$(dirname "${POWERPAINT_CHECKPOINT_DIR}")"
 
 if [[ -d "${POWERPAINT_CHECKPOINT_DIR}/.git" ]]; then
-  git -C "${POWERPAINT_CHECKPOINT_DIR}" pull --ff-only
-  git -C "${POWERPAINT_CHECKPOINT_DIR}" lfs pull
-else
-  if [[ -d "${POWERPAINT_CHECKPOINT_DIR}" && -n "$(ls -A "${POWERPAINT_CHECKPOINT_DIR}" 2>/dev/null)" ]]; then
-    echo "${POWERPAINT_CHECKPOINT_DIR} already exists but is not a git repository." >&2
-    echo "Move it aside or clear it before downloading the PowerPaint model with git." >&2
-    exit 1
-  fi
-
-  if [[ -d "${POWERPAINT_CHECKPOINT_DIR}" ]]; then
-    rmdir "${POWERPAINT_CHECKPOINT_DIR}"
-  fi
-
-  git lfs install
-  git clone "${POWERPAINT_MODEL_GIT_URL}" "${POWERPAINT_CHECKPOINT_DIR}"
-  git -C "${POWERPAINT_CHECKPOINT_DIR}" lfs pull
+  BACKUP_DIR="${POWERPAINT_CHECKPOINT_DIR}.git-lfs-backup-$(date +%Y%m%d-%H%M%S)"
+  echo "Existing Git LFS checkout found at ${POWERPAINT_CHECKPOINT_DIR}."
+  echo "Moving it aside to ${BACKUP_DIR} before using huggingface-cli download."
+  mv "${POWERPAINT_CHECKPOINT_DIR}" "${BACKUP_DIR}"
 fi
+
+mkdir -p "${POWERPAINT_CHECKPOINT_DIR}"
+
+run_conda run --no-capture-output -n "${CONDA_ENV_POWERPAINT}" \
+  huggingface-cli download "${POWERPAINT_MODEL_REPO}" \
+  --repo-type model \
+  --local-dir "${POWERPAINT_CHECKPOINT_DIR}" \
+  --local-dir-use-symlinks False \
+  --resume-download
 
 cat <<EOF
 PowerPaint model is ready at:
