@@ -29,12 +29,26 @@ import {
 } from "./projectState.js";
 import { buildBenchmarkRecordPayload } from "./benchmarkState.js";
 import { apiFetch } from "./apiClient.js";
+import {
+  buildSmartGenerationPayload,
+  primaryActionLabel,
+  summarizeSmartGenerationStatus,
+} from "./smartGeneration.js";
 
 const TASK_OPTIONS = [
   { value: "text-guided", label: "文本插入" },
   { value: "object-removal", label: "对象移除" },
   { value: "shape-guided", label: "形状引导" },
   { value: "image-outpainting", label: "图像扩展" },
+];
+
+const SMART_TASK_OPTIONS = [
+  { value: "", label: "自动判断" },
+  { value: "text_to_image", label: "文生图" },
+  { value: "image_variation", label: "整体改图" },
+  { value: "local_inpaint", label: "局部修改" },
+  { value: "outpainting", label: "扩图" },
+  { value: "svg_or_structure_generation", label: "结构化图" },
 ];
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -83,6 +97,7 @@ function App() {
   const [sourceImage, setSourceImage] = useState("");
   const [instruction, setInstruction] = useState("");
   const [task, setTask] = useState("text-guided");
+  const [taskOverride, setTaskOverride] = useState("");
   const [brushSize, setBrushSize] = useState(24);
   const [drawMode, setDrawMode] = useState("brush");
   const [steps, setSteps] = useState(30);
@@ -119,6 +134,7 @@ function App() {
   const [isLoadingBenchmarks, setIsLoadingBenchmarks] = useState(false);
   const [isRecordingBenchmark, setIsRecordingBenchmark] = useState(false);
   const [jobSnapshot, setJobSnapshot] = useState(null);
+  const [smartJobSnapshot, setSmartJobSnapshot] = useState(null);
   const [textValidationReport, setTextValidationReport] = useState(null);
   const [svgExport, setSvgExport] = useState(null);
   const [isValidatingText, setIsValidatingText] = useState(false);
@@ -265,6 +281,7 @@ function App() {
   function invalidateJobPolling() {
     jobTokenRef.current += 1;
     setIsJobGenerating(false);
+    setSmartJobSnapshot(null);
   }
 
   function resetLayerEditorState() {
@@ -394,6 +411,7 @@ function App() {
     setPointPrompts([]);
     resetLayerEditorState();
     setJobSnapshot(null);
+    setSmartJobSnapshot(null);
     setTextValidationReport(null);
     setSvgExport(null);
     setLatestResult(null);
@@ -430,6 +448,7 @@ function App() {
     setPointPrompts([]);
     resetLayerEditorState();
     setJobSnapshot(null);
+    setSmartJobSnapshot(null);
     setTextValidationReport(null);
     setSvgExport(null);
     setHistory([]);
@@ -1011,6 +1030,109 @@ function App() {
     }
   }
 
+  async function pollSmartJobUntilComplete(jobId, token) {
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, 1500);
+      });
+      if (jobTokenRef.current !== token) {
+        return null;
+      }
+      const response = await apiFetch(`/api/generation/jobs/${jobId}`);
+      const snapshot = await readJsonResponse(response, "任务状态读取失败");
+      if (jobTokenRef.current !== token) {
+        return null;
+      }
+      setSmartJobSnapshot(snapshot);
+      setStatus(summarizeSmartGenerationStatus(snapshot).label);
+
+      if (["completed", "failed", "cancelled"].includes(snapshot.status)) {
+        return snapshot;
+      }
+    }
+    throw new Error("生成任务超时，请稍后刷新任务状态。");
+  }
+
+  function applySmartGenerationSnapshot(snapshot) {
+    const summary = summarizeSmartGenerationStatus(snapshot);
+    setSmartJobSnapshot(snapshot);
+    setStatus(summary.label);
+    if (summary.isFailed) {
+      setError(snapshot.message || snapshot.error || "生成失败");
+      return;
+    }
+    if (snapshot.generate_response) {
+      applyGenerateResult(snapshot.generate_response, summary.hasDiagnosticResult ? "诊断结果" : "生成完成");
+      return;
+    }
+    const firstResult = snapshot.results?.[0];
+    if (firstResult?.image_url) {
+      setSourceImage(firstResult.image_url);
+      setLatestResult(null);
+      setInitCandidates([]);
+      setSelectedInitCandidateId("");
+      setHistory([]);
+      setStatus(summary.label);
+      if (summary.hasDiagnosticResult) {
+        setError("当前结果是诊断占位，不代表正式模型生成效果。");
+      }
+    }
+  }
+
+  async function runSmartGeneration() {
+    const prompt = instruction.trim();
+    if (!prompt) {
+      setError("请输入你想生成或修改的内容。");
+      return;
+    }
+
+    const token = jobTokenRef.current + 1;
+    jobTokenRef.current = token;
+    setIsJobGenerating(true);
+    setError("");
+    setSmartJobSnapshot(null);
+    setStatus(sourceImage ? "正在提交图片修改任务..." : "正在提交文生图任务...");
+
+    try {
+      const maskPayload = sourceImage ? await buildMaskPayload() : { dataUrl: "", pixelCount: 0 };
+      const requestPayload = buildSmartGenerationPayload({
+        instruction: prompt,
+        sourceImage,
+        maskPayload,
+        taskOverride,
+        seed,
+        steps,
+        guidanceScale,
+      });
+      const response = await apiFetch("/api/generation/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload),
+      });
+      const created = await readJsonResponse(response, "生成任务创建失败");
+      if (jobTokenRef.current !== token) {
+        return;
+      }
+      setSmartJobSnapshot(created);
+      setStatus(summarizeSmartGenerationStatus(created).label);
+
+      const finalSnapshot = ["queued", "planning", "generating"].includes(created.status)
+        ? await pollSmartJobUntilComplete(created.job_id, token)
+        : created;
+      if (!finalSnapshot || jobTokenRef.current !== token) {
+        return;
+      }
+      applySmartGenerationSnapshot(finalSnapshot);
+    } catch (smartError) {
+      setError(smartError.message);
+      setStatus("生成失败，请调整输入后重试。");
+    } finally {
+      if (jobTokenRef.current === token) {
+        setIsJobGenerating(false);
+      }
+    }
+  }
+
   async function validateCanvasText() {
     setIsValidatingText(true);
     setError("");
@@ -1251,9 +1373,9 @@ function App() {
           status={status}
           instruction={instruction}
           setInstruction={setInstruction}
-          task={task}
-          taskOptions={TASK_OPTIONS}
-          setTask={setTask}
+          taskOverride={taskOverride}
+          smartTaskOptions={SMART_TASK_OPTIONS}
+          setTaskOverride={setTaskOverride}
           brushSize={brushSize}
           setBrushSize={setBrushSize}
           drawMode={drawMode}
@@ -1278,6 +1400,8 @@ function App() {
           updateAssetScale={updateAssetScale}
           analyzePlan={analyzePlan}
           createInitialCanvas={createInitialCanvas}
+          runSmartGeneration={runSmartGeneration}
+          primaryActionLabel={primaryActionLabel({ sourceImage })}
           generateResult={generateResult}
           startGenerateJob={startGenerateJob}
           validateCanvasText={validateCanvasText}
@@ -1332,6 +1456,7 @@ function App() {
           selectedInitCandidateId={selectedInitCandidateId}
           chooseInitCandidate={chooseInitCandidate}
           jobSnapshot={jobSnapshot}
+          smartJobSnapshot={smartJobSnapshot}
           cancelGenerateJob={cancelGenerateJob}
           canvasState={latestResult?.canvas_state ?? jobSnapshot?.result?.canvas_state ?? null}
           projects={projects}

@@ -2,9 +2,9 @@ function ControlPanel({
   status,
   instruction,
   setInstruction,
-  task,
-  taskOptions,
-  setTask,
+  taskOverride,
+  smartTaskOptions,
+  setTaskOverride,
   brushSize,
   setBrushSize,
   drawMode,
@@ -29,6 +29,8 @@ function ControlPanel({
   updateAssetScale,
   analyzePlan,
   createInitialCanvas,
+  runSmartGeneration,
+  primaryActionLabel,
   generateResult,
   startGenerateJob,
   validateCanvasText,
@@ -45,62 +47,47 @@ function ControlPanel({
     <aside className="workbench-panel control-panel">
       <div className="panel-heading">
         <div>
-          <p className="panel-eyebrow">工作流</p>
-          <h2>编辑控制台</h2>
+          <p className="panel-eyebrow">生成</p>
+          <h2>一键生成与修改</h2>
         </div>
         <span className="status-pill compact soft-state">{status}</span>
       </div>
 
       <div className="workflow-strip" aria-label="主要流程">
-        <span>1 输入</span>
-        <span>2 标注</span>
-        <span>3 生成</span>
+        <span>1 描述需求</span>
+        <span>2 可选上传</span>
+        <span>3 点击生成</span>
       </div>
 
       <section className="surface-block rail-block primary-rail-block">
         <div className="section-header compact-header">
           <div>
-            <span className="section-label">输入</span>
-            <strong>上传与描述</strong>
+            <span className="section-label">需求</span>
+            <strong>你想生成或修改什么？</strong>
           </div>
         </div>
-        <label className="upload-card">
-          <span>拖入或选择图片</span>
-          <small>支持科研示意图、实验装置图、流程图等图像输入。</small>
-          <input type="file" accept="image/*" onChange={handleUpload} />
-        </label>
         <textarea
           value={instruction}
           onChange={(event) => setInstruction(event.target.value)}
           rows={5}
-          placeholder="例如：在右侧空白区域加入烧杯与箭头标注，并保持图中文字清晰。"
+          placeholder="例如：把杯子换成白色花瓶，并保持背景和光照不变。"
         />
-        <button type="button" className="secondary-button full-width" onClick={createInitialCanvas} disabled={isInitializing}>
-          {isInitializing ? "生成初图中..." : "无图生成初图"}
-        </button>
-        <div className="segmented-grid">
-          {taskOptions.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={task === option.value ? "segment active" : "segment"}
-              onClick={() => setTask(option.value)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <label className="upload-card">
+          <span>可选：上传一张图片</span>
+          <small>不上传图片时会进入文生图；上传后可涂抹局部区域再修改。</small>
+          <input type="file" accept="image/*" onChange={handleUpload} />
+        </label>
       </section>
 
       <section className="surface-block rail-block">
         <div className="section-header compact-header">
           <div>
-            <span className="section-label">画布</span>
-            <strong>标注与素材</strong>
+            <span className="section-label">选区</span>
+            <strong>可选：涂抹要修改的区域</strong>
           </div>
         </div>
         <div className="field-group">
-          <label>绘制模式</label>
+          <label>画笔工具</label>
           <div className="segmented-grid tool-mode-grid">
             <button type="button" className={drawMode === "brush" ? "segment active" : "segment"} onClick={() => setDrawMode("brush")}>
               画笔
@@ -108,6 +95,44 @@ function ControlPanel({
             <button type="button" className={drawMode === "erase" ? "segment active" : "segment"} onClick={() => setDrawMode("erase")}>
               橡皮
             </button>
+          </div>
+        </div>
+        <div className="field-group">
+          <label>笔刷大小</label>
+          <input type="range" min="8" max="72" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} />
+        </div>
+      </section>
+
+      <section className="surface-block rail-block action-block">
+        <button type="button" className="primary-button full-width" onClick={runSmartGeneration} disabled={isInitializing || isGenerating || isJobGenerating}>
+          {isInitializing || isGenerating || isJobGenerating ? "生成中..." : primaryActionLabel}
+        </button>
+        {error && <p className="error-text">{error}</p>}
+      </section>
+
+      <details className="surface-block rail-block advanced-block">
+        <summary className="details-summary">
+          <span className="section-label">高级</span>
+          <strong>任务覆盖、素材和调试</strong>
+        </summary>
+        <div className="field-group compact">
+          <label>任务判断</label>
+          <div className="segmented-grid">
+            {smartTaskOptions.map((option) => (
+              <button
+                key={option.value || "auto"}
+                type="button"
+                className={taskOverride === option.value ? "segment active" : "segment"}
+                onClick={() => setTaskOverride(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="field-group compact">
+          <label>高级画布工具</label>
+          <div className="segmented-grid tool-mode-grid">
             <button type="button" className={drawMode === "layer" ? "segment active" : "segment"} onClick={() => setDrawMode("layer")}>
               图层
             </button>
@@ -118,10 +143,6 @@ function ControlPanel({
               负点
             </button>
           </div>
-        </div>
-        <div className="field-group">
-          <label>笔刷大小</label>
-          <input type="range" min="8" max="72" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} />
         </div>
         <div className="section-header compact-header">
           <div>
@@ -159,13 +180,6 @@ function ControlPanel({
             />
           </div>
         )}
-      </section>
-
-      <details className="surface-block rail-block advanced-block">
-        <summary className="details-summary">
-          <span className="section-label">参数</span>
-          <strong>高级生成参数</strong>
-        </summary>
         <div className="advanced-grid">
           <div className="field-group compact">
             <label>迭代步数</label>
@@ -188,7 +202,7 @@ function ControlPanel({
               </button>
             </div>
           </div>
-          {task === "image-outpainting" && (
+          {taskOverride === "outpainting" && (
             <>
               <div className="field-group compact">
                 <label>横向扩展</label>
@@ -215,12 +229,12 @@ function ControlPanel({
             </>
           )}
         </div>
-      </details>
-
-      <section className="surface-block rail-block action-block">
         <div className="action-row action-stack">
+          <button type="button" className="secondary-button" onClick={createInitialCanvas} disabled={isInitializing}>
+            {isInitializing ? "生成初图中..." : "旧入口：无图初图"}
+          </button>
           <button type="button" className="secondary-button" onClick={analyzePlan}>
-            解析任务
+            调试：解析任务
           </button>
           <button type="button" className="secondary-button" onClick={validateCanvasText} disabled={isValidatingText}>
             {isValidatingText ? "校验中..." : "校验文本"}
@@ -235,8 +249,7 @@ function ControlPanel({
             {isGenerating ? "生成中..." : "局部生成"}
           </button>
         </div>
-        {error && <p className="error-text">{error}</p>}
-      </section>
+      </details>
     </aside>
   );
 }

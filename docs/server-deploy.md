@@ -218,6 +218,37 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 
 `/api/deployment/readiness` 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档是否存在；它不会调用 Qwen3.5、SAM2.1、PowerPaint 或本地 FLUX 模型。
 
+### 8.1 合并本次 smart generation 后的接口检查
+
+本次版本的默认前端主流程会调用统一入口：
+
+```text
+POST /api/generation/jobs
+GET /api/generation/jobs/{job_id}
+```
+
+服务器更新后，先用一个不带图片的文生图请求确认 Gateway 已经加载新接口：
+
+```bash
+curl -sS -X POST http://127.0.0.1:19080/api/generation/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"一张简单的科学示意图","options":{"num_outputs":1,"quality":"standard"}}'
+```
+
+如果 `flux` 正常，响应会返回 `queued`、`planning`、`generating` 或 `completed` 状态，并带有 `job_id`。继续轮询：
+
+```bash
+curl -sS http://127.0.0.1:19080/api/generation/jobs/<job_id>
+```
+
+如果本地 FLUX 不可用，文生图请求应该明确失败，例如返回 `TEXT_TO_IMAGE_MODEL_UNAVAILABLE`，而不是返回伪装成正常生成结果的占位图。局部编辑请求则需要上传图片和 mask；有图有 mask 时后端会自动路由到 `local_inpaint`，前端不再让用户选择 PowerPaint 的内部任务类型。
+
+如果配置了 `GATEWAY_API_TOKEN`，上面两个请求都要加：
+
+```bash
+-H "Authorization: Bearer <token>"
+```
+
 ## 9. 首次请求较慢是正常现象
 
 `planner`、`segmenter` 和 `flux` 采用惰性加载。也就是说：
@@ -270,6 +301,19 @@ cd /home/common/yzhu_2025/science-diagram-platform
 git pull origin main
 sudo docker compose --env-file .env up -d --build
 ```
+
+本次合并后建议额外执行：
+
+```bash
+sudo docker compose ps
+sudo docker compose logs --tail=120 gateway
+sudo docker compose logs --tail=120 flux
+sudo docker compose logs --tail=120 powerpaint
+curl http://127.0.0.1:19080/api/health
+curl http://127.0.0.1:19080/api/deployment/readiness
+```
+
+然后按 8.1 的 `POST /api/generation/jobs` 做一次文生图接口检查。前端静态资源由 Docker build 重新生成；如果你设置了 `GATEWAY_API_TOKEN`，更新 `.env` 里的 `VITE_API_TOKEN` 后必须重新执行 `up -d --build`。
 
 ## 12. 常见问题
 
@@ -343,7 +387,7 @@ sudo docker compose --env-file .env up -d --build
 - `FLUX_MODEL_REPO` 是否是可访问的 Hugging Face repo 或服务器本地模型目录
 - 如果设置了 `FLUX_LOCAL_FILES_ONLY=true`，`models/huggingface` 或本地模型目录里是否已经有完整权重
 - GPU 7 是否空闲，或者把 `FLUX_CUDA_VISIBLE_DEVICES` 改成空闲卡
-- 如果只是 FLUX 服务不可用，Gateway 的 `auto` 初图生成会回退到确定性 fallback；显式 `flux-local` 请求会返回错误
+- 如果只是 FLUX 服务不可用，旧的 `auto` 初图生成仍可能回退到确定性 fallback；新的 `/api/generation/jobs` 文生图默认会明确失败，或只返回带 `is_diagnostic_result=true` 标记的诊断结果，不能当作正式生成质量
 
 ### 12.8 Where PowerPaint 2.1 Weights Come From
 

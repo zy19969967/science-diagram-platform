@@ -446,7 +446,7 @@ function EditorStage({
               </div>
             )}
           </div>
-          {sourceImage && (
+          {sourceImage && drawMode === "layer" && (
             <LayerPanel
               layers={editorLayers}
               activeLayerId={activeLayerId}
