@@ -18,6 +18,7 @@ function ResultPanel({
   selectedInitCandidateId,
   chooseInitCandidate,
   jobSnapshot,
+  smartJobSnapshot,
   cancelGenerateJob,
   canvasState,
   projects,
@@ -46,6 +47,8 @@ function ResultPanel({
   const qualityEvaluation = qualityReport?.evaluation ?? {};
   const qualityPrompt = qualityReport?.prompt ?? {};
   const latestProjectVersionId = currentProject?.latest_version_id ?? "none";
+  const activeJobSnapshot = smartJobSnapshot || jobSnapshot;
+  const activeJobStatus = activeJobSnapshot?.status ?? "";
   const canCancelJob = jobSnapshot && !["DONE", "FAILED", "CANCELLED"].includes(jobSnapshot.status);
   const exportWarnings = Array.from(new Set([...(textValidationReport?.warnings ?? []), ...(svgExport?.warnings ?? [])]));
   const initSummary = summarizeInitGeneration(initGeneration);
@@ -57,7 +60,7 @@ function ResultPanel({
       <div className="panel-heading result-heading">
         <div>
           <p className="panel-eyebrow">输出</p>
-          <h2>结果与版本</h2>
+          <h2>生成结果</h2>
         </div>
         <span className={latestResult ? "status-pill compact success-state" : "status-pill compact"}>{latestResult ? "结果已生成" : "等待结果"}</span>
       </div>
@@ -118,22 +121,25 @@ function ResultPanel({
         </section>
       )}
 
-      {jobSnapshot && (
+      {activeJobSnapshot && (
         <section className="surface-block rail-block job-block">
           <div className="section-header compact-header">
             <div>
               <span className="section-label">任务</span>
-              <strong>异步任务</strong>
+              <strong>生成状态</strong>
             </div>
-            <span className="section-meta">{jobSnapshot.status}</span>
+            <span className="section-meta">{activeJobStatus}</span>
           </div>
           <div className="job-progress">
             <div>
               <span>生成进度</span>
-              <strong>{Math.round(jobSnapshot.progress * 100)}%</strong>
+              <strong>{Math.round((activeJobSnapshot.progress ?? 0) * 100)}%</strong>
             </div>
-            <progress value={jobSnapshot.progress} max="1" />
-            <p>{jobSnapshot.error || jobSnapshot.message}</p>
+            <progress value={activeJobSnapshot.progress ?? 0} max="1" />
+            <p>{activeJobSnapshot.error || activeJobSnapshot.message}</p>
+            {(smartJobSnapshot?.metadata?.fallback_used || smartJobSnapshot?.metadata?.is_diagnostic_result) && (
+              <p className="warning-text">当前结果是诊断占位，不代表正式模型生成效果。</p>
+            )}
             {canCancelJob && (
               <button type="button" className="ghost-button full-width" onClick={cancelGenerateJob}>
                 取消任务
@@ -183,14 +189,12 @@ function ResultPanel({
         </section>
       )}
 
-      <section className="surface-block rail-block project-block">
-        <div className="section-header compact-header">
-          <div>
-            <span className="section-label">项目</span>
-            <strong>项目版本</strong>
-          </div>
+      <details className="surface-block rail-block project-block">
+        <summary className="details-summary">
+          <span className="section-label">高级</span>
+          <strong>项目版本</strong>
           <span className="section-meta">{currentProject ? `${projectVersionCount} 个版本` : "未保存"}</span>
-        </div>
+        </summary>
         <div className="project-summary">
           <div>
             <span>当前状态</span>
@@ -226,7 +230,7 @@ function ResultPanel({
             </button>
           ))}
         </div>
-      </section>
+      </details>
 
       <details className="surface-block rail-block result-details">
         <summary className="details-summary">

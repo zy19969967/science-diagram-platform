@@ -6,6 +6,22 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 TaskType = Literal["text-guided", "object-removal", "shape-guided", "image-outpainting"]
+SmartTaskType = Literal[
+    "text_to_image",
+    "image_variation",
+    "local_inpaint",
+    "outpainting",
+    "svg_or_structure_generation",
+]
+SmartPipeline = Literal[
+    "flux_text_to_image",
+    "powerpaint_inpaint",
+    "powerpaint_variation",
+    "powerpaint_outpaint",
+    "svg_structure",
+    "needs_user_input",
+]
+SmartJobStatus = Literal["queued", "planning", "generating", "completed", "failed", "cancelled"]
 InitMode = Literal["create_from_text"]
 InitGenerationProvider = Literal["auto", "deterministic-fallback", "flux-local", "flux-remote"]
 JobStatus = Literal["CREATED", "PLANNING", "SEGMENTING", "EXECUTING", "EVALUATING", "DONE", "FAILED", "CANCELLED"]
@@ -88,6 +104,62 @@ class PlanResponse(BaseModel):
     mask_strategy: str = "user-mask"
     reasoning: str
     warnings: list[str] = Field(default_factory=list)
+
+
+class SmartGenerationOptions(BaseModel):
+    num_outputs: int = Field(default=2, ge=1, le=4)
+    task_override: SmartTaskType | None = None
+    quality: Literal["draft", "standard", "high"] = "standard"
+    seed: int = Field(default=2026, ge=0, le=2147483647)
+    steps: int = Field(default=30, ge=1, le=100)
+    guidance_scale: float = Field(default=7.5, ge=0.1, le=30.0)
+
+
+class SmartGenerationRequest(BaseModel):
+    prompt: str = ""
+    image_id: str | None = None
+    mask_id: str | None = None
+    source_image: str | None = None
+    mask_image: str | None = None
+    options: SmartGenerationOptions = Field(default_factory=SmartGenerationOptions)
+
+
+class SmartPlannerDecision(BaseModel):
+    task_type: SmartTaskType
+    subtask_type: str = "general"
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+    need_user_clarification: bool = False
+    clarification_question: str = ""
+    normalized_prompt: str
+    negative_prompt: str = ""
+    pipeline: SmartPipeline
+    requires_mask: bool = False
+    can_auto_segment: bool = False
+    preserve_background: bool = True
+    preserve_identity: bool = False
+    preserve_style: bool = True
+    warnings: list[str] = Field(default_factory=list)
+
+
+class SmartGenerationResultItem(BaseModel):
+    image_url: str
+    thumbnail_url: str | None = None
+    metadata_id: str | None = None
+    is_diagnostic_result: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SmartGenerationJobResponse(BaseModel):
+    job_id: str
+    status: SmartJobStatus
+    task_type: SmartTaskType
+    message: str
+    progress: float = Field(default=0.0, ge=0.0, le=1.0)
+    results: list[SmartGenerationResultItem] = Field(default_factory=list)
+    planner: SmartPlannerDecision | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    generate_response: Any | None = None
 
 
 class ScenePlanRequest(BaseModel):
@@ -433,6 +505,7 @@ class GenerateRequest(BaseModel):
     horizontal_expansion_ratio: float = Field(default=1.0, ge=1.0, le=4.0)
     vertical_expansion_ratio: float = Field(default=1.0, ge=1.0, le=4.0)
     canvas_state: CanvasState | None = None
+    smart_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class PowerPaintGenerateRequest(BaseModel):

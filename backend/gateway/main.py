@@ -11,10 +11,12 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 
 from common.assets import asset_catalog_with_urls
 from common.canvas_state import build_canvas_state_after_generate
 from common.export_logic import build_svg_export, build_text_validation_report
+from common.generation_logic import build_smart_generation_plan, smart_metadata
 from common.init_logic import build_scene_plan
 from common.planner_logic import build_plan
 from common.quality import build_quality_report
@@ -40,13 +42,17 @@ from common.schemas import (
     ScenePlanResponse,
     SegmentRequest,
     SegmentResponse,
+    SmartGenerationJobResponse,
+    SmartGenerationRequest,
+    SmartGenerationResultItem,
+    SmartPlannerDecision,
     SvgExportRequest,
     SvgExportResponse,
     TextValidationReport,
     TextValidationRequest,
 )
 from common.segment_logic import build_segment
-from common.utils.images import decode_data_url_to_image
+from common.utils.images import decode_data_url_to_image, encode_image_to_data_url
 from common.utils.masks import evaluate_edit
 
 from .benchmarks import BenchmarkStore
@@ -72,6 +78,8 @@ job_store = JobStore(JOBS_DIR)
 project_store = ProjectStore(PROJECTS_DIR)
 benchmark_store = BenchmarkStore(BENCHMARKS_DIR)
 gateway_auth = GatewayAuthConfig(GATEWAY_API_TOKEN)
+smart_job_metadata: dict[str, dict] = {}
+smart_job_plans: dict[str, SmartPlannerDecision] = {}
 
 app = FastAPI(title="Science Diagram Gateway", version="0.1.0")
 app.add_middleware(
@@ -158,6 +166,229 @@ async def init_generate(payload: InitGenerateRequest) -> InitGenerateResponse:
         return await generate_initial_candidates(payload, flux_init_url=FLUX_INIT_URL)
     except InitProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+def _smart_failure_response(
+    *,
+    decision: SmartPlannerDecision,
+    message: str,
+    error: str,
+    metadata: dict,
+) -> SmartGenerationJobResponse:
+    return SmartGenerationJobResponse(
+        job_id=uuid.uuid4().hex[:12],
+        status="failed",
+        task_type=decision.task_type,
+        message=message,
+        progress=1.0,
+        planner=decision,
+        metadata=metadata,
+        error=error,
+    )
+
+
+def _smart_result_from_generate_response(result: GenerateResponse, metadata: dict) -> SmartGenerationResultItem:
+    return SmartGenerationResultItem(
+        image_url=result.result_image,
+        thumbnail_url=result.artifacts.get("result"),
+        metadata_id=result.run_id,
+        is_diagnostic_result=bool(metadata.get("is_diagnostic_result")),
+        metadata=metadata,
+    )
+
+
+def _smart_response_from_job(snapshot: JobSnapshot) -> SmartGenerationJobResponse:
+    metadata = smart_job_metadata.get(snapshot.job_id, {})
+    decision = smart_job_plans.get(snapshot.job_id)
+    task_type = decision.task_type if decision else metadata.get("task_type", "local_inpaint")
+    status_map = {
+        "CREATED": "queued",
+        "PLANNING": "planning",
+        "SEGMENTING": "generating",
+        "EXECUTING": "generating",
+        "EVALUATING": "generating",
+        "DONE": "completed",
+        "FAILED": "failed",
+        "CANCELLED": "cancelled",
+    }
+    results = []
+    if snapshot.result:
+        results.append(_smart_result_from_generate_response(snapshot.result, metadata))
+    return SmartGenerationJobResponse(
+        job_id=snapshot.job_id,
+        status=status_map.get(snapshot.status, "failed"),
+        task_type=task_type,
+        message=snapshot.error or snapshot.message,
+        progress=snapshot.progress,
+        results=results,
+        planner=decision,
+        metadata=metadata,
+        error=snapshot.error,
+        generate_response=snapshot.result.model_dump() if snapshot.result else None,
+    )
+
+
+def _legacy_task_for_decision(decision: SmartPlannerDecision) -> str:
+    if decision.task_type == "outpainting":
+        return "image-outpainting"
+    if decision.subtask_type == "object_removal":
+        return "object-removal"
+    return "text-guided"
+
+
+def _full_image_mask(source_image: str) -> str:
+    image = decode_data_url_to_image(source_image, mode="RGB")
+    mask = Image.new("L", image.size, 255)
+    return encode_image_to_data_url(mask)
+
+
+def _generate_request_from_smart(payload: SmartGenerationRequest, decision: SmartPlannerDecision) -> GenerateRequest:
+    if not payload.source_image:
+        raise HTTPException(status_code=400, detail="source_image is required for image editing tasks.")
+    if decision.requires_mask and not payload.mask_image:
+        raise HTTPException(status_code=400, detail="mask_image is required for local inpaint tasks.")
+    mask_image = payload.mask_image
+    if not mask_image and decision.task_type in {"image_variation", "outpainting"}:
+        mask_image = _full_image_mask(payload.source_image)
+    return GenerateRequest(
+        source_image=payload.source_image,
+        instruction=payload.prompt,
+        task=_legacy_task_for_decision(decision),
+        mask_image=mask_image,
+        plan=PlanResponse(
+            task=_legacy_task_for_decision(decision),
+            task_prompt=decision.normalized_prompt,
+            negative_prompt=decision.negative_prompt,
+            mask_strategy="user-mask" if payload.mask_image else "smart-generation",
+            reasoning="统一生成入口完成任务判断。",
+            warnings=decision.warnings,
+        ),
+        steps=payload.options.steps,
+        guidance_scale=payload.options.guidance_scale,
+        seed=payload.options.seed,
+        negative_prompt=decision.negative_prompt,
+        smart_metadata=smart_metadata(
+            request=payload,
+            decision=decision,
+            provider="powerpaint",
+            fallback_used=False,
+            is_diagnostic_result=False,
+        ),
+    )
+
+
+@app.post("/api/generation/jobs", response_model=SmartGenerationJobResponse)
+async def create_generation_job(
+    payload: SmartGenerationRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+) -> SmartGenerationJobResponse:
+    decision = build_smart_generation_plan(payload)
+    base_metadata = smart_metadata(
+        request=payload,
+        decision=decision,
+        provider="powerpaint" if decision.task_type != "text_to_image" else "flux-local",
+        fallback_used=False,
+        is_diagnostic_result=False,
+    )
+
+    if decision.need_user_clarification:
+        return _smart_failure_response(
+            decision=decision,
+            message=decision.clarification_question or "需要补充修改区域。",
+            error="USER_CLARIFICATION_REQUIRED",
+            metadata=base_metadata,
+        )
+
+    if decision.task_type == "text_to_image":
+        scene_plan = build_scene_plan(
+            ScenePlanRequest(
+                instruction=payload.prompt,
+                candidate_count=payload.options.num_outputs,
+                seed=payload.options.seed,
+            )
+        )
+        try:
+            candidates = await generate_initial_candidates(
+                InitGenerateRequest(scene_plan=scene_plan, seed=payload.options.seed, provider="flux-local"),
+                flux_init_url=FLUX_INIT_URL,
+            )
+        except InitProviderError:
+            return _smart_failure_response(
+                decision=decision,
+                message="文生图模型当前不可用，请检查 FLUX 配置。",
+                error="TEXT_TO_IMAGE_MODEL_UNAVAILABLE",
+                metadata={**base_metadata, "provider_unavailable": True},
+            )
+        except Exception as exc:
+            return _smart_failure_response(
+                decision=decision,
+                message="文生图模型当前不可用，请检查 FLUX 配置。",
+                error="TEXT_TO_IMAGE_MODEL_UNAVAILABLE",
+                metadata={**base_metadata, "provider_unavailable": True, "provider_error": str(exc)},
+            )
+
+        is_diagnostic = bool(candidates.fallback_used)
+        metadata = smart_metadata(
+            request=payload,
+            decision=decision,
+            provider=candidates.used_provider or candidates.provider,
+            fallback_used=candidates.fallback_used,
+            is_diagnostic_result=is_diagnostic,
+        )
+        return SmartGenerationJobResponse(
+            job_id=uuid.uuid4().hex[:12],
+            status="completed",
+            task_type=decision.task_type,
+            message=(
+                "当前文生图模型不可用，以下结果只是诊断占位。"
+                if is_diagnostic
+                else "文生图生成完成。"
+            ),
+            progress=1.0,
+            results=[
+                SmartGenerationResultItem(
+                    image_url=candidate.image,
+                    thumbnail_url=None,
+                    metadata_id=candidate.id,
+                    is_diagnostic_result=is_diagnostic,
+                    metadata={**metadata, "candidate_metadata": candidate.metadata},
+                )
+                for candidate in candidates.candidates
+            ],
+            planner=decision,
+            metadata=metadata,
+        )
+
+    generate_request = _generate_request_from_smart(payload, decision)
+    snapshot = job_store.create("Queued for generation")
+    smart_job_metadata[snapshot.job_id] = base_metadata
+    smart_job_plans[snapshot.job_id] = decision
+    background_tasks.add_task(
+        run_generate_job,
+        snapshot.job_id,
+        generate_request,
+        current_base_url(request),
+        1,
+    )
+    return _smart_response_from_job(snapshot)
+
+
+@app.get("/api/generation/jobs/{job_id}", response_model=SmartGenerationJobResponse)
+async def get_generation_job(job_id: str) -> SmartGenerationJobResponse:
+    snapshot = job_store.get(job_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return _smart_response_from_job(snapshot)
+
+
+@app.post("/api/generation/jobs/{job_id}/cancel", response_model=SmartGenerationJobResponse)
+async def cancel_generation_job(job_id: str) -> SmartGenerationJobResponse:
+    try:
+        snapshot = job_store.cancel(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Job not found.") from exc
+    return _smart_response_from_job(snapshot)
 
 
 @app.post("/api/canvas/validate-text", response_model=TextValidationReport)
@@ -330,11 +561,24 @@ async def generate_pipeline(
         "plan": plan_payload.model_dump(),
         "evaluation": evaluation.model_dump(),
         "quality_report": quality_report.model_dump(),
+        "smart_generation": payload.smart_metadata,
         "selected_asset_id": payload.selected_asset_id,
         "task": payload.task or plan_payload.task,
         "canvas_state_before": payload.canvas_state.model_dump() if payload.canvas_state else None,
         "canvas_state_after": canvas_state_after.model_dump() if canvas_state_after else None,
     }
+    for key in (
+        "task_type",
+        "subtask_type",
+        "planner_confidence",
+        "fallback_used",
+        "is_diagnostic_result",
+        "resize_strategy",
+        "postprocess_blending",
+    ):
+        if key in payload.smart_metadata:
+            quality_report.prompt.parameters[f"smart_{key}"] = payload.smart_metadata[key]
+    metadata["quality_report"] = quality_report.model_dump()
     (run_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return GenerateResponse(

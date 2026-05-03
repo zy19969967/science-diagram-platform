@@ -258,7 +258,56 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 
 这个 readiness 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档，不会主动调用 Qwen3.5、SAM2.1、PowerPaint 或本地 FLUX 模型。
 
-## 9. 首次运行为什么会慢
+### 8.1 合并本次 smart generation 后的接口检查
+
+本次版本的默认前端主流程会调用统一入口：
+
+```text
+POST /api/generation/jobs
+GET /api/generation/jobs/{job_id}
+```
+
+服务器更新并重启 `gateway`、`flux`、`powerpaint` 后，先用一个不带图片的请求确认新接口可用：
+
+```bash
+curl -sS -X POST http://127.0.0.1:19080/api/generation/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"一张简单的科学示意图","options":{"num_outputs":1,"quality":"standard"}}'
+```
+
+如果 `flux` 正常，响应会返回 `queued`、`planning`、`generating` 或 `completed` 状态，并带有 `job_id`。继续轮询：
+
+```bash
+curl -sS http://127.0.0.1:19080/api/generation/jobs/<job_id>
+```
+
+如果本地 FLUX 不可用，文生图请求应该明确失败，例如返回 `TEXT_TO_IMAGE_MODEL_UNAVAILABLE`，而不是返回伪装成正常生成结果的占位图。局部编辑请求需要上传图片和 mask；有图有 mask 时后端会自动路由到 `local_inpaint`，前端不再让用户选择 PowerPaint 内部任务类型。
+
+如果配置了 `GATEWAY_API_TOKEN`，上面两个请求都要加：
+
+```bash
+-H "Authorization: Bearer <token>"
+```
+
+## 9. 更新项目
+
+以后服务器更新 `main` 时，推荐按这个顺序：
+
+```bash
+cd /home/common/yzhu_2025/science-diagram-platform
+git pull origin main
+bash scripts/setup_conda_envs.sh
+bash scripts/build_frontend.sh
+bash scripts/stop_all_tmux.sh
+bash scripts/start_all_tmux.sh --with-frontend
+bash scripts/status_tmux.sh
+bash scripts/check_services.sh
+curl http://127.0.0.1:19080/api/deployment/readiness
+```
+
+如果只是代码更新且依赖没有变化，可以跳过 `bash scripts/setup_conda_envs.sh`；但本次合并包含前端构建产物变化，服务器上必须重新执行 `bash scripts/build_frontend.sh`。如果修改了 `GATEWAY_API_TOKEN` 或 `VITE_API_TOKEN`，也必须重新构建前端。
+
+## 10. 首次运行为什么会慢
 
 首次启动或首次请求时，服务会下载或加载：
 
@@ -270,17 +319,17 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 因此第一次调用 `/api/plan`、`/api/segment`、`/api/generate` 明显偏慢是正常的。
 第一次调用 `/api/init-generate` 且命中本地 FLUX 时也会加载 FLUX 模型，建议先用小尺寸请求预热。
 
-## 10. 常见问题
+## 11. 常见问题
 
-### 10.1 Conda 环境能不能互相通信
+### 11.1 Conda 环境能不能互相通信
 
 可以。它们不是直接共享 Python 包，而是通过 HTTP 端口通信。
 
-### 10.2 GPU 冲突
+### 11.2 GPU 冲突
 
 如果某张卡已经被占用，直接改 `.env.nodocker` 里的 GPU 编号，然后重启对应脚本。
 
-### 10.3 前端打开后请求失败
+### 11.3 前端打开后请求失败
 
 优先检查：
 
@@ -289,8 +338,9 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 - 防火墙是否放行前端端口
 - 如果启用了 token，`GATEWAY_API_TOKEN` 和构建前端时的 `VITE_API_TOKEN` 是否一致
 - 修改 `VITE_API_TOKEN` 后是否重新运行了 `bash scripts/build_frontend.sh`
+- 浏览器主流程请求是否打到了 `/api/generation/jobs`
 
-### 10.4 PowerPaint 没启动
+### 11.4 PowerPaint 没启动
 
 优先检查：
 
@@ -299,7 +349,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 - `bash scripts/fetch_powerpaint_model.sh` 是否已经把 `PowerPaint 2.1` 权重拉到本地
 - 相关 Python 依赖是否安装完整
 
-### 10.5 本地 FLUX 初图失败
+### 11.5 本地 FLUX 初图失败
 
 优先检查：
 
@@ -309,9 +359,9 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 - 如果设置了 `FLUX_LOCAL_FILES_ONLY=true`，模型权重是否已经在本地缓存或模型目录中
 - `FLUX_CUDA_VISIBLE_DEVICES` 指向的 GPU 是否空闲
 
-Gateway 的默认 `auto` 初图请求在本地 FLUX 不可用时会回退到确定性 fallback；显式 `flux-local` 请求会返回错误。
+旧的 `auto` 初图请求在本地 FLUX 不可用时仍可能回退到确定性 fallback；新的 `/api/generation/jobs` 文生图默认会明确失败，或只返回带 `is_diagnostic_result=true` 标记的诊断结果，不能当作正式生成质量。
 
-### 10.6 运行数据在哪里
+### 11.6 运行数据在哪里
 
 默认运行数据目录：
 
@@ -325,7 +375,7 @@ models            Hugging Face 与 PowerPaint 权重缓存
 
 迁移服务器或备份毕业设计演示数据时，至少备份 `data/` 和必要的 `models/`。
 
-### 10.7 PowerPaint Code And Weight Sources
+### 11.7 PowerPaint Code And Weight Sources
 
 - `POWERPAINT_REPO_GIT_URL` points to the PowerPaint code repository, by default `https://github.com/zhuang2002/PowerPaint.git`
 - `POWERPAINT_MODEL_GIT_URL` points to the `PowerPaint 2.1` weight repository, by default `https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1`
