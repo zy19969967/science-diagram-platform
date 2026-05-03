@@ -275,6 +275,7 @@ bash scripts/setup_conda_envs.sh
 bash scripts/start_all_tmux.sh --with-frontend
 bash scripts/check_gpu_envs.sh
 bash scripts/check_services.sh
+bash scripts/prewarm_models.sh
 ```
 
 无 Docker 路径会启动这些服务：
@@ -320,7 +321,7 @@ frontend   0.0.0.0:19084
 
 ### 首次请求很慢
 
-这是正常情况。先看日志确认模型正在下载或加载，不要急着重启容器。
+这是正常情况。先看日志确认模型正在下载或加载，不要急着重启容器。Conda/tmux 部署可以在演示前运行 `bash scripts/prewarm_models.sh` 顺序预热 `planner`、`segmenter`、`powerpaint` 和 `flux`。
 
 ### 磁盘不足
 

@@ -80,6 +80,14 @@ sudo docker compose --env-file .env up -d
 
 如果服务器不能使用 Docker、但可以使用 Conda，请看 [Conda Deployment README](docs/server-conda-deploy.md)，并使用 `scripts/setup_conda_envs.sh`、`scripts/start_all_tmux.sh`、`scripts/run_*.sh` 这组脚本。
 
+Conda 部署启动后，如果需要演示前提前把 Qwen3.5、SAM2、PowerPaint 和 FLUX 加载进显存，可以顺序运行：
+
+```bash
+bash scripts/prewarm_models.sh
+```
+
+脚本会生成一张小尺寸烧杯测试图并逐个触发 `planner`、`segmenter`、`powerpaint` 和 `flux`。不要并发预热；如果出现 CUDA OOM，请先调整 `.env.nodocker` 里的各服务 GPU 编号。
+
 浏览器访问：
 
 ```text

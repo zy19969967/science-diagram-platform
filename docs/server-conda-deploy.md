@@ -258,7 +258,54 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 
 这个 readiness 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档，不会主动调用 Qwen3.5、SAM2.1、PowerPaint 或本地 FLUX 模型。
 
-## 9. 首次运行为什么会慢
+## 9. 预热所有模型
+
+`planner`、`segmenter` 和 `flux` 默认采用惰性加载；服务进程启动成功不代表模型已经进入显存。演示前建议顺序预热一次所有模型：
+
+```bash
+bash scripts/prewarm_models.sh
+```
+
+这个脚本会生成一张 512x512 的烧杯测试图和 mask，然后按顺序触发：
+
+- `planner` 的 `/plan`
+- `segmenter` 的 `/segment`
+- `powerpaint` 的 `/generate`
+- `flux` 的 `/generate`
+- 最后执行 `bash scripts/check_services.sh`
+
+建议另开一个终端观察显存：
+
+```bash
+watch -n 2 nvidia-smi
+```
+
+如果某一步失败，脚本会停在对应服务并打印 HTTP 响应；再查看对应日志：
+
+```bash
+tail -n 200 logs/planner.log
+tail -n 200 logs/segmenter.log
+tail -n 200 logs/powerpaint.log
+tail -n 200 logs/flux.log
+```
+
+如果 FLUX 权重已经提前下载到本地目录，推荐配置：
+
+```bash
+FLUX_MODEL_REPO=/root/autodl-tmp/yzhu/science-diagram-platform/models/FLUX.2-klein-4B
+FLUX_LOCAL_FILES_ONLY=true
+FLUX_INIT_URL=http://127.0.0.1:19085
+```
+
+如果 FLUX 首次加载或生成超过默认 30 分钟，可以临时加大脚本超时时间：
+
+```bash
+PREWARM_CURL_MAX_TIME=3600 bash scripts/prewarm_models.sh
+```
+
+不要并发预热多个模型；如果预热时出现 CUDA OOM，需要重新分配 `.env.nodocker` 里的 `POWERPAINT_CUDA_VISIBLE_DEVICES`、`PLANNER_CUDA_VISIBLE_DEVICES`、`SEGMENTER_CUDA_VISIBLE_DEVICES` 和 `FLUX_CUDA_VISIBLE_DEVICES`，确保每个服务指向真实且有足够空闲显存的 GPU。
+
+## 10. 首次运行为什么会慢
 
 首次启动或首次请求时，服务会下载或加载：
 
@@ -270,17 +317,17 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 因此第一次调用 `/api/plan`、`/api/segment`、`/api/generate` 明显偏慢是正常的。
 第一次调用 `/api/init-generate` 且命中本地 FLUX 时也会加载 FLUX 模型，建议先用小尺寸请求预热。
 
-## 10. 常见问题
+## 11. 常见问题
 
-### 10.1 Conda 环境能不能互相通信
+### 11.1 Conda 环境能不能互相通信
 
 可以。它们不是直接共享 Python 包，而是通过 HTTP 端口通信。
 
-### 10.2 GPU 冲突
+### 11.2 GPU 冲突
 
 如果某张卡已经被占用，直接改 `.env.nodocker` 里的 GPU 编号，然后重启对应脚本。
 
-### 10.3 前端打开后请求失败
+### 11.3 前端打开后请求失败
 
 优先检查：
 
@@ -290,7 +337,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 - 如果启用了 token，`GATEWAY_API_TOKEN` 和构建前端时的 `VITE_API_TOKEN` 是否一致
 - 修改 `VITE_API_TOKEN` 后是否重新运行了 `bash scripts/build_frontend.sh`
 
-### 10.4 PowerPaint 没启动
+### 11.4 PowerPaint 没启动
 
 优先检查：
 
@@ -299,7 +346,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 - `bash scripts/fetch_powerpaint_model.sh` 是否已经把 `PowerPaint 2.1` 权重拉到本地
 - 相关 Python 依赖是否安装完整
 
-### 10.5 本地 FLUX 初图失败
+### 11.5 本地 FLUX 初图失败
 
 优先检查：
 
@@ -311,7 +358,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 
 Gateway 的默认 `auto` 初图请求在本地 FLUX 不可用时会回退到确定性 fallback；显式 `flux-local` 请求会返回错误。
 
-### 10.6 运行数据在哪里
+### 11.6 运行数据在哪里
 
 默认运行数据目录：
 
@@ -325,7 +372,7 @@ models            Hugging Face 与 PowerPaint 权重缓存
 
 迁移服务器或备份毕业设计演示数据时，至少备份 `data/` 和必要的 `models/`。
 
-### 10.7 PowerPaint Code And Weight Sources
+### 11.7 PowerPaint Code And Weight Sources
 
 - `POWERPAINT_REPO_GIT_URL` points to the PowerPaint code repository, by default `https://github.com/zhuang2002/PowerPaint.git`
 - `POWERPAINT_MODEL_GIT_URL` points to the `PowerPaint 2.1` weight repository, by default `https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1`
