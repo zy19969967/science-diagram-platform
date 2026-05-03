@@ -69,14 +69,14 @@ Docker 部署：
 ```bash
 mkdir -p /home/common/yzhu_2025
 cd /home/common/yzhu_2025
-git clone -b codex/report-alignment-phase1 https://github.com/zy19969967/science-diagram-platform.git
+git clone https://github.com/zy19969967/science-diagram-platform.git
 cd science-diagram-platform
 cp .env.server.example .env
 sudo docker compose --env-file .env build
 sudo docker compose --env-file .env up -d
 ```
 
-如果 PR 已经合并到 `main`，可以把上面的 `-b codex/report-alignment-phase1` 去掉，直接部署默认分支。
+当前完整功能已经落在 `main`，服务器直接部署默认分支即可。
 
 如果服务器不能使用 Docker、但可以使用 Conda，请看 [Conda Deployment README](docs/server-conda-deploy.md)，并使用 `scripts/setup_conda_envs.sh`、`scripts/start_all_tmux.sh`、`scripts/run_*.sh` 这组脚本。
 

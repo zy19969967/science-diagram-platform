@@ -73,6 +73,7 @@ services:
       CUDA_VISIBLE_DEVICES: ${PLANNER_CUDA_VISIBLE_DEVICES:-3}
       NVIDIA_VISIBLE_DEVICES: ${PLANNER_CUDA_VISIBLE_DEVICES:-3}
       HF_HOME: /models/huggingface
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - ./models:/models
     gpus: all
@@ -99,6 +100,7 @@ services:
       CUDA_VISIBLE_DEVICES: ${SEGMENTER_CUDA_VISIBLE_DEVICES:-6}
       NVIDIA_VISIBLE_DEVICES: ${SEGMENTER_CUDA_VISIBLE_DEVICES:-6}
       HF_HOME: /models/huggingface
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - ./models:/models
     gpus: all
@@ -129,6 +131,7 @@ services:
       CUDA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-2}
       NVIDIA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-2}
       HF_HOME: /models/huggingface
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - ./models:/models
     gpus: all
@@ -159,6 +162,7 @@ services:
       CUDA_VISIBLE_DEVICES: ${FLUX_CUDA_VISIBLE_DEVICES:-7}
       NVIDIA_VISIBLE_DEVICES: ${FLUX_CUDA_VISIBLE_DEVICES:-7}
       HF_HOME: /models/huggingface
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - ./models:/models
     gpus: all

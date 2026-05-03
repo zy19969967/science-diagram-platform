@@ -18,6 +18,7 @@ class LocalFluxDeploymentTest(unittest.TestCase):
         self.assertIn("FLUX_GUIDANCE_SCALE: ${FLUX_GUIDANCE_SCALE:-1.0}", compose)
         self.assertIn("FLUX_MAX_SEQUENCE_LENGTH: ${FLUX_MAX_SEQUENCE_LENGTH:-512}", compose)
         self.assertIn("FLUX_CUDA_VISIBLE_DEVICES", compose)
+        self.assertIn("HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}", compose)
         self.assertIn("condition: service_healthy", compose)
 
     def test_conda_scripts_include_local_flux_service(self) -> None:
@@ -28,6 +29,7 @@ class LocalFluxDeploymentTest(unittest.TestCase):
 
         self.assertIn("CONDA_ENV_FLUX", common)
         self.assertIn("FLUX_PORT", common)
+        self.assertIn('HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"', common)
         self.assertIn('FLUX_MODEL_REPO="${FLUX_MODEL_REPO:-black-forest-labs/FLUX.2-klein-4B}"', common)
         self.assertIn('FLUX_GUIDANCE_SCALE="${FLUX_GUIDANCE_SCALE:-1.0}"', common)
         self.assertIn('FLUX_MAX_SEQUENCE_LENGTH="${FLUX_MAX_SEQUENCE_LENGTH:-512}"', common)
@@ -43,6 +45,7 @@ class LocalFluxDeploymentTest(unittest.TestCase):
             self.assertIn("FLUX_LOCAL_FILES_ONLY", text)
             self.assertIn("FLUX_GUIDANCE_SCALE=1.0", text)
             self.assertIn("FLUX_MAX_SEQUENCE_LENGTH=512", text)
+            self.assertIn("HF_ENDPOINT=https://hf-mirror.com", text)
 
 
 if __name__ == "__main__":

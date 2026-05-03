@@ -9,7 +9,7 @@
 
 可以部署，但要注意 5 个边界：
 
-1. 当前完整功能在 `codex/report-alignment-phase1` 分支上。如果 PR 还没有合并到 `main`，服务器必须部署这个分支；如果已经合并，再部署 `main`。
+1. 当前完整功能已经落在 `main`，服务器直接部署默认分支；不要再拉旧的 `codex/report-alignment-phase1` 分支。
 2. 推荐优先使用 Docker Compose。它会同时启动 `frontend`、`gateway`、`planner`、`segmenter`、`powerpaint` 和本地 `flux` 服务。
 3. 项目不会把 Qwen3.5、SAM2.1、PowerPaint 2.1、FLUX 权重提交进 Git。首次启动或首次请求时需要下载，或者你提前把模型放到服务器缓存目录。
 4. 当前部署是单节点、单用户、文件持久化方案，适合毕业设计演示、内网测试和受控服务器环境；不是公网多租户生产系统。
@@ -68,14 +68,7 @@ mkdir -p /home/common/yzhu_2025
 cd /home/common/yzhu_2025
 ```
 
-如果 PR 还没有合并到 `main`，现在用：
-
-```bash
-git clone -b codex/report-alignment-phase1 https://github.com/zy19969967/science-diagram-platform.git
-cd science-diagram-platform
-```
-
-如果 PR 已经合并到 `main`，用：
+当前完整功能已经落在 `main`，直接克隆默认分支：
 
 ```bash
 git clone https://github.com/zy19969967/science-diagram-platform.git
@@ -121,6 +114,7 @@ POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint-v2-1
 POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1
 POWERPAINT_VERSION=ppt-v2
 POWERPAINT_MODEL_DIR_NAME=ppt-v2-1
+HF_ENDPOINT=https://hf-mirror.com
 
 FLUX_INIT_URL=
 FLUX_MODEL_REPO=black-forest-labs/FLUX.2-klein-4B
@@ -137,6 +131,7 @@ VITE_API_TOKEN=
 
 - `FLUX_INIT_URL` 留空时，Docker Compose 会默认让 Gateway 调用本地 `http://flux:8004`。
 - 初图生成不会调用外部 FLUX API；Gateway 只访问 Compose 内部的本地 `flux` 服务。
+- `HF_ENDPOINT=https://hf-mirror.com` 会让 Hugging Face 权重下载优先走镜像站；如果镜像站不可用，可以改回 `https://huggingface.co` 或清空该变量。
 - 默认 FLUX 模型是 Apache 2.0 开源的 `black-forest-labs/FLUX.2-klein-4B`，通常需要约 13GB VRAM；首次启动或模型更新时可能需要从 Hugging Face 下载权重。
 - 如果你已经有服务器本地 FLUX 模型目录，可以把 `FLUX_MODEL_REPO` 改成那个目录。
 - 如果设置 `GATEWAY_API_TOKEN`，必须把 `VITE_API_TOKEN` 设置成同一个值，并重新 build 前端。
@@ -262,15 +257,7 @@ FLUX_LOCAL_FILES_ONLY=true
 
 ## 11. 更新服务器代码
 
-如果当前仍部署 PR 分支：
-
-```bash
-cd /home/common/yzhu_2025/science-diagram-platform
-git pull origin codex/report-alignment-phase1
-sudo docker compose --env-file .env up -d --build
-```
-
-如果已经合并到 `main` 并切换主分支：
+当前部署 `main` 时：
 
 ```bash
 cd /home/common/yzhu_2025/science-diagram-platform

@@ -2,7 +2,7 @@
 
 这份文档适用于服务器无法使用 Docker、但可以使用 Conda 环境的场景。当前项目已经把无 Docker 流程切换为多服务、多 Conda 环境的部署方式。
 
-当前可以部署，但如果 PR 还没有合并到 `main`，请部署 `codex/report-alignment-phase1` 分支；如果 PR 已经合并，则部署 `main` 即可。
+当前完整功能已经落在 `main`，服务器直接部署默认分支即可。
 
 当前项目本身就是多服务架构，因此最稳的替代方案是：
 
@@ -44,17 +44,7 @@
 
 ## 3. 克隆仓库
 
-如果 PR 还没有合并到 `main`，现在用：
-
-```bash
-mkdir -p /home/common/yzhu_2025
-cd /home/common/yzhu_2025
-git clone -b codex/report-alignment-phase1 https://github.com/zy19969967/science-diagram-platform.git
-cd science-diagram-platform
-cp .env.nodocker.example .env.nodocker
-```
-
-如果 PR 已经合并到 `main`，则使用：
+当前完整功能已经落在 `main`，直接克隆默认分支：
 
 ```bash
 mkdir -p /home/common/yzhu_2025
@@ -131,6 +121,7 @@ BENCHMARKS_DIR=/home/common/yzhu_2025/science-diagram-platform/data/benchmarks
 - `gateway` 默认绑定在 `127.0.0.1:19080`
 - 如果你希望公网直接访问网关，可以把 `GATEWAY_HOST` 改成 `0.0.0.0`
 - `FLUX_INIT_URL` 默认指向本机 `flux` 服务；Gateway 的 `auto` 初图生成会优先调用它
+- `HF_ENDPOINT=https://hf-mirror.com` 会让 Hugging Face 权重下载优先走镜像站；如果镜像站不可用，可以改回 `https://huggingface.co` 或清空该变量
 - 默认 FLUX 模型是 Apache 2.0 开源的 `black-forest-labs/FLUX.2-klein-4B`，通常需要约 13GB VRAM
 - 初图生成不会调用外部 FLUX API；Gateway 只访问本机 `flux` 服务，只有下载或更新权重时可能访问 Hugging Face
 - `FLUX_MODEL_REPO` 可以是 Hugging Face repo，也可以是服务器上的本地模型目录；提前准备好权重时可设置 `FLUX_LOCAL_FILES_ONLY=true`

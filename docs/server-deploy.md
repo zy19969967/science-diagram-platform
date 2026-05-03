@@ -17,7 +17,7 @@
 
 可以部署，但请按下面边界理解：
 
-- 当前推荐部署版本是 PR 分支 `codex/report-alignment-phase1`；如果 PR 已经合并到 `main`，再改为部署 `main`。
+- 当前推荐部署版本是 `main`；不要再拉旧的 `codex/report-alignment-phase1` 分支。
 - 推荐优先使用 Docker Compose，因为它会同时编排 `frontend`、`gateway`、`planner`、`segmenter`、`powerpaint` 和本地 `flux` 服务。
 - 服务器必须能访问或已经缓存 Qwen3.5、SAM2.1、PowerPaint 2.1 和 FLUX 权重；仓库不会把这些大模型权重提交进 Git。
 - 这是单节点、单用户、文件持久化优先的部署，适合毕业设计演示、内网测试和受控服务器环境；不是公网多租户生产系统。
@@ -62,16 +62,7 @@ bash scripts/server-preflight.sh
 
 ## 4. 克隆项目
 
-如果 PR 还没有合并到 `main`，现在应当显式拉取当前开发分支：
-
-```bash
-mkdir -p /home/common/yzhu_2025
-cd /home/common/yzhu_2025
-git clone -b codex/report-alignment-phase1 https://github.com/zy19969967/science-diagram-platform.git
-cd science-diagram-platform
-```
-
-如果 PR 已经合并到 `main`，则使用：
+当前完整功能已经落在 `main`，直接克隆默认分支：
 
 ```bash
 mkdir -p /home/common/yzhu_2025
@@ -80,7 +71,7 @@ git clone https://github.com/zy19969967/science-diagram-platform.git
 cd science-diagram-platform
 ```
 
-两种方式二选一，不要在同一个目录重复 clone。
+不要在同一个目录重复 clone；如果目录已存在，请按“更新项目”章节执行 `git pull origin main`。
 
 ## 5. 准备环境变量
 
@@ -105,6 +96,7 @@ POWERPAINT_CUDA_VISIBLE_DEVICES=4
 PLANNER_CUDA_VISIBLE_DEVICES=5
 SEGMENTER_CUDA_VISIBLE_DEVICES=6
 FLUX_CUDA_VISIBLE_DEVICES=7
+HF_ENDPOINT=https://hf-mirror.com
 TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
 TORCH_VERSION=2.5.1
 TORCHVISION_VERSION=0.20.1
@@ -137,6 +129,7 @@ FLUX_LOCAL_FILES_ONLY=false
 - 如果设置了 `GATEWAY_API_TOKEN`，前端构建也要设置相同的 `VITE_API_TOKEN`，Docker Compose 会把它传给 Vite build
 - `VITE_API_TOKEN` 会进入静态前端 bundle，只适合内网或受控演示边界，不是公网多租户认证方案
 - `PowerPaint 2.1` 仍然复用 BrushNet 的 `ppt-v2` 推理分支，因此 `POWERPAINT_VERSION` 保持 `ppt-v2`
+- `HF_ENDPOINT=https://hf-mirror.com` 会让 planner、segmenter、powerpaint 权重下载和 FLUX.2-klein-4B 下载优先走 Hugging Face 镜像站；如果镜像站不可用，可以改回 `https://huggingface.co` 或清空该变量
 - `flux` 是本地初图服务，Compose 内部默认把 `FLUX_INIT_URL` 设置为 `http://flux:8004`
 - 默认 FLUX 模型是 Apache 2.0 开源的 `black-forest-labs/FLUX.2-klein-4B`，通常需要约 13GB VRAM
 - 初图生成阶段不会调用外部 FLUX API；只有首次下载或更新模型权重时可能访问 Hugging Face
@@ -274,13 +267,6 @@ sudo docker info | grep 'Docker Root Dir'
 
 ```bash
 cd /home/common/yzhu_2025/science-diagram-platform
-git pull origin codex/report-alignment-phase1
-sudo docker compose --env-file .env up -d --build
-```
-
-如果你已经把 PR 合并到 `main` 并切回主分支，则使用：
-
-```bash
 git pull origin main
 sudo docker compose --env-file .env up -d --build
 ```
