@@ -43,7 +43,7 @@ class SegmenterRuntime:
         self.model_dtype = os.getenv("SEGMENTER_MODEL_DTYPE", "float16")
         self.local_files_only = _as_bool(os.getenv("SEGMENTER_LOCAL_FILES_ONLY"), default=False)
         self.box_padding_ratio = float(os.getenv("SEGMENTER_BOX_PADDING_RATIO", "0.18"))
-        self.mask_threshold = float(os.getenv("SEGMENTER_MASK_THRESHOLD", "0.0"))
+        self.mask_threshold = float(os.getenv("SEGMENTER_MASK_THRESHOLD", "0.3"))
         self.use_placement_box = _as_bool(os.getenv("SEGMENTER_USE_PLACEMENT_BOX"), default=False)
         self._lock = threading.Lock()
         self._model: Any | None = None
@@ -162,10 +162,16 @@ class SegmenterRuntime:
 
         if masks.ndim == 4:
             mask_candidates = masks[0]
-            score_candidates = score_array[0][0] if score_array is not None and score_array.ndim >= 3 else None
+            if score_array is not None and score_array.ndim >= 3:
+                score_candidates = score_array[0].mean(axis=0) if score_array.shape[1] > 1 else score_array[0][0]
+            else:
+                score_candidates = None
         elif masks.ndim == 3:
             mask_candidates = masks
-            score_candidates = score_array[0] if score_array is not None and score_array.ndim >= 2 else None
+            if score_array is not None and score_array.ndim >= 2:
+                score_candidates = score_array[0].mean(axis=0) if score_array.shape[1] > 1 else score_array[0]
+            else:
+                score_candidates = None
         else:
             return masks
 

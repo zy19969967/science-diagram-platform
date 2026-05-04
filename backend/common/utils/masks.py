@@ -15,23 +15,10 @@ def normalize_mask(mask: Image.Image, size: tuple[int, int]) -> Image.Image:
 def dilate_mask(mask: Image.Image, radius: int) -> Image.Image:
     if radius <= 0:
         return mask.copy()
-    arr = np.asarray(mask.convert("L"))
-    h, w = arr.shape
-    dilated = np.zeros_like(arr)
-    for dy in range(-radius, radius + 1):
-        for dx in range(-radius, radius + 1):
-            if dx * dx + dy * dy <= radius * radius:
-                shifted = np.roll(np.roll(arr, dx, axis=1), dy, axis=0)
-                if dx > 0:
-                    shifted[:, :dx] = 0
-                elif dx < 0:
-                    shifted[:, dx:] = 0
-                if dy > 0:
-                    shifted[:dy, :] = 0
-                elif dy < 0:
-                    shifted[dy:, :] = 0
-                dilated = np.maximum(dilated, shifted)
-    return Image.fromarray(dilated.astype(np.uint8), mode="L")
+    from scipy.ndimage import maximum_filter
+    arr = np.asarray(mask.convert("L"), dtype=np.uint8)
+    dilated = maximum_filter(arr, size=2 * radius + 1)
+    return Image.fromarray(dilated, mode="L")
 
 
 def blur_mask(mask: Image.Image, radius: int) -> Image.Image:

@@ -511,21 +511,38 @@ async def generate_pipeline(
     source_image = decode_data_url_to_image(payload.source_image, mode="RGB")
 
     use_sam2 = plan_payload.mask_strategy == "sam2-refine" and bool(payload.mask_image or payload.point_prompts or payload.asset_placement)
-    if progress:
-        progress("SEGMENTING", 0.35, "Preparing edit mask" if not use_sam2 else "SAM-2 refining mask")
-    try:
-        normalized_mask = await segment(
-            SegmentRequest(
-                source_image=payload.source_image,
-                width=source_image.width,
-                height=source_image.height,
-                mask_image=payload.mask_image,
-                asset_placement=payload.asset_placement,
-                point_prompts=payload.point_prompts,
+    if use_sam2:
+        if progress:
+            progress("SEGMENTING", 0.35, "SAM-2 refining mask")
+        try:
+            normalized_mask = await segment(
+                SegmentRequest(
+                    source_image=payload.source_image,
+                    width=source_image.width,
+                    height=source_image.height,
+                    mask_image=payload.mask_image,
+                    asset_placement=payload.asset_placement,
+                    point_prompts=payload.point_prompts,
+                )
             )
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Unable to prepare a valid mask: {exc}") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"SAM-2 mask refinement failed: {exc}") from exc
+    else:
+        if progress:
+            progress("SEGMENTING", 0.30, "Normalizing user mask")
+        try:
+            normalized_mask = build_segment(
+                SegmentRequest(
+                    source_image=payload.source_image,
+                    width=source_image.width,
+                    height=source_image.height,
+                    mask_image=payload.mask_image,
+                    asset_placement=payload.asset_placement,
+                    point_prompts=payload.point_prompts,
+                )
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Unable to prepare a valid mask: {exc}") from exc
 
     raw_mask = decode_data_url_to_image(normalized_mask.mask_image, mode="L")
     softened_mask = soften_mask_edges(raw_mask, dilation=16, blur=12)
