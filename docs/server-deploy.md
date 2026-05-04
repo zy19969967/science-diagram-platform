@@ -6,7 +6,7 @@
 
 这份文档面向“本机开发、服务器运行”的部署方式，默认目标环境是 Ubuntu 22.04 + Docker Compose + NVIDIA GPU 服务器。当前仓库已经接入真实模型优先的运行链路：
 
-- `planner`：优先调用 `Qwen/Qwen3.5-4B`
+- `planner`：优先调用 `Qwen/Qwen3.5-35B-A3B`（MoE 35B/A3B）
 - `segmenter`：优先调用 `facebook/sam2.1-hiera-base-plus`
 - `powerpaint_service`：调用官方 `PowerPaint`
 - `flux`：本地 diffusers FLUX-compatible 初图服务，默认 `black-forest-labs/FLUX.2-klein-4B`
@@ -102,7 +102,7 @@ TORCH_VERSION=2.5.1
 TORCHVISION_VERSION=0.20.1
 
 POWERPAINT_REPO_GIT_URL=https://github.com/zhuang2002/PowerPaint.git
-PLANNER_MODEL_REPO=Qwen/Qwen3.5-4B
+PLANNER_MODEL_REPO=Qwen/Qwen3.5-35B-A3B
 SEGMENTER_MODEL_REPO=facebook/sam2.1-hiera-base-plus
 POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint-v2-1
 POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1
