@@ -273,6 +273,8 @@ class PlannerRuntime:
                     for asset in load_asset_catalog()
                 ],
             )
+            LOGGER.info("Qwen plan request | instruction=%s | has_image=%s", payload.instruction, bool(source_image))
+            LOGGER.debug("Qwen plan prompt: %s", prompt)
             messages = self._messages(prompt, include_image=source_image is not None)
             template = self._processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, enable_thinking=False)
 
@@ -291,9 +293,12 @@ class PlannerRuntime:
 
             input_len = inputs["input_ids"].shape[-1]
             decoded = self._processor.batch_decode(generated_ids[:, input_len:], skip_special_tokens=True)[0].strip()
+            LOGGER.info("Qwen raw output: %s", decoded[:500])
             raw = _extract_json_block(decoded)
             self._last_error = None
-            return self._normalize(payload, raw)
+            result = self._normalize(payload, raw)
+            LOGGER.info("Qwen plan result | task=%s | prompt=%s", result.task, result.task_prompt[:200])
+            return result
         except Exception as exc:
             self._last_error = str(exc)
             LOGGER.exception("Qwen planner fallback triggered: %s", exc)
@@ -305,6 +310,8 @@ class PlannerRuntime:
         try:
             self._load()
             prompt = _scene_plan_prompt(payload)
+            LOGGER.info("Qwen scene plan request | instruction=%s", payload.instruction)
+            LOGGER.debug("Qwen scene plan prompt: %s", prompt)
             messages = [
                 {"role": "system", "content": [{"type": "text", "text": (
                     "You are the scene planning service for a scientific diagram generation platform. "
@@ -326,9 +333,12 @@ class PlannerRuntime:
 
             input_len = inputs["input_ids"].shape[-1]
             decoded = self._processor.batch_decode(generated_ids[:, input_len:], skip_special_tokens=True)[0].strip()
+            LOGGER.info("Qwen scene raw output: %s", decoded[:500])
             raw = _extract_json_block(decoded)
             self._last_error = None
-            return _normalize_scene_plan(payload, raw)
+            result = _normalize_scene_plan(payload, raw)
+            LOGGER.info("Qwen scene plan result | type=%s | labels=%s", result.diagram_type, result.labels)
+            return result
         except Exception as exc:
             self._last_error = str(exc)
             LOGGER.exception("Qwen scene planner failed: %s", exc)
