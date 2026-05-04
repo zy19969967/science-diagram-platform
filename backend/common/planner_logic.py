@@ -98,7 +98,7 @@ def build_plan(payload: PlanRequest) -> PlanResponse:
 
     if task == "object-removal":
         task_prompt = "Remove the masked object entirely. Fill the area with the surrounding background texture. No visible seams, ghosting, or artifacts."
-        negative_prompt = "object remnants, ghost artifacts, blurry inpainting, mismatched texture, broken edges, extra object"
+        negative_prompt = "text, letters, words, watermark, object remnants, ghost artifacts, blurry inpainting, mismatched texture, broken edges, extra object"
         reasoning = "Detected removal intent."
     elif task == "image-outpainting":
         task_prompt = "Extend the canvas outward naturally. Maintain consistent lighting, structure, and style with the original image. No visible seams."
