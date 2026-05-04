@@ -73,7 +73,7 @@ class SmartGenerationPlannerTest(unittest.TestCase):
         self.assertEqual(decision.subtask_type, "object_replacement")
         self.assertEqual(decision.pipeline, "powerpaint_inpaint")
         self.assertTrue(decision.requires_mask)
-        self.assertIn("保持", decision.normalized_prompt)
+        self.assertIn("Preserve", decision.normalized_prompt)
 
     def test_image_without_mask_style_prompt_routes_to_image_variation(self) -> None:
         decision = build_smart_generation_plan(
