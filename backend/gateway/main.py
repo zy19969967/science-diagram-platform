@@ -692,11 +692,16 @@ async def run_generate_job(job_id: str, payload: GenerateRequest, base_url: str,
             result = await generate_pipeline(payload, base_url, progress=update)
             if job_store.is_cancel_requested(job_id):
                 raise JobCancelled()
+            planner_src = result.quality_report.prompt.parameters.get("planner_source", "unknown") if result.quality_report else "unknown"
+            psrc_label = "Qwen" if planner_src == "planner-service-or-fallback" else "fallback"
+            if job_id in smart_job_metadata:
+                smart_job_metadata[job_id]["planner_source"] = planner_src
+                smart_job_metadata[job_id]["planner_label"] = psrc_label
             job_store.update(
                 job_id,
                 status="DONE",
                 progress=1.0,
-                message="Generation complete",
+                message=f"[{psrc_label}] Generation complete",
                 result=result,
             )
             return
