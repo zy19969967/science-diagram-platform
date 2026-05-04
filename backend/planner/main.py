@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from common.init_logic import build_scene_plan
 from common.planner_logic import build_plan
-from common.schemas import PlanRequest, PlanResponse
+from common.schemas import PlanRequest, PlanResponse, ScenePlanRequest, ScenePlanResponse
 
 from .runtime import planner_runtime
 
@@ -19,3 +20,9 @@ def health() -> dict[str, object]:
 def plan(payload: PlanRequest) -> PlanResponse:
     planned = planner_runtime.plan(payload)
     return planned or build_plan(payload)
+
+
+@app.post("/init-plan", response_model=ScenePlanResponse)
+def init_plan(payload: ScenePlanRequest) -> ScenePlanResponse:
+    planned = planner_runtime.plan_scene(payload)
+    return planned or build_scene_plan(payload)

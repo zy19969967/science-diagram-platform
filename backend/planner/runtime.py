@@ -10,7 +10,7 @@ from typing import Any
 
 from common.assets import get_asset, load_asset_catalog
 from common.planner_logic import build_plan
-from common.schemas import PlanRequest, PlanResponse, TaskType
+from common.schemas import PlanRequest, PlanResponse, ScenePlanRequest, TaskType
 from common.utils.images import decode_data_url_to_image
 
 LOGGER = logging.getLogger(__name__)
@@ -280,6 +280,124 @@ class PlannerRuntime:
             self._last_error = str(exc)
             LOGGER.exception("Qwen planner fallback triggered: %s", exc)
             return None
+
+    def plan_scene(self, payload: "ScenePlanRequest") -> "ScenePlanResponse | None":
+        if not self._enabled():
+            return None
+        try:
+            self._load()
+            prompt = _scene_plan_prompt(payload)
+            messages = [
+                {"role": "system", "content": [{"type": "text", "text": (
+                    "You are the scene planning service for a scientific diagram generation platform. "
+                    "Given a user's natural language description, output a structured scene plan as a single JSON object. "
+                    "The plan will be consumed by FLUX.2 image generation model. "
+                    "Use English for prompts and labels. Return JSON only, no markdown fences."
+                )}]},
+                {"role": "user", "content": [{"type": "text", "text": prompt}]},
+            ]
+            template = self._processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+            inputs = self._processor(text=template, return_tensors="pt")
+            if hasattr(inputs, "to"):
+                inputs = inputs.to(self._device)
+            else:
+                inputs = {k: v.to(self._device) if hasattr(v, "to") else v for k, v in inputs.items()}
+
+            with self._torch.no_grad():
+                generated_ids = self._model.generate(**inputs, max_new_tokens=self.max_new_tokens, do_sample=False)
+
+            input_len = inputs["input_ids"].shape[-1]
+            decoded = self._processor.batch_decode(generated_ids[:, input_len:], skip_special_tokens=True)[0].strip()
+            raw = _extract_json_block(decoded)
+            self._last_error = None
+            return _normalize_scene_plan(payload, raw)
+        except Exception as exc:
+            self._last_error = str(exc)
+            LOGGER.exception("Qwen scene planner failed: %s", exc)
+            return None
+
+
+def _scene_plan_prompt(payload: "ScenePlanRequest") -> str:
+    schema = {
+        "diagram_type": "e.g. enzyme_reaction_diagram, cell_structure_diagram, laboratory_process_diagram, scientific_process_diagram",
+        "objects": [
+            {
+                "id": "obj_1",
+                "name": "Short label in Chinese or English",
+                "role": "One of: input, process, output, container, structure, relation",
+                "position": "left / center / right",
+                "visual": "Brief English visual description for FLUX (e.g. 'rounded protein shape')",
+            }
+        ],
+        "relations": [
+            {"source": "obj_1", "target": "obj_2", "type": "arrow"}
+        ],
+        "labels": ["All object names as a flat list"],
+        "positive_prompt": "Complete English prompt for FLUX text-to-image, clean scientific diagram style, white background, vector-like",
+        "negative_prompt": "photorealistic, watermark, blurry text, messy labels, extra arrows, 3D rendering",
+        "render_text_as_vector": False,
+    }
+    rules = [
+        "Extract 2-5 key scientific objects from the instruction.",
+        "Assign each object a spatial position (left/center/right) to form a logical flow.",
+        "Connect objects with arrow relations where there is a flow or dependency.",
+        "The positive_prompt must be a complete, detailed English prompt suitable for FLUX.2.",
+        "Return JSON only, no markdown fences.",
+    ]
+    return json.dumps({
+        "instruction": payload.instruction.strip(),
+        "width": payload.width,
+        "height": payload.height,
+        "style": payload.style,
+        "candidate_count": payload.candidate_count,
+        "seed": payload.seed,
+        "response_schema": schema,
+        "rules": rules,
+    }, ensure_ascii=False, indent=2)
+
+
+def _normalize_scene_plan(payload: "ScenePlanRequest", raw: dict[str, Any]) -> "ScenePlanResponse":
+    from common.schemas import ScenePlanObject, ScenePlanRelation, ScenePlanResponse as SPR
+
+    objects = []
+    for obj in raw.get("objects") or []:
+        objects.append(ScenePlanObject(
+            id=str(obj.get("id", f"obj_{len(objects)+1}")),
+            name=str(obj.get("name", "")),
+            role=str(obj.get("role", "structure")),
+            position=str(obj.get("position", "center")),
+            visual=str(obj.get("visual", "")),
+        ))
+
+    relations = []
+    for rel in raw.get("relations") or []:
+        relations.append(ScenePlanRelation(
+            source=str(rel.get("source", "")),
+            target=str(rel.get("target", "")),
+            type=str(rel.get("type", "arrow")),
+        ))
+
+    labels = [str(label) for label in (raw.get("labels") or []) if str(label).strip()]
+    if not labels:
+        labels = [obj.name for obj in objects if obj.name]
+
+    return SPR(
+        diagram_type=str(raw.get("diagram_type", "scientific_process_diagram")),
+        width=payload.width,
+        height=payload.height,
+        instruction=payload.instruction.strip(),
+        objects=objects,
+        relations=relations,
+        labels=labels,
+        style=payload.style,
+        positive_prompt=str(raw.get("positive_prompt", f"clean scientific diagram, {payload.style}, white background")),
+        negative_prompt=str(raw.get("negative_prompt", "photorealistic, watermark, blurry text, messy labels")),
+        render_text_as_vector=bool(raw.get("render_text_as_vector", False)),
+        candidate_count=payload.candidate_count,
+        seed=payload.seed or raw.get("seed", 42),
+        provider="qwen3.5",
+        warnings=[],
+    )
 
 
 planner_runtime = PlannerRuntime()

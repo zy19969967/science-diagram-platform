@@ -163,7 +163,11 @@ async def plan(payload: PlanRequest) -> PlanResponse:
 
 @app.post("/api/init-plan", response_model=ScenePlanResponse)
 async def init_plan(payload: ScenePlanRequest) -> ScenePlanResponse:
-    return build_scene_plan(payload)
+    try:
+        data = await post_json(f"{PLANNER_URL}/init-plan", payload.model_dump())
+        return ScenePlanResponse.model_validate(data)
+    except Exception:
+        return build_scene_plan(payload)
 
 
 @app.post("/api/init-generate", response_model=InitGenerateResponse)
@@ -240,6 +244,16 @@ def _legacy_task_for_decision(decision: SmartPlannerDecision) -> str:
     if decision.subtask_type == "object_removal":
         return "object-removal"
     return "text-guided"
+
+
+def _fitting_for_task(task: str | None) -> float:
+    if task == "object-removal":
+        return 0.75
+    if task == "shape-guided":
+        return 0.95
+    if task == "image-outpainting":
+        return 0.8
+    return 0.85
 
 
 def _full_image_mask(source_image: str) -> str:
@@ -494,8 +508,9 @@ async def generate_pipeline(
 
     source_image = decode_data_url_to_image(payload.source_image, mode="RGB")
 
+    use_sam2 = plan_payload.mask_strategy == "sam2-refine" and bool(payload.mask_image or payload.point_prompts or payload.asset_placement)
     if progress:
-        progress("SEGMENTING", 0.35, "Preparing edit mask")
+        progress("SEGMENTING", 0.35, "Preparing edit mask" if not use_sam2 else "SAM-2 refining mask")
     try:
         normalized_mask = await segment(
             SegmentRequest(
@@ -543,6 +558,10 @@ async def generate_pipeline(
 
     if progress:
         progress("EXECUTING", 0.65, "PowerPaint generation is running")
+
+    task_fitting = _fitting_for_task(payload.task or plan_payload.task)
+    effective_fitting = payload.fitting_degree if payload.fitting_degree != 0.9 else task_fitting
+
     powerpaint_request = PowerPaintGenerateRequest(
         image=inpaint_image_data,
         mask_image=inpaint_mask_data,
@@ -551,7 +570,7 @@ async def generate_pipeline(
         negative_prompt=payload.negative_prompt or plan_payload.negative_prompt,
         steps=payload.steps,
         guidance_scale=payload.guidance_scale,
-        fitting_degree=payload.fitting_degree,
+        fitting_degree=effective_fitting,
         seed=payload.seed,
         local_files_only=payload.local_files_only,
         horizontal_expansion_ratio=payload.horizontal_expansion_ratio,
@@ -613,6 +632,11 @@ async def generate_pipeline(
         "canvas_state_before": payload.canvas_state.model_dump() if payload.canvas_state else None,
         "canvas_state_after": canvas_state_after.model_dump() if canvas_state_after else None,
     }
+    quality_report.prompt.parameters["mask_strategy"] = plan_payload.mask_strategy
+    quality_report.prompt.parameters["sam2_refinement_requested"] = use_sam2
+    quality_report.prompt.parameters["crop_used"] = use_crop
+    quality_report.prompt.parameters["effective_fitting_degree"] = effective_fitting
+    quality_report.prompt.parameters["planner_source"] = planner_source
     for key in (
         "task_type",
         "subtask_type",
