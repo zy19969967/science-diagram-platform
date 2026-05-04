@@ -119,7 +119,7 @@ def _planner_prompt(
 class PlannerRuntime:
     def __init__(self) -> None:
         self.backend = os.getenv("PLANNER_BACKEND", "qwen3.5")
-        self.model_repo = os.getenv("PLANNER_MODEL_REPO", "Qwen/Qwen3.5-4B")
+        self.model_repo = os.getenv("PLANNER_MODEL_REPO", "Qwen/Qwen3.5-35B-A3B")
         self.model_dtype = os.getenv("PLANNER_MODEL_DTYPE", "float16")
         self.max_new_tokens = int(os.getenv("PLANNER_MAX_NEW_TOKENS", "320"))
         self.local_files_only = _as_bool(os.getenv("PLANNER_LOCAL_FILES_ONLY"), default=False)

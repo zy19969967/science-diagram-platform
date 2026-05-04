@@ -54,7 +54,112 @@ def blend_with_mask(original: Image.Image, generated: Image.Image, mask: Image.I
     return Image.fromarray(blended.clip(0, 255).astype(np.uint8), mode="RGB")
 
 
-def mask_from_box(width: int, height: int, box: list[int]) -> Image.Image:
+def match_histogram(source: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    result = np.empty_like(source)
+    for channel in range(3):
+        src_ch = source[:, :, channel].ravel()
+        ref_ch = reference[:, :, channel].ravel()
+        src_sorted = np.sort(src_ch)
+        ref_sorted = np.sort(ref_ch)
+        src_indices = np.searchsorted(src_sorted, src_ch)
+        src_indices = np.clip(src_indices, 0, len(ref_sorted) - 1)
+        matched = ref_sorted[src_indices]
+        result[:, :, channel] = matched.reshape(source.shape[:2])
+    return result
+
+
+def build_gaussian_pyramid(image: np.ndarray, levels: int) -> list[np.ndarray]:
+    pyramid = [image]
+    for _ in range(levels - 1):
+        h, w = pyramid[-1].shape[:2]
+        down = Image.fromarray(pyramid[-1].astype(np.uint8)).resize((w // 2, h // 2), Image.LANCZOS)
+        pyramid.append(np.asarray(down, dtype=np.float32))
+    return pyramid
+
+
+def build_laplacian_pyramid(gaussian: list[np.ndarray]) -> list[np.ndarray]:
+    laplacian = []
+    for i in range(len(gaussian) - 1):
+        h, w = gaussian[i].shape[:2]
+        up = np.asarray(Image.fromarray(gaussian[i + 1].astype(np.uint8)).resize((w, h), Image.LANCZOS), dtype=np.float32)
+        laplacian.append(gaussian[i] - up)
+    laplacian.append(gaussian[-1])
+    return laplacian
+
+
+def reconstruct_from_laplacian(laplacian: list[np.ndarray]) -> np.ndarray:
+    result = laplacian[-1]
+    for i in range(len(laplacian) - 2, -1, -1):
+        h, w = laplacian[i].shape[:2]
+        up = np.asarray(Image.fromarray(result.astype(np.uint8)).resize((w, h), Image.LANCZOS), dtype=np.float32)
+        result = laplacian[i] + up
+    return result
+
+
+def multiband_blend(original: Image.Image, generated: Image.Image, mask: Image.Image, levels: int = 5) -> Image.Image:
+    gen = generated.convert("RGB").resize(original.size)
+    orig_arr = np.asarray(original.convert("RGB"), dtype=np.float32)
+    gen_arr = np.asarray(gen, dtype=np.float32)
+    mask_arr = np.asarray(mask.convert("L").resize(original.size), dtype=np.float32) / 255.0
+    mask_arr = mask_arr[:, :, np.newaxis]
+
+    orig_pyr = build_gaussian_pyramid(orig_arr, levels)
+    gen_pyr = build_gaussian_pyramid(gen_arr, levels)
+    mask_pyr = [Image.fromarray((m[:, :, 0] * 255).astype(np.uint8)).resize(
+        (orig_pyr[i].shape[1], orig_pyr[i].shape[0]), Image.LANCZOS) for i, m in enumerate(
+        [mask_arr] + [np.ones((h // 2, w // 2, 1), dtype=np.float32) for h, w in
+         [(orig_pyr[0].shape[0], orig_pyr[0].shape[1])] * (levels - 1)])]
+
+    mask_pyr_arrs = [np.asarray(m, dtype=np.float32) / 255.0 for m in mask_pyr]
+    mask_pyr_arrs = [m[:, :, np.newaxis] if m.ndim == 2 else m for m in mask_pyr_arrs]
+
+    orig_lap = build_laplacian_pyramid(orig_pyr)
+    gen_lap = build_laplacian_pyramid(gen_pyr)
+
+    blended_lap = []
+    for i in range(levels):
+        blended_lap.append(gen_lap[i] * mask_pyr_arrs[i] + orig_lap[i] * (1.0 - mask_pyr_arrs[i]))
+
+    result = reconstruct_from_laplacian(blended_lap)
+    return Image.fromarray(result.clip(0, 255).astype(np.uint8), mode="RGB")
+
+
+def color_match_generated(original: Image.Image, generated: Image.Image, mask: Image.Image) -> Image.Image:
+    orig_arr = np.asarray(original.convert("RGB"), dtype=np.float32)
+    gen_arr = np.asarray(generated.convert("RGB").resize(original.size), dtype=np.float32)
+    mask_arr = np.asarray(mask.convert("L").resize(original.size), dtype=np.float32) / 255.0
+    mask_binary = mask_arr > 0.5
+
+    if not mask_binary.any():
+        return generated
+
+    kernel_size = max(3, min(original.width, original.height) // 20)
+    dilated = np.zeros_like(mask_binary)
+    for _ in range(kernel_size // 2):
+        dilated = np.maximum(dilated, np.roll(mask_binary, 1, axis=0))
+        dilated = np.maximum(dilated, np.roll(mask_binary, -1, axis=0))
+        dilated = np.maximum(dilated, np.roll(mask_binary, 1, axis=1))
+        dilated = np.maximum(dilated, np.roll(mask_binary, -1, axis=1))
+        mask_binary = dilated
+
+    border = dilated & (~mask_binary)
+    if not border.any():
+        return generated
+
+    border_pixels = orig_arr[border]
+    gen_pixels = gen_arr[mask_binary]
+    if len(border_pixels) < 10 or len(gen_pixels) < 10:
+        return generated
+
+    matched_gen = match_histogram(gen_pixels, border_pixels)
+    result = gen_arr.copy()
+    flat_mask = mask_binary.ravel()
+    result_flat = result.reshape(-1, 3)
+    gen_indices = np.where(flat_mask)[0]
+    result_flat[gen_indices] = matched_gen
+    result = result_flat.reshape(gen_arr.shape)
+
+    return Image.fromarray(result.clip(0, 255).astype(np.uint8), mode="RGB")(width: int, height: int, box: list[int]) -> Image.Image:
     x1, y1, x2, y2 = box
     mask = Image.new("L", (width, height), 0)
     draw = ImageDraw.Draw(mask)

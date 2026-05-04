@@ -55,8 +55,10 @@ from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image, encode_image_to_data_url
 from common.utils.masks import (
     blend_with_mask,
+    color_match_generated,
     compute_mask_bbox,
     evaluate_edit,
+    multiband_blend,
     soften_mask_edges,
 )
 
@@ -593,7 +595,11 @@ async def generate_pipeline(
     else:
         result_image = generated_image
 
-    result_image = blend_with_mask(source_image, result_image, softened_mask)
+    if is_local_inpaint:
+        color_matched = color_match_generated(source_image, result_image, raw_mask)
+        result_image = multiband_blend(source_image, color_matched, softened_mask, levels=4)
+    else:
+        result_image = blend_with_mask(source_image, result_image, softened_mask)
     result_image_data = encode_image_to_data_url(result_image)
     mask_image = raw_mask
     evaluation = evaluate_edit(source_image, result_image, mask_image)
