@@ -6,6 +6,9 @@ import logging
 import os
 import re
 import threading
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from common.assets import get_asset, load_asset_catalog
@@ -14,6 +17,7 @@ from common.schemas import PlanRequest, PlanResponse, ScenePlanRequest, TaskType
 from common.utils.images import decode_data_url_to_image
 
 LOGGER = logging.getLogger(__name__)
+QWEN_LOGS_DIR = Path("logs/qwen_plans")
 VALID_TASKS: set[TaskType] = {
     "text-guided",
     "object-removal",
@@ -123,6 +127,23 @@ def _planner_prompt(
         "decision_rules": rules,
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _save_qwen_log(payload: dict[str, Any], raw: dict[str, Any], normalized: dict[str, Any], method: str) -> None:
+    try:
+        QWEN_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        filename = f"{ts}_{uuid.uuid4().hex[:8]}.json"
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "method": method,
+            "instruction": payload.get("instruction", ""),
+            "raw_qwen_output": raw,
+            "normalized_plan": normalized,
+        }
+        (QWEN_LOGS_DIR / filename).write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        LOGGER.exception("Failed to save Qwen plan log")
 
 
 class PlannerRuntime:
@@ -292,8 +313,15 @@ class PlannerRuntime:
             input_len = inputs["input_ids"].shape[-1]
             decoded = self._processor.batch_decode(generated_ids[:, input_len:], skip_special_tokens=True)[0].strip()
             raw = _extract_json_block(decoded)
+            normalized = self._normalize(payload, raw)
             self._last_error = None
-            return self._normalize(payload, raw)
+            _save_qwen_log(
+                {"instruction": payload.instruction, "selected_asset_id": payload.selected_asset_id, "preferred_task": payload.preferred_task},
+                raw,
+                normalized.model_dump(),
+                "plan",
+            )
+            return normalized
         except Exception as exc:
             self._last_error = str(exc)
             LOGGER.exception("Qwen planner fallback triggered: %s", exc)
@@ -327,8 +355,15 @@ class PlannerRuntime:
             input_len = inputs["input_ids"].shape[-1]
             decoded = self._processor.batch_decode(generated_ids[:, input_len:], skip_special_tokens=True)[0].strip()
             raw = _extract_json_block(decoded)
+            normalized = _normalize_scene_plan(payload, raw)
             self._last_error = None
-            return _normalize_scene_plan(payload, raw)
+            _save_qwen_log(
+                {"instruction": payload.instruction, "style": payload.style, "width": payload.width, "height": payload.height},
+                raw,
+                normalized.model_dump(),
+                "plan_scene",
+            )
+            return normalized
         except Exception as exc:
             self._last_error = str(exc)
             LOGGER.exception("Qwen scene planner failed: %s", exc)
