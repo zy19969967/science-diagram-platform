@@ -11,7 +11,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from common.assets import asset_catalog_with_urls
 from common.canvas_state import build_canvas_state_after_generate
@@ -556,6 +556,24 @@ async def generate_pipeline(
 
     raw_mask = decode_data_url_to_image(normalized_mask.mask_image, mode="L")
 
+    # Pre-fill mask area with border average color to avoid BrushNet black-hole issue
+    import numpy as np
+    mask_arr = np.asarray(raw_mask) > 32
+    if mask_arr.any():
+        border = mask_arr.astype(np.uint8) * 255
+        dilated = np.asarray(raw_mask.filter(ImageFilter.MaxFilter(9))) > 32
+        border_ring = dilated & ~mask_arr
+        if border_ring.any():
+            src_arr = np.asarray(source_image)
+            avg_color = src_arr[border_ring].mean(axis=0).astype(np.uint8)
+            filled = src_arr.copy()
+            filled[mask_arr] = avg_color
+            inpaint_image = encode_image_to_data_url(Image.fromarray(filled, mode="RGB"))
+        else:
+            inpaint_image = payload.source_image
+    else:
+        inpaint_image = payload.source_image
+
     if progress:
         progress("EXECUTING", 0.65, "PowerPaint generation is running")
 
@@ -566,7 +584,7 @@ async def generate_pipeline(
     effective_scale = payload.guidance_scale if payload.guidance_scale != 5.0 else task_scale
 
     powerpaint_request = PowerPaintGenerateRequest(
-        image=payload.source_image,
+        image=inpaint_image,
         mask_image=normalized_mask.mask_image,
         task=task_name,
         prompt=plan_payload.task_prompt,

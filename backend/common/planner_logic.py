@@ -46,6 +46,19 @@ ZH_EN_DICT: dict[str, str] = {
     # Adjectives
     "大": "large", "小": "small", "新": "new", "旧": "old",
     "现代": "modern", "古典": "classic", "干净": "clean",
+    # Nature
+    "树": "tree", "草": "grass", "天空": "sky", "云": "cloud", "水": "water",
+    "山": "mountain", "河": "river", "海": "ocean", "太阳": "sun", "月亮": "moon",
+    "叶子": "leaf", "森林": "forest", "土地": "ground", "火": "fire",
+    # People
+    "人": "person", "脸": "face", "手": "hand", "眼睛": "eye", "头发": "hair",
+    # Buildings
+    "房子": "house", "门": "door", "窗户": "window", "墙": "wall", "地板": "floor",
+    # Vehicles
+    "车": "car", "自行车": "bicycle",
+    # Other
+    "纸": "paper", "布": "cloth", "光": "light", "影": "shadow",
+    "图案": "pattern", "纹理": "texture", "背景": "background",
 }
 
 
