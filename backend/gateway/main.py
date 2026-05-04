@@ -259,9 +259,7 @@ def _fitting_for_task(task: str | None) -> float:
 
 
 def _scale_for_task(task: str | None) -> float:
-    if task == "object-removal":
-        return 15.0
-    if task == "image-outpainting":
+    if task in {"object-removal", "image-outpainting"}:
         return 12.0
     if task == "shape-guided":
         return 7.5

@@ -142,9 +142,9 @@ class PowerPaintRuntime:
                 vertical_expansion_ratio=payload.vertical_expansion_ratio,
                 horizontal_expansion_ratio=payload.horizontal_expansion_ratio,
                 outpaint_prompt="",
-                outpaint_negative_prompt=payload.negative_prompt if payload.task == "image-outpainting" else "",
+                outpaint_negative_prompt="",
                 removal_prompt="",
-                removal_negative_prompt=payload.negative_prompt if payload.task == "object-removal" else "",
+                removal_negative_prompt="",
             )
 
         return encode_image_to_data_url(results[0])
