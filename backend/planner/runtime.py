@@ -97,7 +97,7 @@ def _planner_prompt(
         "negative_prompt": "English negative prompt: what to avoid (blurry, distorted, artifacts, etc.)",
         "target_label": "Optional Chinese or English label for the target object",
         "recommended_asset_id": "Asset id from the provided list or null",
-        "mask_strategy": "Prefer 'sam2-refine' when image/object segmentation would improve mask precision, otherwise 'user-mask'",
+        "mask_strategy": "Use 'sam2-refine' ONLY when point_prompts are provided (user clicked on image). Otherwise always use 'user-mask'.",
         "reasoning": "One short Chinese sentence",
         "warnings": ["Zero or more short Chinese warnings"],
     }
@@ -202,6 +202,11 @@ class PlannerRuntime:
             "Your job is to produce a detailed English prompt that tells PowerPaint EXACTLY what to generate "
             "in the masked region. Be specific about the object, its color, material, shape, and how it "
             "should blend into the scene. "
+            "For object removal or outpainting, the prompt should be empty since PowerPaint auto-fills "
+            "based on surrounding context. "
+            "For replacement, describe ONLY the new target object, not the old one. "
+            "IMPORTANT: the mask_strategy should ALWAYS be 'user-mask' unless the user provided "
+            "point_prompts (clicked specific points on the image). "
             "Return a single compact JSON object only. Use English for task_prompt and negative_prompt. "
             "Use Chinese for reasoning and warnings."
         )

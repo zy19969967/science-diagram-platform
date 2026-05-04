@@ -258,6 +258,14 @@ def _fitting_for_task(task: str | None) -> float:
     return 0.85
 
 
+def _scale_for_task(task: str | None) -> float:
+    if task in {"object-removal", "image-outpainting"}:
+        return 12.0
+    if task == "shape-guided":
+        return 7.5
+    return 7.5
+
+
 def _full_image_mask(source_image: str) -> str:
     image = decode_data_url_to_image(source_image, mode="RGB")
     mask = Image.new("L", image.size, 255)
@@ -511,7 +519,8 @@ async def generate_pipeline(
 
     source_image = decode_data_url_to_image(payload.source_image, mode="RGB")
 
-    use_sam2 = plan_payload.mask_strategy == "sam2-refine" and bool(payload.mask_image or payload.point_prompts or payload.asset_placement)
+    has_point_prompts = bool(payload.point_prompts)
+    use_sam2 = plan_payload.mask_strategy == "sam2-refine" and has_point_prompts
     if use_sam2:
         if progress:
             progress("SEGMENTING", 0.35, "SAM-2 refining mask")
@@ -579,17 +588,20 @@ async def generate_pipeline(
     if progress:
         progress("EXECUTING", 0.65, "PowerPaint generation is running")
 
-    task_fitting = _fitting_for_task(payload.task or plan_payload.task)
+    task_name = payload.task or plan_payload.task
+    task_fitting = _fitting_for_task(task_name)
+    task_scale = _scale_for_task(task_name)
     effective_fitting = payload.fitting_degree if payload.fitting_degree != 0.9 else task_fitting
+    effective_scale = payload.guidance_scale if payload.guidance_scale != 5.0 else task_scale
 
     powerpaint_request = PowerPaintGenerateRequest(
         image=inpaint_image_data,
         mask_image=inpaint_mask_data,
-        task=payload.task or plan_payload.task,
+        task=task_name,
         prompt=plan_payload.task_prompt,
         negative_prompt=payload.negative_prompt or plan_payload.negative_prompt,
         steps=payload.steps,
-        guidance_scale=payload.guidance_scale,
+        guidance_scale=effective_scale,
         fitting_degree=effective_fitting,
         seed=payload.seed,
         local_files_only=payload.local_files_only,
