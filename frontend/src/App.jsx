@@ -100,7 +100,7 @@ function App() {
   const [taskOverride, setTaskOverride] = useState("");
   const [brushSize, setBrushSize] = useState(24);
   const [drawMode, setDrawMode] = useState("brush");
-  const [steps, setSteps] = useState(45);
+  const [steps, setSteps] = useState(25);
   const [guidanceScale, setGuidanceScale] = useState(5.0);
   const [fittingDegree, setFittingDegree] = useState(0.9);
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 2147483647));
