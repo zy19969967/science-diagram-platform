@@ -620,7 +620,6 @@ async def generate_pipeline(
     }
     quality_report.prompt.parameters["mask_strategy"] = plan_payload.mask_strategy
     quality_report.prompt.parameters["sam2_refinement_requested"] = use_sam2
-    quality_report.prompt.parameters["crop_used"] = use_crop
     quality_report.prompt.parameters["effective_fitting_degree"] = effective_fitting
     quality_report.prompt.parameters["planner_source"] = planner_source
     for key in (
