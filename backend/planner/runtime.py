@@ -87,20 +87,28 @@ def _planner_prompt(
 ) -> str:
     schema = {
         "task": "One of: text-guided, object-removal, shape-guided, image-outpainting",
-        "task_prompt": "Short English prompt for PowerPaint",
-        "negative_prompt": "Short English negative prompt for PowerPaint",
+        "task_prompt": (
+            "Detailed English prompt describing WHAT to generate in the masked region. "
+            "Be specific: name the object, its color, material, shape, and how it fits the scene. "
+            "For replacement: describe the NEW object to place there. "
+            "For removal: describe the background to fill in. "
+            "Do NOT describe the action — describe the desired RESULT."
+        ),
+        "negative_prompt": "English negative prompt: what to avoid (blurry, distorted, artifacts, etc.)",
         "target_label": "Optional Chinese or English label for the target object",
         "recommended_asset_id": "Asset id from the provided list or null",
-        "mask_strategy": "Prefer 'sam2-refine' when image/object segmentation is helpful, otherwise 'user-mask'",
+        "mask_strategy": "Prefer 'sam2-refine' when image/object segmentation would improve mask precision, otherwise 'user-mask'",
         "reasoning": "One short Chinese sentence",
         "warnings": ["Zero or more short Chinese warnings"],
     }
     rules = [
-        "If the user is deleting or cleaning an existing object, choose object-removal.",
-        "If the user is extending the canvas or background, choose image-outpainting.",
-        "If the user selected an asset or wants the result to follow a silhouette or region, choose shape-guided.",
-        "Otherwise choose text-guided.",
-        "Prefer clear scientific-illustration wording and protect labels, arrows, and geometry.",
+        "If the user wants to delete, erase, remove, or clean an object, choose object-removal. The task_prompt must describe the clean background to fill in.",
+        "If the user wants to extend, expand, or outpaint the canvas, choose image-outpainting.",
+        "If the user selected an asset or wants to follow a specific shape/silhouette, choose shape-guided.",
+        "If the user wants to replace, swap, change, or transform an object into something else, choose text-guided. The task_prompt MUST describe the NEW target object in detail (color, material, type).",
+        "Otherwise choose text-guided. The task_prompt must be a detailed visual description of what should appear in the masked area.",
+        "Look at the user's instruction carefully. Extract the TARGET object they want (e.g., from 'replace cup with red vase' -> target is 'red vase').",
+        "If the instruction is in Chinese, translate the target description into English for the task_prompt.",
         "If no listed asset is suitable, return null for recommended_asset_id.",
         "Return JSON only, with no markdown fences.",
     ]
@@ -189,7 +197,11 @@ class PlannerRuntime:
 
     def _messages(self, prompt: str, include_image: bool) -> list[dict[str, Any]]:
         system_text = (
-            "You are the planning service for a scientific diagram editing platform built on PowerPaint. "
+            "You are the planning service for an image editing platform built on PowerPaint. "
+            "The platform handles both scientific diagrams and real-world photos. "
+            "Your job is to produce a detailed English prompt that tells PowerPaint EXACTLY what to generate "
+            "in the masked region. Be specific about the object, its color, material, shape, and how it "
+            "should blend into the scene. "
             "Return a single compact JSON object only. Use English for task_prompt and negative_prompt. "
             "Use Chinese for reasoning and warnings."
         )
