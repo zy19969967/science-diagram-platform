@@ -159,7 +159,10 @@ def color_match_generated(original: Image.Image, generated: Image.Image, mask: I
     result_flat[gen_indices] = matched_gen
     result = result_flat.reshape(gen_arr.shape)
 
-    return Image.fromarray(result.clip(0, 255).astype(np.uint8), mode="RGB")(width: int, height: int, box: list[int]) -> Image.Image:
+    return Image.fromarray(result.clip(0, 255).astype(np.uint8), mode="RGB")
+
+
+def mask_from_box(width: int, height: int, box: list[int]) -> Image.Image:
     x1, y1, x2, y2 = box
     mask = Image.new("L", (width, height), 0)
     draw = ImageDraw.Draw(mask)
