@@ -53,7 +53,7 @@ from common.schemas import (
 )
 from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image, encode_image_to_data_url
-from common.utils.masks import evaluate_edit, soften_mask_edges
+from common.utils.masks import evaluate_edit
 
 from .benchmarks import BenchmarkStore
 from .deployment import build_deployment_readiness
@@ -260,9 +260,9 @@ def _fitting_for_task(task: str | None) -> float:
 
 def _scale_for_task(task: str | None) -> float:
     if task == "object-removal":
-        return 15.0
+        return 10.0
     if task == "image-outpainting":
-        return 12.0
+        return 10.0
     if task == "shape-guided":
         return 7.5
     return 7.5
@@ -559,8 +559,6 @@ async def generate_pipeline(
             raise HTTPException(status_code=400, detail=f"Unable to prepare a valid mask: {exc}") from exc
 
     raw_mask = decode_data_url_to_image(normalized_mask.mask_image, mode="L")
-    softened_mask = soften_mask_edges(raw_mask, dilation=8, blur=10)
-    softened_mask_url = encode_image_to_data_url(softened_mask)
 
     if progress:
         progress("EXECUTING", 0.65, "PowerPaint generation is running")
@@ -575,7 +573,7 @@ async def generate_pipeline(
 
     powerpaint_request = PowerPaintGenerateRequest(
         image=payload.source_image,
-        mask_image=softened_mask_url,
+        mask_image=normalized_mask.mask_image,
         task=task_name,
         prompt=plan_payload.task_prompt,
         negative_prompt=payload.negative_prompt or plan_payload.negative_prompt,
