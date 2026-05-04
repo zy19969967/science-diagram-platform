@@ -237,6 +237,14 @@ def _legacy_task_for_decision(decision: SmartPlannerDecision) -> str:
         return "image-outpainting"
     if decision.subtask_type == "object_removal":
         return "object-removal"
+    if decision.subtask_type == "object_replacement":
+        return "text-guided"
+    if decision.subtask_type in {"background_edit", "color_change", "attribute_edit", "repair"}:
+        return "text-guided"
+    if decision.task_type == "text_to_image":
+        return "text-guided"
+    if decision.task_type == "image_variation":
+        return "text-guided"
     return "text-guided"
 
 
@@ -551,7 +559,7 @@ async def generate_pipeline(
     if progress:
         progress("EXECUTING", 0.65, "PowerPaint generation is running")
 
-    task_name = payload.task or plan_payload.task
+    task_name = plan_payload.task or payload.task
     task_fitting = _fitting_for_task(task_name)
     task_scale = _scale_for_task(task_name)
     effective_fitting = payload.fitting_degree if payload.fitting_degree != 0.9 else task_fitting

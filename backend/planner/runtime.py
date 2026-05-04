@@ -87,7 +87,7 @@ def _planner_prompt(
     available_assets: list[dict[str, Any]],
 ) -> str:
     schema = {
-        "task": "One of: text-guided, object-removal, shape-guided, image-outpainting",
+        "task": "One of: text-guided (for adding/replacing objects), object-removal (for deleting/erasing), shape-guided (for fitting to a drawn shape), image-outpainting (for expanding canvas)",
         "task_prompt": (
             "Detailed English prompt describing WHAT to generate in the masked region. "
             "Be specific: name the object, its color, material, shape, and how it fits the scene. "
