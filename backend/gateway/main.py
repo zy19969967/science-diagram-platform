@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import uuid
 from pathlib import Path
@@ -74,7 +73,6 @@ ASSETS_DIR = Path(os.getenv("ASSETS_DIR", "/app/assets"))
 FLUX_INIT_URL = os.getenv("FLUX_INIT_URL", "http://127.0.0.1:19085")
 GATEWAY_API_TOKEN = os.getenv("GATEWAY_API_TOKEN", "")
 
-LOGGER = logging.getLogger(__name__)
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 job_store = JobStore(JOBS_DIR)
 project_store = ProjectStore(PROJECTS_DIR)
@@ -523,9 +521,6 @@ async def generate_pipeline(
 
     has_point_prompts = bool(payload.point_prompts)
     use_sam2 = plan_payload.mask_strategy == "sam2-refine" and has_point_prompts
-    LOGGER.info("Mask strategy=%s | has_point_prompts=%s | has_mask=%s | SAM2=%s",
-                plan_payload.mask_strategy, has_point_prompts, bool(payload.mask_image),
-                "enabled" if use_sam2 else "skipped")
     if use_sam2:
         if progress:
             progress("SEGMENTING", 0.35, "SAM-2 refining mask")
