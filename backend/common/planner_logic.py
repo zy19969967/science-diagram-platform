@@ -4,8 +4,8 @@ from .assets import get_asset
 from .schemas import PlanRequest, PlanResponse
 
 REMOVE_KEYWORDS = (
-    "删除", "移除", "去掉", "清除",
-    "erase", "remove", "delete",
+    "删除", "移除", "去掉", "清除", "去除", "抹掉", "擦掉", "消除", "弄掉", "删掉", "消掉",
+    "erase", "remove", "delete", "clean", "clear",
 )
 REPLACE_KEYWORDS = (
     "替换", "换成", "改成", "变成",

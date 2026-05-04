@@ -27,7 +27,10 @@ VARIATION_KEYWORDS = (
     "variation",
     "style",
 )
-REMOVE_KEYWORDS = ("删除", "移除", "去掉", "清除", "remove", "delete", "erase")
+REMOVE_KEYWORDS = (
+    "删除", "移除", "去掉", "清除", "去除", "抹掉", "擦掉", "消除", "弄掉", "删掉", "消掉",
+    "remove", "delete", "erase", "clean", "clear",
+)
 REPLACE_KEYWORDS = ("替换", "换成", "改成", "变成", "replace", "change")
 REPAIR_KEYWORDS = ("修复", "修一下", "处理", "repair", "fix")
 
