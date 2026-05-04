@@ -278,13 +278,15 @@ def _generate_request_from_smart(payload: SmartGenerationRequest, decision: Smar
     if decision.requires_mask and not payload.mask_image:
         raise HTTPException(status_code=400, detail="mask_image is required for local inpaint tasks.")
     mask_image = payload.mask_image
-    if not mask_image and decision.task_type in {"image_variation", "outpainting"}:
+    if not mask_image and decision.task_type == "image_variation":
         mask_image = _full_image_mask(payload.source_image)
     return GenerateRequest(
         source_image=payload.source_image,
         instruction=payload.prompt,
         task=_legacy_task_for_decision(decision),
         mask_image=mask_image,
+        horizontal_expansion_ratio=1.3 if decision.task_type == "outpainting" else 1.0,
+        vertical_expansion_ratio=1.3 if decision.task_type == "outpainting" else 1.0,
         plan=PlanResponse(
             task=_legacy_task_for_decision(decision),
             task_prompt=decision.normalized_prompt,

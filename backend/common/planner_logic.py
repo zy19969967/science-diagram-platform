@@ -124,6 +124,7 @@ def build_plan(payload: PlanRequest) -> PlanResponse:
             reasoning = "Detected replacement intent."
         elif not instruction and selected_asset:
             task_prompt = f"Add {selected_asset.prompt} to the marked region, clean scientific illustration style."
+            reasoning = "Asset placement without instruction."
         else:
             task_prompt = _inpaint_prompt(instruction)
             reasoning = "Default text-guided generation with mask constraint."
