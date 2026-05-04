@@ -162,20 +162,20 @@ class SegmenterRuntime:
 
         if masks.ndim == 4:
             mask_candidates = masks[0]
-            if score_array is not None and score_array.ndim >= 3:
-                score_candidates = score_array[0].mean(axis=0) if score_array.shape[1] > 1 else score_array[0][0]
+            if score_array is not None:
+                score_candidates = score_array.squeeze()
             else:
                 score_candidates = None
         elif masks.ndim == 3:
             mask_candidates = masks
-            if score_array is not None and score_array.ndim >= 2:
-                score_candidates = score_array[0].mean(axis=0) if score_array.shape[1] > 1 else score_array[0]
+            if score_array is not None:
+                score_candidates = score_array.squeeze()
             else:
                 score_candidates = None
         else:
             return masks
 
-        if score_candidates is not None and len(score_candidates) == len(mask_candidates):
+        if score_candidates is not None and score_candidates.size > 0:
             return mask_candidates[int(np.argmax(score_candidates))]
         return mask_candidates[0]
 

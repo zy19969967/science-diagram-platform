@@ -73,10 +73,10 @@ class FluxServiceRuntimeTest(unittest.TestCase):
     def test_build_flux_prompt_uses_scene_plan_labels_and_style(self) -> None:
         prompt = build_flux_prompt(self.plan)
 
-        self.assertIn(self.plan.positive_prompt, prompt)
-        self.assertIn("底物", prompt)
-        self.assertIn("酶", prompt)
-        self.assertIn("clean scientific diagram", prompt)
+        self.assertIn(self.plan.instruction, prompt)
+        self.assertTrue(any(phrase in prompt.lower() for phrase in ["clean scientific diagram", "scientific diagram style"]))
+        self.assertIn("white background", prompt)
+        self.assertIn("vector-like", prompt)
 
     def test_default_config_targets_flux2_klein(self) -> None:
         config = FluxRuntimeConfig()

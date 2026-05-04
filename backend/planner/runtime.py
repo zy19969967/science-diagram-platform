@@ -44,6 +44,7 @@ def _resolve_torch_dtype(torch_module: Any, value: str | None) -> Any | None:
 
 def _extract_json_block(text: str) -> dict[str, Any]:
     cleaned = text.strip()
+    cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
@@ -273,7 +274,7 @@ class PlannerRuntime:
                 ],
             )
             messages = self._messages(prompt, include_image=source_image is not None)
-            template = self._processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+            template = self._processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, enable_thinking=False)
 
             processor_kwargs: dict[str, Any] = {"text": template, "return_tensors": "pt"}
             if source_image is not None:
@@ -313,7 +314,7 @@ class PlannerRuntime:
                 )}]},
                 {"role": "user", "content": [{"type": "text", "text": prompt}]},
             ]
-            template = self._processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+            template = self._processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, enable_thinking=False)
             inputs = self._processor(text=template, return_tensors="pt")
             if hasattr(inputs, "to"):
                 inputs = inputs.to(self._device)

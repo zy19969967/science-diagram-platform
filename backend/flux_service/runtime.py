@@ -115,21 +115,14 @@ def _resolve_torch_dtype(torch_module: Any, value: str) -> Any | None:
 
 
 def _normalize_dimension(value: int) -> int:
-    clamped = min(2048, max(256, int(value)))
-    return max(256, clamped - (clamped % 8))
+    return 1024
 
 
 def build_flux_prompt(plan: ScenePlanResponse) -> str:
-    labels = ", ".join(plan.labels)
-    objects = "; ".join(f"{item.name}: {item.visual}, {item.position}" for item in plan.objects)
-    relations = "; ".join(f"{item.source} {item.type} {item.target}" for item in plan.relations)
-    return (
-        f"{plan.positive_prompt}. "
-        f"Create a clean scientific diagram with accurate composition, crisp edges, controlled color, "
-        f"white background, readable scientific labels, and vector-like layout. "
-        f"Diagram type: {plan.diagram_type}. Labels: {labels}. Objects: {objects}. Relations: {relations}. "
-        f"Style: {plan.style}. User instruction: {plan.instruction}."
-    )
+    instruction = plan.instruction.strip()
+    if instruction:
+        return f"{instruction}. Clean scientific diagram style, white background, vector-like."
+    return f"{plan.positive_prompt}. Clean scientific diagram, white background, vector-like."
 
 
 def _load_diffusers_pipeline(config: FluxRuntimeConfig) -> Any:
