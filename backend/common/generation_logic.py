@@ -82,22 +82,40 @@ def _pipeline_for_task(task_type: SmartTaskType, *, has_mask: bool) -> SmartPipe
     return "needs_user_input"
 
 
+def _contains_cjk(text: str) -> bool:
+    for char in text:
+        cp = ord(char)
+        if (
+            (0x4E00 <= cp <= 0x9FFF)
+            or (0x3400 <= cp <= 0x4DBF)
+            or (0xF900 <= cp <= 0xFAFF)
+            or (0x3040 <= cp <= 0x30FF)
+        ):
+            return True
+    return False
+
+
 def _normalized_prompt(task_type: SmartTaskType, subtask_type: str, prompt: str) -> str:
     stripped = prompt.strip()
     if task_type == "local_inpaint":
-        action = stripped or "modify the masked region to blend naturally"
-        return (
-            f"Edit the masked region: {action}. "
-            "Preserve the surrounding context, background, lighting, and overall style. "
-            "Seamless blending with the rest of the image."
-        )
+        if subtask_type == "object_removal":
+            return "Remove the masked object. Fill the area with the surrounding background texture. Seamless, no visible seams or artifacts."
+        if subtask_type == "object_replacement":
+            if stripped and not _contains_cjk(stripped):
+                return f"A {stripped}, high quality, seamlessly blended into the scene. Matching the lighting, color tone, and style of the surrounding image."
+            return "A new object naturally placed in the masked region, seamlessly blended with the scene lighting, color, and style."
+        if stripped and not _contains_cjk(stripped):
+            return f"{stripped}. High quality, seamlessly blended with the surrounding scene."
+        return "Edit the masked region to blend naturally with the surrounding context, lighting, and style."
     if task_type == "outpainting":
-        return stripped or "Extend the canvas content outward, maintaining the original structure, lighting, and style consistency."
+        return "Extend the canvas content outward, maintaining the original structure, lighting, and style consistency. No visible seams."
     if task_type == "image_variation":
-        return stripped or "Enhance this image while preserving the main subject content and overall composition."
+        return "Enhance this image while preserving the main subject content and overall composition."
     if task_type == "svg_or_structure_generation":
-        return stripped or "Generate a clean, structured scientific diagram with clear labels."
-    return stripped or "Generate a clean, sharp scientific illustration diagram."
+        return "Generate a clean, structured scientific diagram with clear labels, white background, vector-like style."
+    if stripped and not _contains_cjk(stripped):
+        return f"{stripped}. Clean, sharp scientific illustration diagram."
+    return "Generate a clean, sharp scientific illustration diagram."
 
 
 def _decision(

@@ -489,7 +489,8 @@ async def generate_pipeline(
 ) -> GenerateResponse:
     if progress:
         progress("PLANNING", 0.12, "Planning edit instructions")
-    if payload.plan:
+    has_smart_plan = bool(payload.plan and payload.smart_metadata)
+    if payload.plan and not has_smart_plan:
         plan_payload = payload.plan
         planner_source = "provided-plan"
     else:
@@ -498,7 +499,7 @@ async def generate_pipeline(
                 source_image=payload.source_image,
                 instruction=payload.instruction,
                 selected_asset_id=payload.selected_asset_id,
-                preferred_task=payload.task,
+                preferred_task=payload.task or (payload.plan.task if payload.plan else None),
                 canvas_hints={
                     "has_asset": bool(payload.asset_placement),
                     "has_mask": bool(payload.mask_image),
