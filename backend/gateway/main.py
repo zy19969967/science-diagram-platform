@@ -560,8 +560,6 @@ async def generate_pipeline(
         progress("EXECUTING", 0.65, "PowerPaint generation is running")
 
     task_name = plan_payload.task or payload.task
-    if task_name == "text-guided" and payload.task and payload.task != "text-guided":
-        task_name = payload.task
     task_fitting = _fitting_for_task(task_name)
     task_scale = _scale_for_task(task_name)
     effective_fitting = payload.fitting_degree if payload.fitting_degree != 0.9 else task_fitting
