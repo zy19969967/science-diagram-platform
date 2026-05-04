@@ -83,29 +83,26 @@ def reconstruct_from_laplacian(laplacian: list[np.ndarray]) -> np.ndarray:
     return result
 
 
-def multiband_blend(original: Image.Image, generated: Image.Image, mask: Image.Image, levels: int = 5) -> Image.Image:
+def multiband_blend(original: Image.Image, generated: Image.Image, mask: Image.Image, levels: int = 4) -> Image.Image:
     gen = generated.convert("RGB").resize(original.size)
     orig_arr = np.asarray(original.convert("RGB"), dtype=np.float32)
     gen_arr = np.asarray(gen, dtype=np.float32)
-    mask_arr = np.asarray(mask.convert("L").resize(original.size), dtype=np.float32) / 255.0
-    mask_arr = mask_arr[:, :, np.newaxis]
-
+    mask_gray = mask.convert("L").resize(original.size)
+    mask_arr = np.asarray(mask_gray, dtype=np.float32) / 255.0
     orig_pyr = build_gaussian_pyramid(orig_arr, levels)
     gen_pyr = build_gaussian_pyramid(gen_arr, levels)
-    mask_pyr = [Image.fromarray((m[:, :, 0] * 255).astype(np.uint8)).resize(
-        (orig_pyr[i].shape[1], orig_pyr[i].shape[0]), Image.LANCZOS) for i, m in enumerate(
-        [mask_arr] + [np.ones((h // 2, w // 2, 1), dtype=np.float32) for h, w in
-         [(orig_pyr[0].shape[0], orig_pyr[0].shape[1])] * (levels - 1)])]
-
-    mask_pyr_arrs = [np.asarray(m, dtype=np.float32) / 255.0 for m in mask_pyr]
-    mask_pyr_arrs = [m[:, :, np.newaxis] if m.ndim == 2 else m for m in mask_pyr_arrs]
+    mask_2d = mask_arr[:, :, 0] if mask_arr.ndim == 3 else mask_arr
+    mask_pyr_2d = build_gaussian_pyramid(mask_2d, levels)
 
     orig_lap = build_laplacian_pyramid(orig_pyr)
     gen_lap = build_laplacian_pyramid(gen_pyr)
 
     blended_lap = []
     for i in range(levels):
-        blended_lap.append(gen_lap[i] * mask_pyr_arrs[i] + orig_lap[i] * (1.0 - mask_pyr_arrs[i]))
+        m = mask_pyr_2d[i]
+        if m.ndim == 2:
+            m = m[:, :, np.newaxis]
+        blended_lap.append(gen_lap[i] * m + orig_lap[i] * (1.0 - m))
 
     result = reconstruct_from_laplacian(blended_lap)
     return Image.fromarray(result.clip(0, 255).astype(np.uint8), mode="RGB")
