@@ -29,6 +29,42 @@ def _contains_cjk(text: str) -> bool:
     return False
 
 
+ZH_EN_DICT: dict[str, str] = {
+    # Colors
+    "红色": "red", "蓝色": "blue", "绿色": "green", "白色": "white", "黑色": "black",
+    "黄色": "yellow", "紫色": "purple", "橙色": "orange", "粉色": "pink", "灰色": "gray",
+    "棕色": "brown", "金色": "gold", "银色": "silver",
+    # Common objects
+    "花瓶": "flower vase", "杯子": "cup", "瓶子": "bottle", "碗": "bowl",
+    "盘子": "plate", "盒子": "box", "花": "flower", "植物": "plant",
+    "桌子": "table", "椅子": "chair", "手机": "phone", "电脑": "computer",
+    "书本": "book", "笔": "pen", "灯": "lamp", "钟": "clock",
+    "猫": "cat", "狗": "dog", "水果": "fruit", "苹果": "apple",
+    "水壶": "kettle", "茶壶": "teapot", "玻璃": "glass", "球": "ball",
+    "蛋糕": "cake", "面包": "bread", "石头": "stone", "木头": "wood",
+    "金属": "metal", "塑料": "plastic", "陶瓷": "ceramic",
+    # Adjectives
+    "大": "large", "小": "small", "新": "new", "旧": "old",
+    "现代": "modern", "古典": "classic", "干净": "clean",
+}
+
+
+def _translate_cjk(text: str) -> str:
+    result = text
+    for zh, en in sorted(ZH_EN_DICT.items(), key=lambda x: -len(x[0])):
+        result = result.replace(zh, f" {en} ")
+    result = " ".join(result.split())
+    has_cjk = _contains_cjk(result)
+    if has_cjk:
+        result = " ".join(
+            word for word in result.split()
+            if not _contains_cjk(word) or word in ZH_EN_DICT.values()
+        )
+    if not result.strip():
+        return "a new object"
+    return result.strip()
+
+
 def _inpaint_prompt(instruction: str) -> str:
     if not instruction:
         return "modify the masked region to match the surrounding scene naturally"
@@ -79,10 +115,11 @@ def build_plan(payload: PlanRequest) -> PlanResponse:
         reasoning = "Detected shape or asset guidance."
     else:
         if is_replace:
+            target_desc = _translate_cjk(instruction) if _contains_cjk(instruction) else instruction
             task_prompt = (
-                "Replace the masked object with a new object that matches the description. "
-                "The new object must fit naturally into the scene — matching the lighting, perspective, scale, and color tone of the surrounding image. "
-                "Seamless transition, no visible seams or artifacts."
+                f"{target_desc}. "
+                "The object must fit naturally into the scene — matching the lighting, perspective, "
+                "scale, and color tone of the surrounding image. Seamless transition, no artifacts."
             )
             reasoning = "Detected replacement intent."
         elif not instruction and selected_asset:
