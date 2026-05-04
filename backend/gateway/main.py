@@ -53,7 +53,12 @@ from common.schemas import (
 )
 from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image, encode_image_to_data_url
-from common.utils.masks import evaluate_edit
+from common.utils.masks import (
+    blend_with_mask,
+    compute_mask_bbox,
+    evaluate_edit,
+    soften_mask_edges,
+)
 
 from .benchmarks import BenchmarkStore
 from .deployment import build_deployment_readiness
@@ -73,6 +78,7 @@ ASSETS_DIR = Path(os.getenv("ASSETS_DIR", "/app/assets"))
 FLUX_INIT_URL = os.getenv("FLUX_INIT_URL", "http://127.0.0.1:19085")
 GATEWAY_API_TOKEN = os.getenv("GATEWAY_API_TOKEN", "")
 
+CROP_CONTEXT_PADDING = 64
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 job_store = JobStore(JOBS_DIR)
 project_store = ProjectStore(PROJECTS_DIR)
@@ -504,11 +510,42 @@ async def generate_pipeline(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Unable to prepare a valid mask: {exc}") from exc
 
+    raw_mask = decode_data_url_to_image(normalized_mask.mask_image, mode="L")
+    softened_mask = soften_mask_edges(raw_mask, dilation=16, blur=12)
+    softened_mask_data_url = encode_image_to_data_url(softened_mask)
+
+    is_local_inpaint = payload.task in {"text-guided", "object-removal", "shape-guided"}
+    mask_bbox = compute_mask_bbox(raw_mask)
+    use_crop = is_local_inpaint and mask_bbox is not None
+
+    if use_crop:
+        x1, y1, x2, y2 = mask_bbox
+        pad = CROP_CONTEXT_PADDING
+        x1 = max(0, x1 - pad)
+        y1 = max(0, y1 - pad)
+        x2 = min(source_image.width, x2 + pad)
+        y2 = min(source_image.height, y2 + pad)
+        crop_w = x2 - x1
+        crop_h = y2 - y1
+
+        if crop_w >= 128 and crop_h >= 128:
+            cropped_source = source_image.crop((x1, y1, x2, y2))
+            cropped_mask = softened_mask.crop((x1, y1, x2, y2))
+            inpaint_image_data = encode_image_to_data_url(cropped_source)
+            inpaint_mask_data = encode_image_to_data_url(cropped_mask)
+        else:
+            use_crop = False
+
+    if not use_crop:
+        inpaint_image_data = payload.source_image
+        inpaint_mask_data = softened_mask_data_url
+        x1, y1 = 0, 0
+
     if progress:
         progress("EXECUTING", 0.65, "PowerPaint generation is running")
     powerpaint_request = PowerPaintGenerateRequest(
-        image=payload.source_image,
-        mask_image=normalized_mask.mask_image,
+        image=inpaint_image_data,
+        mask_image=inpaint_mask_data,
         task=payload.task or plan_payload.task,
         prompt=plan_payload.task_prompt,
         negative_prompt=payload.negative_prompt or plan_payload.negative_prompt,
@@ -528,9 +565,18 @@ async def generate_pipeline(
 
     if progress:
         progress("EVALUATING", 0.9, "Evaluating result and saving artifacts")
-    result_image_data = powerpaint_data["result_image"]
-    result_image = decode_data_url_to_image(result_image_data, mode="RGB")
-    mask_image = decode_data_url_to_image(normalized_mask.mask_image, mode="L")
+    generated_image = decode_data_url_to_image(powerpaint_data["result_image"], mode="RGB")
+
+    if use_crop:
+        result_image = source_image.copy()
+        cropped_result = generated_image.resize((crop_w, crop_h))
+        result_image.paste(cropped_result, (x1, y1))
+    else:
+        result_image = generated_image
+
+    result_image = blend_with_mask(source_image, result_image, softened_mask)
+    result_image_data = encode_image_to_data_url(result_image)
+    mask_image = raw_mask
     evaluation = evaluate_edit(source_image, result_image, mask_image)
 
     run_id = uuid.uuid4().hex[:12]

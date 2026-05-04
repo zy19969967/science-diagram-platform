@@ -31,8 +31,10 @@ REMOVE_KEYWORDS = ("删除", "移除", "去掉", "清除", "remove", "delete", "
 REPLACE_KEYWORDS = ("替换", "换成", "改成", "变成", "replace", "change")
 REPAIR_KEYWORDS = ("修复", "修一下", "处理", "repair", "fix")
 
-LOCAL_EDIT_NEGATIVE_PROMPT = "低质量，模糊，畸形，边缘破损，背景变化，颜色溢出"
-TEXT_TO_IMAGE_NEGATIVE_PROMPT = "模糊，畸形，低质量，乱码文字，水印"
+LOCAL_EDIT_NEGATIVE_PROMPT = "low quality, blurry, distorted, broken edges, background changed, color bleeding, watermark, text corruption"
+TEXT_TO_IMAGE_NEGATIVE_PROMPT = "blurry, distorted, low quality, garbled text, watermark, messy layout"
+OBJECT_REMOVAL_NEGATIVE_PROMPT = "object remnants, ghost artifacts, blurry inpainting, mismatched texture, broken edges"
+OUTPAINT_NEGATIVE_PROMPT = "seam visible, mismatched style, distorted continuation, blurry extension, inconsistent lighting"
 DEFAULT_MASK_DILATION = 16
 DEFAULT_MASK_BLUR = 12
 
@@ -40,6 +42,16 @@ DEFAULT_MASK_BLUR = 12
 def _contains_any(text: str, keywords: tuple[str, ...]) -> bool:
     lowered = text.lower()
     return any(keyword in text or keyword in lowered for keyword in keywords)
+
+
+def _negative_for_task(task_type: SmartTaskType) -> str:
+    if task_type == "outpainting":
+        return OUTPAINT_NEGATIVE_PROMPT
+    if task_type == "local_inpaint":
+        return LOCAL_EDIT_NEGATIVE_PROMPT
+    if task_type == "image_variation":
+        return LOCAL_EDIT_NEGATIVE_PROMPT
+    return TEXT_TO_IMAGE_NEGATIVE_PROMPT
 
 
 def _subtask_for(prompt: str) -> str:
@@ -73,15 +85,19 @@ def _pipeline_for_task(task_type: SmartTaskType, *, has_mask: bool) -> SmartPipe
 def _normalized_prompt(task_type: SmartTaskType, subtask_type: str, prompt: str) -> str:
     stripped = prompt.strip()
     if task_type == "local_inpaint":
-        action = stripped or "修改被涂抹区域"
-        return f"将被涂抹区域{action}，保持主体、背景、光照和画面风格不变。"
+        action = stripped or "modify the masked region to blend naturally"
+        return (
+            f"Edit the masked region: {action}. "
+            "Preserve the surrounding context, background, lighting, and overall style. "
+            "Seamless blending with the rest of the image."
+        )
     if task_type == "outpainting":
-        return stripped or "扩展画布内容，保持原图结构、光照和风格一致。"
+        return stripped or "Extend the canvas content outward, maintaining the original structure, lighting, and style consistency."
     if task_type == "image_variation":
-        return stripped or "整体优化这张图，保持主体内容和构图稳定。"
+        return stripped or "Enhance this image while preserving the main subject content and overall composition."
     if task_type == "svg_or_structure_generation":
-        return stripped or "生成清晰的结构化科学示意图。"
-    return stripped or "生成一张清晰、干净的科学示意图。"
+        return stripped or "Generate a clean, structured scientific diagram with clear labels."
+    return stripped or "Generate a clean, sharp scientific illustration diagram."
 
 
 def _decision(
@@ -107,7 +123,7 @@ def _decision(
         need_user_clarification=need_user_clarification,
         clarification_question=clarification_question,
         normalized_prompt=_normalized_prompt(task_type, subtask_type, request.prompt),
-        negative_prompt=LOCAL_EDIT_NEGATIVE_PROMPT if task_type in {"local_inpaint", "outpainting", "image_variation"} else TEXT_TO_IMAGE_NEGATIVE_PROMPT,
+        negative_prompt=_negative_for_task(task_type),
         pipeline=pipeline,
         requires_mask=requires_mask,
         can_auto_segment=can_auto_segment,
@@ -132,7 +148,7 @@ def build_smart_generation_plan(request: SmartGenerationRequest) -> SmartPlanner
             confidence=1.0,
             requires_mask=override in {"local_inpaint", "outpainting"},
             need_user_clarification=override == "local_inpaint" and not has_mask,
-            clarification_question="请涂抹你想修改的区域，这样局部编辑会更稳定。" if override == "local_inpaint" and not has_mask else "",
+            clarification_question="Please paint over the area you want to modify for more stable local editing." if override == "local_inpaint" and not has_mask else "",
         )
 
     if not has_image:
@@ -187,9 +203,9 @@ def build_smart_generation_plan(request: SmartGenerationRequest) -> SmartPlanner
             confidence=0.79,
             requires_mask=True,
             need_user_clarification=True,
-            clarification_question="请涂抹你想修改的区域，这样局部编辑会更稳定。",
+            clarification_question="Please paint over the area you want to modify for more stable local editing.",
             can_auto_segment=False,
-            warnings=["当前没有可用的自动文本定位结果，建议用户补充选区。"],
+            warnings=["No automatic text localization available, suggest user add a mask region."],
         )
 
     return _decision(
@@ -199,8 +215,8 @@ def build_smart_generation_plan(request: SmartGenerationRequest) -> SmartPlanner
         confidence=0.55,
         requires_mask=True,
         need_user_clarification=True,
-        clarification_question="请说明要修改的位置，或直接涂抹你想修改的区域。",
-        warnings=["局部区域不明确，已暂停生成以避免大范围误改。"],
+        clarification_question="Please specify the area to modify, or paint directly over the region you want to edit.",
+        warnings=["Target region is ambiguous, generation paused to avoid unintended widespread changes."],
     )
 
 

@@ -100,10 +100,10 @@ function App() {
   const [taskOverride, setTaskOverride] = useState("");
   const [brushSize, setBrushSize] = useState(24);
   const [drawMode, setDrawMode] = useState("brush");
-  const [steps, setSteps] = useState(30);
-  const [guidanceScale, setGuidanceScale] = useState(7.5);
-  const [fittingDegree, setFittingDegree] = useState(0.85);
-  const [seed, setSeed] = useState(2026);
+  const [steps, setSteps] = useState(25);
+  const [guidanceScale, setGuidanceScale] = useState(5.0);
+  const [fittingDegree, setFittingDegree] = useState(0.9);
+  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 2147483647));
   const [horizontalExpansionRatio, setHorizontalExpansionRatio] = useState(1.2);
   const [verticalExpansionRatio, setVerticalExpansionRatio] = useState(1.2);
   const [selectedAssetId, setSelectedAssetId] = useState("");

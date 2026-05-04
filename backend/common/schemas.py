@@ -110,9 +110,9 @@ class SmartGenerationOptions(BaseModel):
     num_outputs: int = Field(default=2, ge=1, le=4)
     task_override: SmartTaskType | None = None
     quality: Literal["draft", "standard", "high"] = "standard"
-    seed: int = Field(default=2026, ge=0, le=2147483647)
-    steps: int = Field(default=30, ge=1, le=100)
-    guidance_scale: float = Field(default=7.5, ge=0.1, le=30.0)
+    seed: int = Field(default=42, ge=0, le=2147483647)
+    steps: int = Field(default=25, ge=1, le=100)
+    guidance_scale: float = Field(default=5.0, ge=0.1, le=30.0)
 
 
 class SmartGenerationRequest(BaseModel):
@@ -496,10 +496,10 @@ class GenerateRequest(BaseModel):
     selected_asset_id: str | None = None
     asset_placement: AssetPlacement | None = None
     plan: PlanResponse | None = None
-    steps: int = Field(default=30, ge=1, le=100)
-    guidance_scale: float = Field(default=7.5, ge=0.1, le=30.0)
-    fitting_degree: float = Field(default=0.85, ge=0.0, le=1.0)
-    seed: int = Field(default=2026, ge=0, le=2147483647)
+    steps: int = Field(default=25, ge=1, le=100)
+    guidance_scale: float = Field(default=5.0, ge=0.1, le=30.0)
+    fitting_degree: float = Field(default=0.9, ge=0.0, le=1.0)
+    seed: int = Field(default=42, ge=0, le=2147483647)
     negative_prompt: str = ""
     local_files_only: bool = False
     horizontal_expansion_ratio: float = Field(default=1.0, ge=1.0, le=4.0)
@@ -514,10 +514,10 @@ class PowerPaintGenerateRequest(BaseModel):
     task: TaskType
     prompt: str
     negative_prompt: str = ""
-    steps: int = Field(default=30, ge=1, le=100)
-    guidance_scale: float = Field(default=7.5, ge=0.1, le=30.0)
-    fitting_degree: float = Field(default=0.85, ge=0.0, le=1.0)
-    seed: int = Field(default=2026, ge=0, le=2147483647)
+    steps: int = Field(default=25, ge=1, le=100)
+    guidance_scale: float = Field(default=5.0, ge=0.1, le=30.0)
+    fitting_degree: float = Field(default=0.9, ge=0.0, le=1.0)
+    seed: int = Field(default=42, ge=0, le=2147483647)
     local_files_only: bool = False
     horizontal_expansion_ratio: float = Field(default=1.0, ge=1.0, le=4.0)
     vertical_expansion_ratio: float = Field(default=1.0, ge=1.0, le=4.0)

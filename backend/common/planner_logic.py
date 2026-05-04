@@ -55,12 +55,12 @@ def build_plan(payload: PlanRequest) -> PlanResponse:
 
     if task == "object-removal":
         task_prompt = instruction or "remove the marked object and recover a clean scientific illustration background"
-        negative_prompt = "extra object, duplicated object, blurry text, distorted arrows"
-        reasoning = "检测到删除类指令，规划为对象移除流程，并优先保护科研图中的文字与箭头。"
+        negative_prompt = "object remnants, ghost artifacts, blurry inpainting, mismatched texture, broken edges, extra object"
+        reasoning = "Detected removal intent, planned as object removal with protection for labels and arrows."
     elif task == "image-outpainting":
         task_prompt = instruction or "extend the scientific illustration while preserving labels, arrows and layout"
-        negative_prompt = "extra object, text corruption, cluttered background"
-        reasoning = "检测到扩图或补边意图，规划为背景外扩任务。"
+        negative_prompt = "seam visible, mismatched style, distorted continuation, blurry extension, inconsistent lighting, extra object"
+        reasoning = "Detected outpainting intent, planned as background extension."
     elif task == "shape-guided":
         if not instruction and selected_asset:
             task_prompt = f"a clean scientific illustration of {selected_asset.prompt}"
@@ -68,21 +68,20 @@ def build_plan(payload: PlanRequest) -> PlanResponse:
             task_prompt = f"{instruction}; keep the generated object close to {selected_asset.prompt}".strip("; ")
         else:
             task_prompt = instruction or "a clean scientific illustration element"
-        negative_prompt = "deformed object, blurry label, noisy edge, duplicated object"
-        reasoning = "检测到素材或轮廓引导信号，规划为形状约束插入流程。"
+        negative_prompt = "deformed object, blurry label, noisy edge, duplicated object, broken outline"
+        reasoning = "Detected shape or asset guidance, planned as shape-constrained insertion."
     else:
         if not instruction and selected_asset:
             task_prompt = f"add {selected_asset.prompt} to the marked region in a clean scientific illustration style"
         else:
             task_prompt = instruction or "add a scientific illustration element to the marked region"
-        negative_prompt = "blurry text, broken outline, distorted geometry, duplicated object"
-        reasoning = "默认按文本引导局部生成执行，并保留手工绘制的 mask 作为约束。"
+        negative_prompt = "blurry text, broken outline, distorted geometry, duplicated object, mismatched style"
+        reasoning = "Default text-guided local generation with mask constraint."
 
     if not instruction:
-        warnings.append("当前未输入自然语言指令，系统将主要依赖任务类型和选区进行编辑。")
-
+        warnings.append("No natural language instruction provided, system will rely on task type and mask for editing.")
     if payload.selected_asset_id and not selected_asset:
-        warnings.append("所选素材未在素材库中找到，已退化为纯文本引导。")
+        warnings.append("Selected asset not found in catalog, degraded to pure text guidance.")
 
     return PlanResponse(
         task=task,

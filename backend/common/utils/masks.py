@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from ..schemas import AssetPlacement, EvaluationResult, SegmentPoint
 
@@ -10,6 +10,48 @@ def normalize_mask(mask: Image.Image, size: tuple[int, int]) -> Image.Image:
     normalized = mask.convert("L").resize(size)
     binary = normalized.point(lambda pixel: 255 if pixel > 32 else 0, mode="L")
     return binary
+
+
+def dilate_mask(mask: Image.Image, radius: int) -> Image.Image:
+    if radius <= 0:
+        return mask.copy()
+    arr = np.asarray(mask.convert("L"))
+    h, w = arr.shape
+    dilated = np.zeros_like(arr)
+    for dy in range(-radius, radius + 1):
+        for dx in range(-radius, radius + 1):
+            if dx * dx + dy * dy <= radius * radius:
+                shifted = np.roll(np.roll(arr, dx, axis=1), dy, axis=0)
+                if dx > 0:
+                    shifted[:, :dx] = 0
+                elif dx < 0:
+                    shifted[:, dx:] = 0
+                if dy > 0:
+                    shifted[:dy, :] = 0
+                elif dy < 0:
+                    shifted[dy:, :] = 0
+                dilated = np.maximum(dilated, shifted)
+    return Image.fromarray(dilated.astype(np.uint8), mode="L")
+
+
+def blur_mask(mask: Image.Image, radius: int) -> Image.Image:
+    if radius <= 0:
+        return mask.copy()
+    return mask.filter(ImageFilter.GaussianBlur(radius=radius))
+
+
+def soften_mask_edges(mask: Image.Image, *, dilation: int = 16, blur: int = 12) -> Image.Image:
+    dilated = dilate_mask(mask, dilation)
+    return blur_mask(dilated, blur)
+
+
+def blend_with_mask(original: Image.Image, generated: Image.Image, mask: Image.Image) -> Image.Image:
+    mask_arr = np.asarray(mask.convert("L").resize(original.size), dtype=np.float32) / 255.0
+    mask_arr = mask_arr[:, :, np.newaxis]
+    orig_arr = np.asarray(original.convert("RGB"), dtype=np.float32)
+    gen_arr = np.asarray(generated.convert("RGB").resize(original.size), dtype=np.float32)
+    blended = gen_arr * mask_arr + orig_arr * (1.0 - mask_arr)
+    return Image.fromarray(blended.clip(0, 255).astype(np.uint8), mode="RGB")
 
 
 def mask_from_box(width: int, height: int, box: list[int]) -> Image.Image:
@@ -88,11 +130,11 @@ def evaluate_edit(source: Image.Image, result: Image.Image, mask: Image.Image) -
     preservation_score = max(0.0, 1.0 - outside_change_ratio)
 
     if outside_change_ratio < 0.02:
-        note = "非编辑区域保持较好，可作为论文中的局部控制性示例。"
+        note = "Non-edited area well preserved, suitable as a controlled local editing example."
     elif outside_change_ratio < 0.08:
-        note = "存在少量编辑外溢，建议在论文实验中进一步分析 mask 精度与提示词影响。"
+        note = "Minor edit spillover detected, consider refining mask precision or prompt."
     else:
-        note = "编辑外溢较明显，建议重新调整 mask 或 guidance scale。"
+        note = "Significant edit spillover detected, try adjusting the mask or lowering guidance scale."
 
     return EvaluationResult(
         changed_ratio=round(changed_ratio, 4),
