@@ -70,7 +70,6 @@ ZH_EN_DICT: dict[str, str] = {
     "网球场": "tennis court", "游泳池": "swimming pool", "运动员": "athlete",
     "操场": "playground", "体育馆": "gymnasium",
 }
-}
 
 
 def _translate_cjk(text: str) -> str:
