@@ -490,6 +490,37 @@ async def segment(payload: SegmentRequest) -> SegmentResponse:
         return build_segment(payload)
 
 
+def _is_diagram(image: Image.Image) -> bool:
+    """Detect white-background scientific diagrams: border near-white + low variance."""
+    import numpy as np
+    arr = np.asarray(image.convert("RGB"))
+    h, w = arr.shape[:2]
+    border_pixels = np.concatenate([arr[0, :, :], arr[-1, :, :], arr[:, 0, :], arr[:, -1, :]])
+    near_white_ratio = (border_pixels > 240).all(axis=1).mean()
+    gray = arr.mean(axis=2)
+    low_variance = gray.std() < 60
+    return near_white_ratio > 0.7 and low_variance
+
+
+def _diagram_removal_fill(source: Image.Image, mask: Image.Image) -> Image.Image:
+    """Fill masked area with median border color for white-background diagram removal."""
+    import numpy as np
+    arr = np.asarray(source.convert("RGB"))
+    mask_bin = np.asarray(mask.convert("L")) > 32
+    if not mask_bin.any():
+        return source
+    from PIL import ImageFilter
+    dilated = np.asarray(mask.filter(ImageFilter.MaxFilter(5))) > 32
+    border_ring = dilated & ~mask_bin
+    if border_ring.any():
+        fill_color = np.median(arr[border_ring], axis=0).astype(np.uint8)
+    else:
+        fill_color = np.array([255, 255, 255], dtype=np.uint8)
+    result = arr.copy()
+    result[mask_bin] = fill_color
+    return Image.fromarray(result, mode="RGB")
+
+
 async def generate_pipeline(
     payload: GenerateRequest,
     base_url: str,
@@ -555,10 +586,72 @@ async def generate_pipeline(
             raise HTTPException(status_code=400, detail=f"Unable to prepare a valid mask: {exc}") from exc
 
     raw_mask = decode_data_url_to_image(normalized_mask.mask_image, mode="L")
-
-    # Pre-fill mask area with border average color to avoid BrushNet black-hole issue
     import numpy as np
     mask_arr = np.asarray(raw_mask) > 32
+
+    task_name = plan_payload.task or payload.task
+    task_fitting = _fitting_for_task(task_name)
+    task_scale = _scale_for_task(task_name)
+    effective_fitting = payload.fitting_degree if payload.fitting_degree != 0.9 else task_fitting
+    effective_scale = payload.guidance_scale if payload.guidance_scale != 5.0 else task_scale
+
+    # For white-background scientific diagrams, skip generative AI for removal
+    if task_name == "object-removal" and _is_diagram(source_image):
+        if progress:
+            progress("EXECUTING", 0.65, "Filling diagram background")
+        result_image = _diagram_removal_fill(source_image, raw_mask)
+        result_image_data = encode_image_to_data_url(result_image)
+        # Skip PowerPaint, go straight to evaluation
+        if progress:
+            progress("EVALUATING", 0.9, "Evaluating result and saving artifacts")
+        mask_image = raw_mask
+        evaluation = evaluate_edit(source_image, result_image, mask_image)
+        run_id = uuid.uuid4().hex[:12]
+        run_dir = RUNS_DIR / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        source_image.save(run_dir / "source.png")
+        mask_image.save(run_dir / "mask.png")
+        result_image.save(run_dir / "result.png")
+        artifacts = {
+            "source": f"{base_url}/artifacts/{run_id}/source.png",
+            "mask": f"{base_url}/artifacts/{run_id}/mask.png",
+            "result": f"{base_url}/artifacts/{run_id}/result.png",
+            "metadata": f"{base_url}/artifacts/{run_id}/metadata.json",
+        }
+        canvas_state_after = build_canvas_state_after_generate(payload.canvas_state, run_id=run_id, artifacts=artifacts)
+        quality_report = build_quality_report(
+            run_id=run_id, payload=payload, plan=plan_payload,
+            mask=mask_image, evaluation=evaluation, artifacts=artifacts,
+            planner_source=planner_source,
+        )
+        metadata = {
+            "run_id": run_id, "instruction": payload.instruction,
+            "plan": plan_payload.model_dump(),
+            "evaluation": evaluation.model_dump(),
+            "quality_report": quality_report.model_dump(),
+            "smart_generation": payload.smart_metadata,
+            "selected_asset_id": payload.selected_asset_id,
+            "task": task_name,
+            "canvas_state_before": payload.canvas_state.model_dump() if payload.canvas_state else None,
+            "canvas_state_after": canvas_state_after.model_dump() if canvas_state_after else None,
+        }
+        quality_report.prompt.parameters["mask_strategy"] = plan_payload.mask_strategy
+        quality_report.prompt.parameters["sam2_refinement_requested"] = use_sam2
+        quality_report.prompt.parameters["effective_fitting_degree"] = effective_fitting
+        quality_report.prompt.parameters["planner_source"] = planner_source
+        for key in ("task_type", "subtask_type", "planner_confidence", "fallback_used", "is_diagnostic_result", "resize_strategy", "postprocess_blending"):
+            if key in payload.smart_metadata:
+                quality_report.prompt.parameters[f"smart_{key}"] = payload.smart_metadata[key]
+        metadata["quality_report"] = quality_report.model_dump()
+        (run_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+        return GenerateResponse(
+            run_id=run_id, plan=plan_payload,
+            result_image=result_image_data, evaluation=evaluation,
+            artifacts=artifacts, canvas_state=canvas_state_after,
+            quality_report=quality_report,
+        )
+
+    # Pre-fill mask area with border average color to avoid BrushNet black-hole issue
     if mask_arr.any():
         dilated = np.asarray(raw_mask.filter(ImageFilter.MaxFilter(9))) > 32
         border_ring = dilated & ~mask_arr
@@ -580,13 +673,6 @@ async def generate_pipeline(
 
     if progress:
         progress("EXECUTING", 0.65, "PowerPaint generation is running")
-
-    task_name = plan_payload.task or payload.task
-    task_fitting = _fitting_for_task(task_name)
-    task_scale = _scale_for_task(task_name)
-    effective_fitting = payload.fitting_degree if payload.fitting_degree != 0.9 else task_fitting
-    effective_scale = payload.guidance_scale if payload.guidance_scale != 5.0 else task_scale
-
     powerpaint_request = PowerPaintGenerateRequest(
         image=inpaint_image,
         mask_image=normalized_mask.mask_image,
