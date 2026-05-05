@@ -59,6 +59,17 @@ ZH_EN_DICT: dict[str, str] = {
     # Other
     "纸": "paper", "布": "cloth", "光": "light", "影": "shadow",
     "图案": "pattern", "纹理": "texture", "背景": "background",
+    # Science & lab
+    "烧杯": "beaker", "试管": "test tube", "酒精灯": "alcohol lamp",
+    "显微镜": "microscope", "量筒": "graduated cylinder", "漏斗": "funnel",
+    "锥形瓶": "erlenmeyer flask", "培养皿": "petri dish", "滴管": "dropper",
+    "坩埚": "crucible", "温度计": "thermometer", "蒸发皿": "evaporating dish",
+    "铁架台": "iron stand", "石棉网": "wire gauze", "研钵": "mortar",
+    # Sports & outdoor
+    "跑道": "running track", "足球": "soccer ball", "篮球": "basketball",
+    "网球场": "tennis court", "游泳池": "swimming pool", "运动员": "athlete",
+    "操场": "playground", "体育馆": "gymnasium",
+}
 }
 
 
