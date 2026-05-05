@@ -53,7 +53,7 @@ from common.schemas import (
 )
 from common.segment_logic import build_segment
 from common.utils.images import decode_data_url_to_image, encode_image_to_data_url
-from common.utils.masks import evaluate_edit
+from common.utils.masks import blend_with_mask, blur_mask, dilate_mask, evaluate_edit
 
 from .benchmarks import BenchmarkStore
 from .deployment import build_deployment_readiness
@@ -560,7 +560,6 @@ async def generate_pipeline(
     import numpy as np
     mask_arr = np.asarray(raw_mask) > 32
     if mask_arr.any():
-        border = mask_arr.astype(np.uint8) * 255
         dilated = np.asarray(raw_mask.filter(ImageFilter.MaxFilter(9))) > 32
         border_ring = dilated & ~mask_arr
         if border_ring.any():
@@ -568,6 +567,11 @@ async def generate_pipeline(
             avg_color = src_arr[border_ring].mean(axis=0).astype(np.uint8)
             filled = src_arr.copy()
             filled[mask_arr] = avg_color
+            # Soften the fill boundary: blur a narrow inner ring to smooth the transition
+            inner_ring = mask_arr & ~(np.asarray(raw_mask.filter(ImageFilter.MinFilter(3))) > 32)
+            if inner_ring.any():
+                filled_blurred = np.asarray(Image.fromarray(filled, mode="RGB").filter(ImageFilter.GaussianBlur(radius=2)))
+                filled[inner_ring] = filled_blurred[inner_ring]
             inpaint_image = encode_image_to_data_url(Image.fromarray(filled, mode="RGB"))
         else:
             inpaint_image = payload.source_image
@@ -606,7 +610,25 @@ async def generate_pipeline(
     if progress:
         progress("EVALUATING", 0.9, "Evaluating result and saving artifacts")
     result_image = decode_data_url_to_image(powerpaint_data["result_image"], mode="RGB")
-    result_image_data = powerpaint_data["result_image"]
+
+    # Post-process: blend mask boundary to remove BrushNet dark edge artifacts
+    if mask_arr.any():
+        boundary_ring = dilate_mask(raw_mask, radius=5)
+        boundary_ring = Image.fromarray(
+            (np.asarray(boundary_ring, dtype=np.int16) - np.asarray(raw_mask, dtype=np.int16)).clip(0, 255).astype(np.uint8),
+            mode="L",
+        )
+        boundary_blurred = blur_mask(boundary_ring, radius=3)
+        # Final mask = original mask (interior) + blurred boundary ring (transition zone)
+        blended_mask = Image.fromarray(
+            (np.asarray(raw_mask, dtype=np.int16) + np.asarray(boundary_blurred, dtype=np.int16)).clip(0, 255).astype(np.uint8),
+            mode="L",
+        )
+        result_image = blend_with_mask(source_image, result_image, blended_mask)
+        result_image_data = encode_image_to_data_url(result_image)
+    else:
+        result_image_data = powerpaint_data["result_image"]
+
     mask_image = raw_mask
     evaluation = evaluate_edit(source_image, result_image, mask_image)
 

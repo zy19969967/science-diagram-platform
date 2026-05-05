@@ -78,6 +78,22 @@ def _translate_cjk(text: str) -> str:
     return result.strip()
 
 
+def _extract_target_from_instruction(instruction: str) -> str | None:
+    import re
+    text = instruction.strip()
+    all_keywords = REMOVE_KEYWORDS + REPLACE_KEYWORDS + OUTPAINT_KEYWORDS + SHAPE_GUIDED_KEYWORDS
+    for kw in sorted(all_keywords, key=len, reverse=True):
+        text = re.sub(re.escape(kw), "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip(" ,，。.!！？?的个这那只将把在从对为和与或到向请帮我去掉除删换改扩画涂 plus remove delete").strip()
+    if not text:
+        return None
+    if _contains_cjk(text):
+        translated = _translate_cjk(text)
+        if translated and translated != text and translated != "a new object":
+            return translated
+    return text
+
+
 def _inpaint_prompt(instruction: str) -> str:
     if not instruction:
         return "modify the masked region to match the surrounding scene naturally"
@@ -112,6 +128,10 @@ def build_plan(payload: PlanRequest) -> PlanResponse:
     if task == "object-removal":
         task_prompt = "Remove the masked object entirely. Fill the area with the surrounding background texture. No visible seams, ghosting, or artifacts."
         negative_prompt = "text, letters, words, watermark, dark spots, black marks, object remnants, ghost artifacts, blurry inpainting, mismatched texture, broken edges"
+        # Extract target object name from instruction and add to negative prompt
+        target_name = _extract_target_from_instruction(instruction)
+        if target_name:
+            negative_prompt = f"{negative_prompt}, regenerated {target_name}, {target_name} remnants, ghost of {target_name}"
         reasoning = "Detected removal intent."
     elif task == "image-outpainting":
         task_prompt = "Extend the canvas outward naturally. Maintain consistent lighting, structure, and style with the original image. No visible seams."
