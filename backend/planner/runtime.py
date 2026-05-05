@@ -107,13 +107,13 @@ def _planner_prompt(
         "warnings": ["Zero or more short Chinese warnings"],
     }
     rules = [
-        "If the user wants to delete, erase, remove, or clean an object, choose object-removal. CRITICAL: the negative_prompt MUST be in English and MUST name the specific object being removed (e.g. 'people, cup, beaker'), plus 'remnants, ghost, regenerated' to prevent regeneration. target_label MUST be the object being removed (NOT the background).",
+        "If the user wants to delete, erase, remove, or clean an object, choose object-removal. The task_prompt must describe the clean background to fill in. CRITICAL: the negative_prompt MUST name the object being removed (translate to English), plus 'remnants, ghost, regenerated' to prevent the model from drawing it again.",
         "If the user wants to extend, expand, or outpaint the canvas, choose image-outpainting.",
         "If the user selected an asset or wants to follow a specific shape/silhouette, choose shape-guided.",
         "If the user wants to replace, swap, change, or transform an object into something else, choose text-guided. The task_prompt MUST describe the NEW target object in detail (color, material, type).",
         "Otherwise choose text-guided. The task_prompt must be a detailed visual description of what should appear in the masked area.",
-        "Look at the user's instruction carefully. Extract the TARGET object (e.g., from 'replace cup with red vase' -> target is 'red vase'; from 'remove the person' -> target is 'person').",
-        "The task_prompt and negative_prompt MUST always be in English. Only reasoning and warnings may use Chinese.",
+        "Look at the user's instruction carefully. Extract the TARGET object they want (e.g., from 'replace cup with red vase' -> target is 'red vase').",
+        "If the instruction is in Chinese, translate the target description into English for the task_prompt.",
         "If no listed asset is suitable, return null for recommended_asset_id.",
         "Return JSON only, with no markdown fences.",
     ]
@@ -260,6 +260,12 @@ class PlannerRuntime:
             for warning in _coerce_warning_list(raw.get("warnings"))
             if warning not in fallback.warnings
         ]
+
+        # For object removal, ensure the target object is named in the negative prompt
+        if task == "object-removal" and target_label:
+            suppress_terms = f"regenerated {target_label}, {target_label} remnants, ghost of {target_label}"
+            if suppress_terms not in negative_prompt.lower():
+                negative_prompt = f"{negative_prompt}, {suppress_terms}"
 
         return PlanResponse(
             task=task,
