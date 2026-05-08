@@ -55,6 +55,17 @@ class _SignatureLimitedPipeline:
         return _FakeResult(Image.new("RGB", (12, 10), "#224466"))
 
 
+class _NoMaskPipeline:
+    def __call__(
+        self,
+        *,
+        image: Image.Image,
+        prompt: str,
+        num_inference_steps: int,
+    ) -> _FakeResult:
+        return _FakeResult(Image.new("RGB", (12, 10), "#224466"))
+
+
 class _TrackingLock:
     def __init__(self) -> None:
         self.active = False
@@ -129,6 +140,17 @@ class QwenImageServiceRuntimeTest(unittest.TestCase):
         self.assertEqual(call["true_cfg_scale"], 3.5)
         self.assertEqual(call["strength"], 0.8)
 
+    def test_generate_passes_padding_mask_crop_when_requested(self) -> None:
+        fake_pipeline = _FakePipeline()
+        runtime = QwenImageRuntime(
+            config=QwenImageRuntimeConfig(model_repo="local-qwen-test"),
+            pipeline_loader=lambda _config: fake_pipeline,
+        )
+
+        runtime.generate(_request(padding_mask_crop=64))
+
+        self.assertEqual(fake_pipeline.calls[0]["padding_mask_crop"], 64)
+
     def test_generate_passes_generator_when_torch_can_create_one(self) -> None:
         fake_pipeline = _FakePipeline()
         runtime = QwenImageRuntime(
@@ -158,6 +180,15 @@ class QwenImageServiceRuntimeTest(unittest.TestCase):
         call = fake_pipeline.calls[0]
         self.assertEqual(set(call), {"image", "mask_image", "prompt", "num_inference_steps"})
         self.assertEqual(call["num_inference_steps"], 7)
+
+    def test_generate_fails_if_loaded_pipeline_does_not_accept_mask_image(self) -> None:
+        runtime = QwenImageRuntime(
+            config=QwenImageRuntimeConfig(num_inference_steps=50, true_cfg_scale=4.0, strength=1.0),
+            pipeline_loader=lambda _config: _NoMaskPipeline(),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "mask_image"):
+            runtime.generate(_request())
 
     def test_generate_uses_runtime_defaults_when_request_omits_generation_parameters(self) -> None:
         fake_pipeline = _FakePipeline()

@@ -539,6 +539,7 @@ class QwenImageEditRequest(BaseModel):
     num_inference_steps: int = Field(default=50, ge=1, le=100)
     true_cfg_scale: float = Field(default=4.0, ge=0.0, le=30.0)
     strength: float = Field(default=1.0, ge=0.0, le=1.0)
+    padding_mask_crop: int | None = Field(default=None, ge=0, le=1024)
     seed: int = Field(default=42, ge=0, le=2147483647)
     local_files_only: bool = False
 

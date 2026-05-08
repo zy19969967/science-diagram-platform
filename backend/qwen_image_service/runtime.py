@@ -34,6 +34,18 @@ def _as_int(value: str | None, default: int) -> int:
         return default
 
 
+def _as_optional_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized or normalized in {"none", "null", "off", "false"}:
+        return None
+    try:
+        return int(normalized)
+    except ValueError:
+        return None
+
+
 def _as_float(value: str | None, default: float) -> float:
     try:
         return float(str(value))
@@ -50,6 +62,7 @@ class QwenImageRuntimeConfig:
     num_inference_steps: int = 50
     true_cfg_scale: float = 4.0
     strength: float = 1.0
+    padding_mask_crop: int | None = None
 
     @classmethod
     def from_env(cls) -> "QwenImageRuntimeConfig":
@@ -61,6 +74,7 @@ class QwenImageRuntimeConfig:
             num_inference_steps=_as_int(os.getenv("QWEN_IMAGE_NUM_INFERENCE_STEPS"), 50),
             true_cfg_scale=_as_float(os.getenv("QWEN_IMAGE_TRUE_CFG_SCALE"), 4.0),
             strength=_as_float(os.getenv("QWEN_IMAGE_STRENGTH"), 1.0),
+            padding_mask_crop=_as_optional_int(os.getenv("QWEN_IMAGE_PADDING_MASK_CROP")),
         )
 
 
@@ -178,11 +192,24 @@ class QwenImageRuntime:
             ),
             "strength": payload.strength if "strength" in request_fields else self.config.strength,
         }
+        padding_mask_crop = (
+            payload.padding_mask_crop
+            if "padding_mask_crop" in request_fields
+            else self.config.padding_mask_crop
+        )
+        if padding_mask_crop is not None:
+            kwargs["padding_mask_crop"] = padding_mask_crop
         generator = self._generator(payload.seed)
         if generator is not None:
             kwargs["generator"] = generator
 
-        result = pipeline(**_filter_pipeline_kwargs(pipeline, kwargs))
+        filtered_kwargs = _filter_pipeline_kwargs(pipeline, kwargs)
+        missing_required = {"image", "mask_image", "prompt"} - set(filtered_kwargs)
+        if missing_required:
+            missing = ", ".join(sorted(missing_required))
+            raise RuntimeError(f"Loaded Qwen pipeline does not support required inpaint argument(s): {missing}")
+
+        result = pipeline(**filtered_kwargs)
         images = getattr(result, "images", None)
         if not images:
             raise RuntimeError("Local Qwen-Image pipeline returned no images.")

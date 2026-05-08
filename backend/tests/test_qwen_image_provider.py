@@ -51,7 +51,7 @@ class QwenImageProviderTest(unittest.IsolatedAsyncioTestCase):
             task="text-guided",
         )
 
-        self.assertIn("user-painted mask determines the location", provider_prompt)
+        self.assertIn("provided mask determines the edit location", provider_prompt)
         self.assertIn("do not draw an extra outer beaker", provider_prompt)
         self.assertNotIn("positioned in the filter funnel", provider_prompt)
 
@@ -72,6 +72,7 @@ class QwenImageProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload.num_inference_steps, 12)
         self.assertEqual(payload.true_cfg_scale, 4.0)
         self.assertEqual(payload.strength, 1.0)
+        self.assertIsNone(payload.padding_mask_crop)
 
     async def test_qwen_provider_dispatches_to_qwen_image_service(self) -> None:
         calls: list[tuple[str, dict]] = []
@@ -237,6 +238,47 @@ class QwenImageProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decode_data_url_to_image(result.result_image, mode="RGB").size, (120, 90))
         self.assertTrue(result.quality_report.prompt.parameters["qwen_edit_crop_enabled"])
         self.assertEqual(result.quality_report.prompt.parameters["qwen_edit_crop_source_size"], [120, 90])
+        self.assertFalse(result.quality_report.prompt.parameters["qwen_edit_prefill_enabled"])
+        self.assertGreater(result.quality_report.prompt.parameters["qwen_edit_execution_mask_dilation_radius"], 0)
+        self.assertGreater(
+            result.quality_report.prompt.parameters["qwen_edit_execution_mask_coverage_ratio"],
+            result.quality_report.prompt.parameters["qwen_edit_user_mask_coverage_ratio"],
+        )
+        self.assertIn("qwen_request_image", result.artifacts)
+        self.assertIn("qwen_restored_preblend", result.artifacts)
+
+    async def test_qwen_provider_blends_with_expanded_execution_mask(self) -> None:
+        async def fake_post_json(url: str, payload: dict) -> dict:
+            image = decode_data_url_to_image(payload["image"], mode="RGB")
+            return {"result_image": encode_image_to_data_url(Image.new("RGB", image.size, "#0000ff"))}
+
+        source = encode_image_to_data_url(Image.new("RGB", (120, 90), "white"))
+        request = GenerateRequest(
+            source_image=source,
+            instruction="replace the masked beaker with an Erlenmeyer flask",
+            task="text-guided",
+            mask_image=_box_mask_data_url((120, 90), (50, 38, 70, 58)),
+            plan=PlanResponse(
+                task="text-guided",
+                task_prompt="A clear Erlenmeyer flask in vector diagram style.",
+                negative_prompt="",
+                reasoning="test",
+            ),
+            generation_provider="qwen-image",
+            steps=12,
+            guidance_scale=4.0,
+            seed=123,
+        )
+
+        with patch.object(gateway_main, "post_json", fake_post_json), patch.object(
+            gateway_main, "QWEN_IMAGE_URL", "http://qwen-image-test:8005"
+        ):
+            result = await gateway_main.generate_pipeline(request, "http://testserver")
+
+        result_image = decode_data_url_to_image(result.result_image, mode="RGB")
+        self.assertNotEqual(result_image.getpixel((48, 48)), (255, 255, 255))
+        self.assertEqual(result_image.getpixel((10, 10)), (255, 255, 255))
+        self.assertIn("qwen_final_blend_mask", result.artifacts)
 
     async def test_powerpaint_provider_still_dispatches_to_powerpaint_service(self) -> None:
         calls: list[tuple[str, dict]] = []

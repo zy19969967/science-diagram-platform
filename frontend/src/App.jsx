@@ -150,6 +150,7 @@ function App() {
   const lastPointRef = useRef(null);
   const dragActiveRef = useRef(false);
   const jobTokenRef = useRef(0);
+  const maskSyncTokenRef = useRef(0);
 
   const selectedAsset = useMemo(
     () => assets.find((item) => item.id === selectedAssetId) ?? null,
@@ -267,6 +268,8 @@ function App() {
       return;
     }
 
+    const token = maskSyncTokenRef.current + 1;
+    maskSyncTokenRef.current = token;
     const snapshot = canvas.toDataURL("image/png");
     canvas.width = width;
     canvas.height = height;
@@ -275,6 +278,9 @@ function App() {
 
     if (snapshot !== "data:," && snapshot.length > 10) {
       loadImage(snapshot).then((maskImage) => {
+        if (maskSyncTokenRef.current !== token) {
+          return;
+        }
         const context = canvas.getContext("2d");
         context.drawImage(maskImage, 0, 0, width, height);
       });
@@ -386,6 +392,7 @@ function App() {
   }
 
   function clearMask() {
+    maskSyncTokenRef.current += 1;
     const canvas = maskCanvasRef.current;
     if (!canvas) {
       return;
@@ -774,11 +781,18 @@ function App() {
   function applyGenerateResult(data, statusPrefix = "生成完成") {
     setPlan(data.plan);
     setLatestResult(data);
+    if (data.result_image) {
+      setSourceImage(data.result_image);
+      setSelectedInitCandidateId("");
+    }
     if (data.canvas_state) {
       setTextLayers(extractTextLayersFromCanvasState(data.canvas_state));
-      restoreRegionPrompts(data.canvas_state);
       restoreLayerEditorState(data.canvas_state);
     }
+    setPointPrompts([]);
+    setSelectedAssetId("");
+    setAssetPlacement(null);
+    clearMask();
     setHistory((current) => [data, ...current]);
     setStatus(`${statusPrefix}：${data.evaluation.note}`);
   }
@@ -1325,7 +1339,7 @@ function App() {
       setSourceImage(editableImage);
       setLatestResult(editableItem);
       setTextLayers(extractTextLayersFromCanvasState(item.canvas_state));
-      restoreRegionPrompts(item.canvas_state);
+      setPointPrompts([]);
       restoreLayerEditorState(item.canvas_state);
       clearMask();
       setStatus(`已切换到历史结果 ${item.run_id}，可以继续多轮编辑。`);

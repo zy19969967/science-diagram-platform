@@ -311,6 +311,9 @@ QWEN_IMAGE_INTERNAL_NEGATIVE_MARKERS = (
 )
 
 QWEN_IMAGE_EDIT_CROP_LONG_SIDE = 768
+QWEN_IMAGE_EXECUTION_MASK_OBJECT_RATIO = 0.08
+QWEN_IMAGE_EXECUTION_MASK_MAX_IMAGE_RATIO = 0.04
+QWEN_IMAGE_EXECUTION_MASK_MIN_RADIUS = 3
 QWEN_IMAGE_PLANNER_LOCATION_PATTERNS = (
     r"\s*,?\s*(?:positioned|placed|located|sitting|standing)\b[^.]*",
     r"\s*,?\s*in the (?:lower|upper|left|right|center|centre)\b[^.]*",
@@ -320,6 +323,8 @@ QWEN_IMAGE_PLANNER_LOCATION_PATTERNS = (
 
 @dataclass(frozen=True)
 class QwenEditInput:
+    request_image: Image.Image
+    request_mask: Image.Image
     image_data_url: str
     mask_data_url: str
     source_size: tuple[int, int]
@@ -366,11 +371,11 @@ def _qwen_image_edit_prompt(*, instruction: str, plan_prompt: str, task: str | N
     parts = [
         "Edit only the masked region.",
         action,
-        "The user-painted mask determines the location; use planner details only for object identity, geometry, material, and style.",
+        "The provided mask determines the edit location and may be expanded slightly to cover the full original object; use planner details only for object identity, geometry, material, and style.",
         "The masked region should contain exactly the requested replacement object; do not draw an extra outer beaker, jar, duplicate container, or ghost outline from the original object.",
         "Keep every unmasked part of the source image unchanged, including all apparatus lines, labels, liquid levels, line thickness, and white background outside the mask.",
         QWEN_IMAGE_SCIENCE_STYLE_PROMPT,
-        "Make the replacement fit entirely inside the painted mask and match the existing diagram perspective, scale, geometry, and line weight.",
+        "Make the replacement fit cleanly inside the editable region and match the existing diagram perspective, scale, geometry, and line weight.",
     ]
     hints = _qwen_term_hints(user_instruction)
     if hints:
@@ -418,6 +423,25 @@ def _mask_bbox(mask: Image.Image) -> tuple[int, int, int, int] | None:
     return int(xs.min()), int(ys.min()), int(xs.max() + 1), int(ys.max() + 1)
 
 
+def _mask_coverage_ratio(mask: Image.Image) -> float:
+    import numpy as np
+
+    return float((np.asarray(mask.convert("L")) > 32).mean())
+
+
+def _qwen_execution_mask(raw_mask: Image.Image) -> tuple[Image.Image, int]:
+    bbox = _mask_bbox(raw_mask)
+    if bbox is None:
+        return raw_mask.copy(), 0
+
+    width, height = raw_mask.size
+    x1, y1, x2, y2 = bbox
+    object_radius = int(round(max(x2 - x1, y2 - y1) * QWEN_IMAGE_EXECUTION_MASK_OBJECT_RATIO))
+    image_radius = int(round(max(width, height) * QWEN_IMAGE_EXECUTION_MASK_MAX_IMAGE_RATIO))
+    radius = max(1, min(max(QWEN_IMAGE_EXECUTION_MASK_MIN_RADIUS, object_radius), max(1, image_radius)))
+    return dilate_mask(raw_mask, radius=radius), radius
+
+
 def _expand_box(
     box: tuple[int, int, int, int],
     image_size: tuple[int, int],
@@ -462,13 +486,15 @@ def _prefill_mask_region(image: Image.Image, mask: Image.Image) -> Image.Image:
     return Image.fromarray(rgb, mode="RGB")
 
 
-def _prepare_qwen_edit_input(source_image: Image.Image, raw_mask: Image.Image) -> QwenEditInput:
+def _prepare_qwen_edit_input(source_image: Image.Image, edit_mask: Image.Image) -> QwenEditInput:
     source_size = source_image.size
-    bbox = _mask_bbox(raw_mask)
+    bbox = _mask_bbox(edit_mask)
     if bbox is None:
         return QwenEditInput(
+            request_image=source_image.convert("RGB"),
+            request_mask=edit_mask.convert("L"),
             image_data_url=encode_image_to_data_url(source_image),
-            mask_data_url=encode_image_to_data_url(raw_mask),
+            mask_data_url=encode_image_to_data_url(edit_mask),
             source_size=source_size,
             request_size=source_size,
         )
@@ -481,27 +507,29 @@ def _prepare_qwen_edit_input(source_image: Image.Image, raw_mask: Image.Image) -
 
     if crop_enabled:
         crop = source_image.crop(crop_box)
-        mask_crop = raw_mask.crop(crop_box)
-        prefilled = _prefill_mask_region(crop, mask_crop)
-        request_image = _resize_to_long_side(prefilled, QWEN_IMAGE_EDIT_CROP_LONG_SIDE, resample=Image.Resampling.LANCZOS)
+        mask_crop = edit_mask.crop(crop_box)
+        request_image = _resize_to_long_side(crop, QWEN_IMAGE_EDIT_CROP_LONG_SIDE, resample=Image.Resampling.LANCZOS)
         request_mask = mask_crop.resize(request_image.size, resample=Image.Resampling.NEAREST)
         return QwenEditInput(
+            request_image=request_image.convert("RGB"),
+            request_mask=request_mask.convert("L"),
             image_data_url=encode_image_to_data_url(request_image),
             mask_data_url=encode_image_to_data_url(request_mask),
             source_size=source_size,
             request_size=request_image.size,
             crop_box=crop_box,
             crop_size=crop.size,
-            prefill_enabled=True,
+            prefill_enabled=False,
         )
 
-    prefilled = _prefill_mask_region(source_image, raw_mask)
     return QwenEditInput(
-        image_data_url=encode_image_to_data_url(prefilled),
-        mask_data_url=encode_image_to_data_url(raw_mask),
+        request_image=source_image.convert("RGB"),
+        request_mask=edit_mask.convert("L"),
+        image_data_url=encode_image_to_data_url(source_image),
+        mask_data_url=encode_image_to_data_url(edit_mask),
         source_size=source_size,
         request_size=source_size,
-        prefill_enabled=True,
+        prefill_enabled=False,
     )
 
 
@@ -863,6 +891,11 @@ async def generate_pipeline(
         task=task_name,
     )
     qwen_edit_input: QwenEditInput | None = None
+    qwen_execution_mask: Image.Image | None = None
+    qwen_execution_mask_dilation_radius = 0
+    qwen_provider_raw: Image.Image | None = None
+    qwen_restored_preblend: Image.Image | None = None
+    qwen_final_blend_mask: Image.Image | None = None
 
     # For white-background scientific diagrams, skip generative AI for removal
     if provider_name == "powerpaint" and task_name == "object-removal" and _is_diagram(source_image):
@@ -941,7 +974,8 @@ async def generate_pipeline(
     if provider_name == "qwen-image":
         if progress:
             progress("EXECUTING", 0.65, "Qwen-Image generation is running")
-        qwen_edit_input = _prepare_qwen_edit_input(source_image, raw_mask)
+        qwen_execution_mask, qwen_execution_mask_dilation_radius = _qwen_execution_mask(raw_mask)
+        qwen_edit_input = _prepare_qwen_edit_input(source_image, qwen_execution_mask)
         qwen_request = QwenImageEditRequest(
             image=qwen_edit_input.image_data_url,
             mask_image=qwen_edit_input.mask_data_url,
@@ -958,10 +992,10 @@ async def generate_pipeline(
         except httpx.HTTPError as exc:
             raise HTTPException(status_code=502, detail=f"Qwen-Image service is unavailable: {exc}") from exc
         provider_result = decode_data_url_to_image(provider_data["result_image"], mode="RGB")
+        qwen_provider_raw = provider_result
+        qwen_restored_preblend = _restore_qwen_edit_result(source_image, provider_result, qwen_edit_input)
         provider_data = {
-            "result_image": encode_image_to_data_url(
-                _restore_qwen_edit_result(source_image, provider_result, qwen_edit_input)
-            )
+            "result_image": encode_image_to_data_url(qwen_restored_preblend)
         }
     else:
         # Pre-fill mask area with border average color to avoid BrushNet black-hole issue.
@@ -1013,7 +1047,9 @@ async def generate_pipeline(
     # Qwen-Image gets full outside-mask protection.
     if mask_arr.any():
         if provider_name == "qwen-image":
-            blended_mask = blur_mask(dilate_mask(raw_mask, radius=2), radius=2)
+            blend_source_mask = qwen_execution_mask or raw_mask
+            blended_mask = blur_mask(blend_source_mask, radius=2)
+            qwen_final_blend_mask = blended_mask
         else:
             boundary_ring = dilate_mask(raw_mask, radius=5)
             boundary_ring = Image.fromarray(
@@ -1045,6 +1081,23 @@ async def generate_pipeline(
         "result": f"{base_url}/artifacts/{run_id}/result.png",
         "metadata": f"{base_url}/artifacts/{run_id}/metadata.json",
     }
+    if qwen_edit_input:
+        qwen_edit_input.request_image.save(run_dir / "qwen_request_image.png")
+        qwen_edit_input.request_mask.save(run_dir / "qwen_request_mask.png")
+        artifacts["qwen_request_image"] = f"{base_url}/artifacts/{run_id}/qwen_request_image.png"
+        artifacts["qwen_request_mask"] = f"{base_url}/artifacts/{run_id}/qwen_request_mask.png"
+        if qwen_execution_mask:
+            qwen_execution_mask.save(run_dir / "qwen_execution_mask.png")
+            artifacts["qwen_execution_mask"] = f"{base_url}/artifacts/{run_id}/qwen_execution_mask.png"
+        if qwen_provider_raw:
+            qwen_provider_raw.save(run_dir / "qwen_provider_raw.png")
+            artifacts["qwen_provider_raw"] = f"{base_url}/artifacts/{run_id}/qwen_provider_raw.png"
+        if qwen_restored_preblend:
+            qwen_restored_preblend.save(run_dir / "qwen_restored_preblend.png")
+            artifacts["qwen_restored_preblend"] = f"{base_url}/artifacts/{run_id}/qwen_restored_preblend.png"
+        if qwen_final_blend_mask:
+            qwen_final_blend_mask.save(run_dir / "qwen_final_blend_mask.png")
+            artifacts["qwen_final_blend_mask"] = f"{base_url}/artifacts/{run_id}/qwen_final_blend_mask.png"
     canvas_state_after = build_canvas_state_after_generate(payload.canvas_state, run_id=run_id, artifacts=artifacts)
     quality_report = build_quality_report(
         run_id=run_id,
@@ -1084,6 +1137,15 @@ async def generate_pipeline(
         quality_report.prompt.parameters["qwen_edit_request_size"] = list(qwen_edit_input.request_size)
         quality_report.prompt.parameters["qwen_edit_crop_source_size"] = list(qwen_edit_input.source_size)
         quality_report.prompt.parameters["qwen_edit_prefill_enabled"] = qwen_edit_input.prefill_enabled
+        quality_report.prompt.parameters["qwen_edit_execution_mask_dilation_radius"] = qwen_execution_mask_dilation_radius
+        quality_report.prompt.parameters["qwen_edit_execution_mask_bbox"] = (
+            list(_mask_bbox(qwen_execution_mask)) if qwen_execution_mask else None
+        )
+        quality_report.prompt.parameters["qwen_edit_execution_mask_coverage_ratio"] = (
+            _mask_coverage_ratio(qwen_execution_mask) if qwen_execution_mask else None
+        )
+        quality_report.prompt.parameters["qwen_edit_user_mask_bbox"] = list(_mask_bbox(raw_mask)) if _mask_bbox(raw_mask) else None
+        quality_report.prompt.parameters["qwen_edit_user_mask_coverage_ratio"] = _mask_coverage_ratio(raw_mask)
     for key in (
         "task_type",
         "subtask_type",
