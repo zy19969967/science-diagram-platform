@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -308,12 +310,40 @@ QWEN_IMAGE_INTERNAL_NEGATIVE_MARKERS = (
     "mismatched texture",
 )
 
+QWEN_IMAGE_EDIT_CROP_LONG_SIDE = 768
+QWEN_IMAGE_PLANNER_LOCATION_PATTERNS = (
+    r"\s*,?\s*(?:positioned|placed|located|sitting|standing)\b[^.]*",
+    r"\s*,?\s*in the (?:lower|upper|left|right|center|centre)\b[^.]*",
+    r"\s*,?\s*where the\b[^.]*",
+)
+
+
+@dataclass(frozen=True)
+class QwenEditInput:
+    image_data_url: str
+    mask_data_url: str
+    source_size: tuple[int, int]
+    request_size: tuple[int, int]
+    crop_box: tuple[int, int, int, int] | None = None
+    crop_size: tuple[int, int] | None = None
+    prefill_enabled: bool = False
+
 
 def _first_nonempty(*values: str | None) -> str:
     for value in values:
         if value and value.strip():
             return value.strip()
     return ""
+
+
+def _sanitize_qwen_planner_prompt(value: str) -> str:
+    sanitized = value.strip()
+    for pattern in QWEN_IMAGE_PLANNER_LOCATION_PATTERNS:
+        sanitized = re.sub(pattern, "", sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r"\s{2,}", " ", sanitized)
+    sanitized = re.sub(r"\s+\.", ".", sanitized)
+    sanitized = re.sub(r"\.{2,}", ".", sanitized)
+    return sanitized.strip(" ,")
 
 
 def _qwen_term_hints(text: str) -> str:
@@ -323,7 +353,7 @@ def _qwen_term_hints(text: str) -> str:
 
 def _qwen_image_edit_prompt(*, instruction: str, plan_prompt: str, task: str | None) -> str:
     user_instruction = instruction.strip()
-    planner_prompt = plan_prompt.strip()
+    planner_prompt = _sanitize_qwen_planner_prompt(plan_prompt)
     edit_target = _first_nonempty(user_instruction, planner_prompt, "edit the masked object")
 
     if task == "object-removal":
@@ -331,11 +361,13 @@ def _qwen_image_edit_prompt(*, instruction: str, plan_prompt: str, task: str | N
     else:
         action = f"User edit instruction: {edit_target}. The new content must fully replace the original masked object; do not keep or redraw the original object inside the mask."
         if planner_prompt and planner_prompt != user_instruction and user_instruction:
-            action = f"{action} Additional visual target details: {planner_prompt}."
+            action = f"{action} Additional appearance details from planner: {planner_prompt}."
 
     parts = [
         "Edit only the masked region.",
         action,
+        "The user-painted mask determines the location; use planner details only for object identity, geometry, material, and style.",
+        "The masked region should contain exactly the requested replacement object; do not draw an extra outer beaker, jar, duplicate container, or ghost outline from the original object.",
         "Keep every unmasked part of the source image unchanged, including all apparatus lines, labels, liquid levels, line thickness, and white background outside the mask.",
         QWEN_IMAGE_SCIENCE_STYLE_PROMPT,
         "Make the replacement fit entirely inside the painted mask and match the existing diagram perspective, scale, geometry, and line weight.",
@@ -374,6 +406,113 @@ def _provider_edit_prompts(
             negative_prompt = QWEN_IMAGE_DEFAULT_NEGATIVE_PROMPT
         return _qwen_image_edit_prompt(instruction=instruction, plan_prompt=plan_prompt, task=task), negative_prompt
     return _first_nonempty(plan_prompt, instruction), _first_nonempty(request_negative_prompt, plan_negative_prompt)
+
+
+def _mask_bbox(mask: Image.Image) -> tuple[int, int, int, int] | None:
+    import numpy as np
+
+    arr = np.asarray(mask.convert("L")) > 32
+    if not arr.any():
+        return None
+    ys, xs = np.where(arr)
+    return int(xs.min()), int(ys.min()), int(xs.max() + 1), int(ys.max() + 1)
+
+
+def _expand_box(
+    box: tuple[int, int, int, int],
+    image_size: tuple[int, int],
+    *,
+    padding_ratio: float = 0.70,
+    min_padding: int = 16,
+) -> tuple[int, int, int, int]:
+    width, height = image_size
+    x1, y1, x2, y2 = box
+    pad = max(min_padding, int(round(max(x2 - x1, y2 - y1) * padding_ratio)))
+    return max(0, x1 - pad), max(0, y1 - pad), min(width, x2 + pad), min(height, y2 + pad)
+
+
+def _resize_to_long_side(
+    image: Image.Image,
+    target_long_side: int,
+    *,
+    resample: int,
+) -> Image.Image:
+    width, height = image.size
+    long_side = max(width, height)
+    if long_side >= target_long_side:
+        return image
+    scale = target_long_side / float(long_side)
+    new_width = max(8, int(round((width * scale) / 8.0)) * 8)
+    new_height = max(8, int(round((height * scale) / 8.0)) * 8)
+    return image.resize((new_width, new_height), resample=resample)
+
+
+def _prefill_mask_region(image: Image.Image, mask: Image.Image) -> Image.Image:
+    import numpy as np
+
+    rgb = np.asarray(image.convert("RGB"), dtype=np.uint8).copy()
+    mask_arr = np.asarray(mask.convert("L").resize(image.size)) > 32
+    if not mask_arr.any():
+        return image.convert("RGB")
+
+    dilated = np.asarray(mask.convert("L").resize(image.size).filter(ImageFilter.MaxFilter(9))) > 32
+    border = dilated & ~mask_arr
+    fill_color = rgb[border].mean(axis=0).astype(np.uint8) if border.any() else np.array([255, 255, 255], dtype=np.uint8)
+    rgb[mask_arr] = fill_color
+    return Image.fromarray(rgb, mode="RGB")
+
+
+def _prepare_qwen_edit_input(source_image: Image.Image, raw_mask: Image.Image) -> QwenEditInput:
+    source_size = source_image.size
+    bbox = _mask_bbox(raw_mask)
+    if bbox is None:
+        return QwenEditInput(
+            image_data_url=encode_image_to_data_url(source_image),
+            mask_data_url=encode_image_to_data_url(raw_mask),
+            source_size=source_size,
+            request_size=source_size,
+        )
+
+    crop_box = _expand_box(bbox, source_size)
+    full_box = (0, 0, source_size[0], source_size[1])
+    crop_area = (crop_box[2] - crop_box[0]) * (crop_box[3] - crop_box[1])
+    full_area = source_size[0] * source_size[1]
+    crop_enabled = crop_box != full_box and crop_area < full_area * 0.95
+
+    if crop_enabled:
+        crop = source_image.crop(crop_box)
+        mask_crop = raw_mask.crop(crop_box)
+        prefilled = _prefill_mask_region(crop, mask_crop)
+        request_image = _resize_to_long_side(prefilled, QWEN_IMAGE_EDIT_CROP_LONG_SIDE, resample=Image.Resampling.LANCZOS)
+        request_mask = mask_crop.resize(request_image.size, resample=Image.Resampling.NEAREST)
+        return QwenEditInput(
+            image_data_url=encode_image_to_data_url(request_image),
+            mask_data_url=encode_image_to_data_url(request_mask),
+            source_size=source_size,
+            request_size=request_image.size,
+            crop_box=crop_box,
+            crop_size=crop.size,
+            prefill_enabled=True,
+        )
+
+    prefilled = _prefill_mask_region(source_image, raw_mask)
+    return QwenEditInput(
+        image_data_url=encode_image_to_data_url(prefilled),
+        mask_data_url=encode_image_to_data_url(raw_mask),
+        source_size=source_size,
+        request_size=source_size,
+        prefill_enabled=True,
+    )
+
+
+def _restore_qwen_edit_result(source_image: Image.Image, result_image: Image.Image, edit_input: QwenEditInput) -> Image.Image:
+    if not edit_input.crop_box or not edit_input.crop_size:
+        return result_image.convert("RGB").resize(source_image.size)
+
+    crop_result = result_image.convert("RGB").resize(edit_input.crop_size, resample=Image.Resampling.LANCZOS)
+    restored = source_image.copy()
+    restored.paste(crop_result, edit_input.crop_box[:2])
+    return restored
 
 
 def _full_image_mask(source_image: str) -> str:
@@ -723,6 +862,7 @@ async def generate_pipeline(
         plan_negative_prompt=plan_payload.negative_prompt,
         task=task_name,
     )
+    qwen_edit_input: QwenEditInput | None = None
 
     # For white-background scientific diagrams, skip generative AI for removal
     if provider_name == "powerpaint" and task_name == "object-removal" and _is_diagram(source_image):
@@ -801,9 +941,10 @@ async def generate_pipeline(
     if provider_name == "qwen-image":
         if progress:
             progress("EXECUTING", 0.65, "Qwen-Image generation is running")
+        qwen_edit_input = _prepare_qwen_edit_input(source_image, raw_mask)
         qwen_request = QwenImageEditRequest(
-            image=payload.source_image,
-            mask_image=normalized_mask.mask_image,
+            image=qwen_edit_input.image_data_url,
+            mask_image=qwen_edit_input.mask_data_url,
             prompt=provider_prompt,
             negative_prompt=provider_negative_prompt,
             num_inference_steps=payload.steps,
@@ -816,6 +957,12 @@ async def generate_pipeline(
             provider_data = await post_json(f"{QWEN_IMAGE_URL}/generate", qwen_request.model_dump())
         except httpx.HTTPError as exc:
             raise HTTPException(status_code=502, detail=f"Qwen-Image service is unavailable: {exc}") from exc
+        provider_result = decode_data_url_to_image(provider_data["result_image"], mode="RGB")
+        provider_data = {
+            "result_image": encode_image_to_data_url(
+                _restore_qwen_edit_result(source_image, provider_result, qwen_edit_input)
+            )
+        }
     else:
         # Pre-fill mask area with border average color to avoid BrushNet black-hole issue.
         if mask_arr.any():
@@ -930,6 +1077,13 @@ async def generate_pipeline(
     quality_report.prompt.parameters["model_dtype"] = provider_model_dtype
     quality_report.prompt.parameters["provider_prompt"] = provider_prompt
     quality_report.prompt.parameters["provider_negative_prompt"] = provider_negative_prompt
+    if qwen_edit_input:
+        quality_report.prompt.parameters["qwen_edit_crop_enabled"] = qwen_edit_input.crop_box is not None
+        quality_report.prompt.parameters["qwen_edit_crop_box"] = list(qwen_edit_input.crop_box) if qwen_edit_input.crop_box else None
+        quality_report.prompt.parameters["qwen_edit_crop_size"] = list(qwen_edit_input.crop_size) if qwen_edit_input.crop_size else None
+        quality_report.prompt.parameters["qwen_edit_request_size"] = list(qwen_edit_input.request_size)
+        quality_report.prompt.parameters["qwen_edit_crop_source_size"] = list(qwen_edit_input.source_size)
+        quality_report.prompt.parameters["qwen_edit_prefill_enabled"] = qwen_edit_input.prefill_enabled
     for key in (
         "task_type",
         "subtask_type",

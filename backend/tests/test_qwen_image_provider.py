@@ -8,7 +8,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from common.schemas import GenerateRequest, PlanResponse, QwenImageEditRequest
-from common.utils.images import encode_image_to_data_url
+from common.utils.images import decode_data_url_to_image, encode_image_to_data_url
 
 os.environ.setdefault("ASSETS_DIR", str(Path(__file__).resolve().parents[1] / "assets"))
 _ROOT = Path(__file__).resolve().parents[2]
@@ -32,7 +32,29 @@ def _mask_data_url() -> str:
     return encode_image_to_data_url(mask)
 
 
+def _box_mask_data_url(size: tuple[int, int], box: tuple[int, int, int, int]) -> str:
+    mask = Image.new("L", size, 0)
+    for x in range(box[0], box[2]):
+        for y in range(box[1], box[3]):
+            mask.putpixel((x, y), 255)
+    return encode_image_to_data_url(mask)
+
+
 class QwenImageProviderTest(unittest.IsolatedAsyncioTestCase):
+    def test_qwen_prompt_uses_mask_location_and_blocks_double_containers(self) -> None:
+        provider_prompt = gateway_main._qwen_image_edit_prompt(
+            instruction="replace the masked beaker with an Erlenmeyer flask",
+            plan_prompt=(
+                "A laboratory conical flask, positioned in the filter funnel. "
+                "It should match the vector illustration style."
+            ),
+            task="text-guided",
+        )
+
+        self.assertIn("user-painted mask determines the location", provider_prompt)
+        self.assertIn("do not draw an extra outer beaker", provider_prompt)
+        self.assertNotIn("positioned in the filter funnel", provider_prompt)
+
     def test_qwen_image_edit_request_contains_mask_native_fields(self) -> None:
         payload = QwenImageEditRequest(
             image="data:image/png;base64,source",
@@ -175,6 +197,46 @@ class QwenImageProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(calls[0][0].endswith("/plan"))
         self.assertEqual(calls[-1][1]["negative_prompt"], " ")
         self.assertEqual(result.quality_report.prompt.parameters["provider_negative_prompt"], " ")
+
+    async def test_qwen_provider_crops_and_upscales_mask_region(self) -> None:
+        calls: list[tuple[str, dict, tuple[int, int], tuple[int, int]]] = []
+
+        async def fake_post_json(url: str, payload: dict) -> dict:
+            image = decode_data_url_to_image(payload["image"], mode="RGB")
+            mask = decode_data_url_to_image(payload["mask_image"], mode="L")
+            calls.append((url, payload, image.size, mask.size))
+            return {"result_image": encode_image_to_data_url(Image.new("RGB", image.size, "#ddeeff"))}
+
+        source = encode_image_to_data_url(Image.new("RGB", (120, 90), "white"))
+        request = GenerateRequest(
+            source_image=source,
+            instruction="replace the masked beaker with an Erlenmeyer flask",
+            task="text-guided",
+            mask_image=_box_mask_data_url((120, 90), (50, 38, 70, 58)),
+            plan=PlanResponse(
+                task="text-guided",
+                task_prompt="A clear Erlenmeyer flask in vector diagram style.",
+                negative_prompt="",
+                reasoning="test",
+            ),
+            generation_provider="qwen-image",
+            steps=12,
+            guidance_scale=4.0,
+            seed=123,
+        )
+
+        with patch.object(gateway_main, "post_json", fake_post_json), patch.object(
+            gateway_main, "QWEN_IMAGE_URL", "http://qwen-image-test:8005"
+        ):
+            result = await gateway_main.generate_pipeline(request, "http://testserver")
+
+        self.assertEqual(calls[0][0], "http://qwen-image-test:8005/generate")
+        self.assertNotEqual(calls[0][2], (120, 90))
+        self.assertEqual(calls[0][2], calls[0][3])
+        self.assertGreaterEqual(max(calls[0][2]), 768)
+        self.assertEqual(decode_data_url_to_image(result.result_image, mode="RGB").size, (120, 90))
+        self.assertTrue(result.quality_report.prompt.parameters["qwen_edit_crop_enabled"])
+        self.assertEqual(result.quality_report.prompt.parameters["qwen_edit_crop_source_size"], [120, 90])
 
     async def test_powerpaint_provider_still_dispatches_to_powerpaint_service(self) -> None:
         calls: list[tuple[str, dict]] = []
