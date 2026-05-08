@@ -37,3 +37,9 @@
 - Record the verification commands used after implementation.
 - Distinguish unit tests from real GPU smoke tests.
 - Note that CI does not run real model inference.
+
+## Prompt Diagnostics
+
+- For Qwen-Image quality issues, inspect `metadata.json -> quality_report.prompt.parameters.provider_prompt`.
+- Qwen-Image prompts should say the edit is mask-only, preserve every unmasked part, and keep the scientific diagram style.
+- PowerPaint prompts are intentionally different and should remain planner-style inpainting prompts with stronger artifact negatives.

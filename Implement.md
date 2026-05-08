@@ -59,3 +59,10 @@
 
 - `.env.example`, `.env.server.example`, `.env.nodocker.example`, Docker Compose, and Conda defaults now target 2 x H20-NVLink 96GB.
 - Default GPU mapping is `qwen-image -> 0` and `powerpaint/planner/segmenter/flux -> 1`.
+
+## Prompt Routing Fixes
+
+- Qwen-Image provider prompts now follow the official prompt-enhancement guidance: keep the original user edit request, make the edit region explicit, and add scientific-diagram preservation constraints.
+- PowerPaint keeps the legacy planner/inpaint prompt instead of sharing the Qwen-Image prompt.
+- Qwen-Image default negative prompt is intentionally light unless the user supplies a custom negative prompt; PowerPaint keeps the stronger artifact-focused negative prompt.
+- Quality reports record `provider_prompt` and `provider_negative_prompt` for debugging generated results.

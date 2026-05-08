@@ -23,6 +23,7 @@ Frontend
 - `powerpaint` remains available as a manual provider.
 - If the user explicitly selects a provider, the gateway reports that provider's failure clearly instead of silently pretending another provider succeeded.
 - Qwen-Image receives the original source image and normalized mask. PowerPaint keeps its current pre-fill and blend path.
+- Qwen-Image and PowerPaint use different provider prompts. Qwen-Image receives an explicit mask-only edit instruction that preserves the user's original request and diagram style constraints. PowerPaint keeps the planner-style inpaint prompt and stronger negative prompt.
 - Docker starts Qwen-Image only through the optional `qwen-image` profile so normal deployments are not blocked when the extra 80GB GPU is unavailable.
 
 ## Metadata
@@ -41,6 +42,8 @@ Every generated run should record:
 - `mask_bbox`
 - `fallback_used`
 - `local_files_only`
+- `provider_prompt`
+- `provider_negative_prompt`
 
 ## Current Review Fixes
 

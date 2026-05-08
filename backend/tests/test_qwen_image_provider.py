@@ -81,10 +81,54 @@ class QwenImageProviderTest(unittest.IsolatedAsyncioTestCase):
             result = await gateway_main.generate_pipeline(request, "http://testserver")
 
         self.assertEqual(calls[0][0], "http://qwen-image-test:8005/generate")
-        self.assertEqual(calls[0][1]["prompt"], "A labeled nucleus in a clean scientific diagram style.")
+        self.assertIn("Edit only the masked region", calls[0][1]["prompt"])
+        self.assertIn("A labeled nucleus in a clean scientific diagram style.", calls[0][1]["prompt"])
         self.assertEqual(calls[0][1]["mask_image"].split(",", 1)[0], "data:image/png;base64")
+        self.assertEqual(calls[0][1]["negative_prompt"], " ")
         self.assertEqual(result.quality_report.prompt.parameters["provider"], "qwen-image")
         self.assertEqual(result.quality_report.prompt.parameters["pipeline"], "qwen_image_inpaint")
+        self.assertIn("Edit only the masked region", result.quality_report.prompt.parameters["provider_prompt"])
+        self.assertEqual(result.quality_report.prompt.parameters["provider_negative_prompt"], " ")
+
+    async def test_qwen_provider_enhances_chinese_replacement_prompt(self) -> None:
+        calls: list[tuple[str, dict]] = []
+
+        async def fake_post_json(url: str, payload: dict) -> dict:
+            calls.append((url, payload))
+            return {"result_image": _image_data_url("#ddeeff")}
+
+        request = GenerateRequest(
+            source_image=_image_data_url("white"),
+            instruction="将这个物品换成一个倾斜的锥形瓶，并且与玻璃棒平行",
+            task="text-guided",
+            mask_image=_mask_data_url(),
+            plan=PlanResponse(
+                task="text-guided",
+                task_prompt="A new object naturally placed in the masked region, seamlessly blended with the scene lighting, color, and style.",
+                negative_prompt="low quality, blurry, distorted, broken edges, background changed, color bleeding, watermark, text corruption",
+                reasoning="test",
+            ),
+            generation_provider="qwen-image",
+            steps=12,
+            guidance_scale=4.0,
+            seed=123,
+        )
+
+        with patch.object(gateway_main, "post_json", fake_post_json), patch.object(
+            gateway_main, "QWEN_IMAGE_URL", "http://qwen-image-test:8005"
+        ):
+            result = await gateway_main.generate_pipeline(request, "http://testserver")
+
+        provider_prompt = calls[0][1]["prompt"]
+        self.assertIn("Edit only the masked region", provider_prompt)
+        self.assertIn("将这个物品换成一个倾斜的锥形瓶，并且与玻璃棒平行", provider_prompt)
+        self.assertIn("Erlenmeyer flask", provider_prompt)
+        self.assertIn("glass rod", provider_prompt)
+        self.assertIn("parallel", provider_prompt)
+        self.assertIn("Keep every unmasked part", provider_prompt)
+        self.assertEqual(calls[0][1]["negative_prompt"], " ")
+        self.assertEqual(result.quality_report.prompt.parameters["provider_prompt"], provider_prompt)
+        self.assertEqual(result.quality_report.prompt.parameters["provider_negative_prompt"], " ")
 
     async def test_powerpaint_provider_still_dispatches_to_powerpaint_service(self) -> None:
         calls: list[tuple[str, dict]] = []
@@ -116,7 +160,14 @@ class QwenImageProviderTest(unittest.IsolatedAsyncioTestCase):
             result = await gateway_main.generate_pipeline(request, "http://testserver")
 
         self.assertEqual(calls[0][0], "http://powerpaint-test:8002/generate")
+        self.assertEqual(calls[0][1]["prompt"], "A labeled nucleus in a clean scientific diagram style.")
+        self.assertEqual(calls[0][1]["negative_prompt"], "blurry, distorted")
         self.assertEqual(result.quality_report.prompt.parameters["provider"], "powerpaint")
+        self.assertEqual(
+            result.quality_report.prompt.parameters["provider_prompt"],
+            "A labeled nucleus in a clean scientific diagram style.",
+        )
+        self.assertEqual(result.quality_report.prompt.parameters["provider_negative_prompt"], "blurry, distorted")
 
 
 if __name__ == "__main__":

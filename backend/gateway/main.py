@@ -277,6 +277,84 @@ def _scale_for_task(task: str | None) -> float:
     return 7.5
 
 
+QWEN_IMAGE_DEFAULT_NEGATIVE_PROMPT = " "
+
+QWEN_IMAGE_SCIENCE_STYLE_PROMPT = (
+    "Preserve the clean scientific diagram style: white background, flat vector-like drawing, "
+    "crisp thin gray or black outlines, simple translucent cyan liquid when present, no shadows, "
+    "no photographic texture."
+)
+
+QWEN_IMAGE_TERM_HINTS = (
+    ("锥形瓶", "Erlenmeyer flask / conical flask"),
+    ("烧杯", "beaker"),
+    ("玻璃棒", "glass rod"),
+    ("漏斗", "funnel"),
+    ("试管", "test tube"),
+    ("支架", "lab stand"),
+    ("铁架台", "lab stand"),
+    ("倾斜", "tilted"),
+    ("平行", "parallel"),
+    ("垂直", "perpendicular"),
+)
+
+
+def _first_nonempty(*values: str | None) -> str:
+    for value in values:
+        if value and value.strip():
+            return value.strip()
+    return ""
+
+
+def _qwen_term_hints(text: str) -> str:
+    hints = [f"{source}: {target}" for source, target in QWEN_IMAGE_TERM_HINTS if source in text]
+    return ", ".join(hints)
+
+
+def _qwen_image_edit_prompt(*, instruction: str, plan_prompt: str, task: str | None) -> str:
+    user_instruction = instruction.strip()
+    planner_prompt = plan_prompt.strip()
+    edit_target = _first_nonempty(user_instruction, planner_prompt, "edit the masked object")
+
+    if task == "object-removal":
+        action = "Remove the masked object and fill the masked region with clean white diagram background."
+    else:
+        action = f"User edit instruction: {edit_target}."
+        if planner_prompt and planner_prompt != user_instruction and user_instruction:
+            action = f"{action} Visual target from planner: {planner_prompt}."
+
+    parts = [
+        "Edit only the masked region.",
+        action,
+        "Keep every unmasked part of the source image unchanged, including the support stand, glass rod, funnel, beaker, liquid level, line thickness, and white background.",
+        QWEN_IMAGE_SCIENCE_STYLE_PROMPT,
+        "Make the replacement match the existing diagram perspective, scale, geometry, and line weight.",
+    ]
+    hints = _qwen_term_hints(user_instruction)
+    if hints:
+        parts.insert(2, f"Recognize these requested lab objects and relations: {hints}.")
+    if "平行" in user_instruction:
+        parts.append("If parallel alignment is requested, align the replacement object's main axis parallel to the referenced object.")
+    return " ".join(parts)
+
+
+def _provider_edit_prompts(
+    *,
+    provider: str,
+    instruction: str,
+    plan_prompt: str,
+    request_negative_prompt: str,
+    plan_negative_prompt: str,
+    task: str | None,
+) -> tuple[str, str]:
+    if provider == "qwen-image":
+        negative_prompt = request_negative_prompt.strip()
+        if not negative_prompt or negative_prompt == plan_negative_prompt.strip():
+            negative_prompt = QWEN_IMAGE_DEFAULT_NEGATIVE_PROMPT
+        return _qwen_image_edit_prompt(instruction=instruction, plan_prompt=plan_prompt, task=task), negative_prompt
+    return _first_nonempty(plan_prompt, instruction), _first_nonempty(request_negative_prompt, plan_negative_prompt)
+
+
 def _full_image_mask(source_image: str) -> str:
     image = decode_data_url_to_image(source_image, mode="RGB")
     mask = Image.new("L", image.size, 255)
@@ -616,6 +694,14 @@ async def generate_pipeline(
         if provider_name == "qwen-image"
         else os.getenv("POWERPAINT_WEIGHT_DTYPE", "float16")
     )
+    provider_prompt, provider_negative_prompt = _provider_edit_prompts(
+        provider=provider_name,
+        instruction=payload.instruction,
+        plan_prompt=plan_payload.task_prompt,
+        request_negative_prompt=payload.negative_prompt,
+        plan_negative_prompt=plan_payload.negative_prompt,
+        task=task_name,
+    )
 
     # For white-background scientific diagrams, skip generative AI for removal
     if provider_name == "powerpaint" and task_name == "object-removal" and _is_diagram(source_image):
@@ -665,6 +751,8 @@ async def generate_pipeline(
         quality_report.prompt.parameters["pipeline"] = provider_pipeline
         quality_report.prompt.parameters["model"] = provider_model
         quality_report.prompt.parameters["model_dtype"] = provider_model_dtype
+        quality_report.prompt.parameters["provider_prompt"] = provider_prompt
+        quality_report.prompt.parameters["provider_negative_prompt"] = provider_negative_prompt
         for key in (
             "task_type",
             "subtask_type",
@@ -695,8 +783,8 @@ async def generate_pipeline(
         qwen_request = QwenImageEditRequest(
             image=payload.source_image,
             mask_image=normalized_mask.mask_image,
-            prompt=plan_payload.task_prompt,
-            negative_prompt=payload.negative_prompt or plan_payload.negative_prompt,
+            prompt=provider_prompt,
+            negative_prompt=provider_negative_prompt,
             num_inference_steps=payload.steps,
             true_cfg_scale=payload.true_cfg_scale if payload.true_cfg_scale is not None else payload.guidance_scale,
             strength=payload.strength,
@@ -733,8 +821,8 @@ async def generate_pipeline(
             image=inpaint_image,
             mask_image=normalized_mask.mask_image,
             task=task_name,
-            prompt=plan_payload.task_prompt,
-            negative_prompt=payload.negative_prompt or plan_payload.negative_prompt,
+            prompt=provider_prompt,
+            negative_prompt=provider_negative_prompt,
             steps=payload.steps,
             guidance_scale=effective_scale,
             fitting_degree=effective_fitting,
@@ -819,6 +907,8 @@ async def generate_pipeline(
     quality_report.prompt.parameters["pipeline"] = provider_pipeline
     quality_report.prompt.parameters["model"] = provider_model
     quality_report.prompt.parameters["model_dtype"] = provider_model_dtype
+    quality_report.prompt.parameters["provider_prompt"] = provider_prompt
+    quality_report.prompt.parameters["provider_negative_prompt"] = provider_negative_prompt
     for key in (
         "task_type",
         "subtask_type",
