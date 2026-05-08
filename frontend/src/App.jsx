@@ -781,10 +781,6 @@ function App() {
   function applyGenerateResult(data, statusPrefix = "生成完成") {
     setPlan(data.plan);
     setLatestResult(data);
-    if (data.result_image) {
-      setSourceImage(data.result_image);
-      setSelectedInitCandidateId("");
-    }
     if (data.canvas_state) {
       setTextLayers(extractTextLayersFromCanvasState(data.canvas_state));
       restoreLayerEditorState(data.canvas_state);

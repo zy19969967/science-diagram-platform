@@ -441,13 +441,16 @@ input[type="range"] {
 .canvas-stack {
   position: relative;
   flex: none;
+  max-width: 100%;
   margin: auto auto 80px;
 }
 
 .canvas-stack img {
   display: block;
   width: 100%;
+  height: auto;
   max-height: none;
+  object-fit: contain;
   border-radius: 22px;
   box-shadow: 0 14px 40px rgba(23, 50, 77, 0.14);
 }
@@ -3354,6 +3357,7 @@ input[type="number"]:focus {
 }
 
 .canvas-stack {
+  max-width: 100%;
   margin: auto auto 72px;
 }
 
@@ -3780,4 +3784,75 @@ input[type="number"]:focus {
   .whiteboard-canvas-stage {
     padding: 14px 10px;
   }
+}
+
+.result-panel.whiteboard-inspector {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  padding: 0;
+}
+
+.result-panel.whiteboard-inspector .inspector-heading {
+  position: relative;
+  z-index: 3;
+  margin: 0;
+  padding: 12px 12px 10px;
+  background: var(--rail);
+}
+
+.result-panel.whiteboard-inspector .inspector-tabs {
+  position: relative;
+  z-index: 3;
+  margin: 0;
+  padding: 8px 12px 10px;
+  background: var(--rail);
+}
+
+.result-panel.whiteboard-inspector .inspector-tab-panel {
+  min-height: 0;
+  overflow: auto;
+  padding: 0 12px 12px;
+  scrollbar-gutter: stable;
+}
+
+.result-panel.whiteboard-inspector .result-preview {
+  min-height: 0;
+  aspect-ratio: auto;
+  overflow: visible;
+}
+
+.result-panel.whiteboard-inspector .result-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+}
+
+@media (max-width: 980px) {
+  .result-panel.whiteboard-inspector {
+    display: flex;
+    overflow: visible;
+    padding: 8px 10px;
+  }
+
+  .result-panel.whiteboard-inspector .inspector-heading,
+  .result-panel.whiteboard-inspector .inspector-tabs {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .result-panel.whiteboard-inspector .inspector-tab-panel {
+    overflow: visible;
+    padding: 0;
+  }
+}
+
+.history-card img {
+  width: 100%;
+  height: 72px;
+  aspect-ratio: auto;
+  object-fit: contain;
+  background: #fffefa;
 }
