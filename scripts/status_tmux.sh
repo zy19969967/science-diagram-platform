@@ -6,4 +6,4 @@ if ! command -v tmux >/dev/null 2>&1; then
   exit 1
 fi
 
-tmux list-sessions 2>/dev/null | grep -E '^sci-(frontend|gateway|flux|powerpaint|segmenter|planner)' || echo "No science-diagram tmux sessions found."
+tmux list-sessions 2>/dev/null | grep -E '^sci-(frontend|gateway|flux|qwen-image|powerpaint|segmenter|planner)' || echo "No science-diagram tmux sessions found."
