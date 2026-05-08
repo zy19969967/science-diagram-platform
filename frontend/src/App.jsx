@@ -177,8 +177,9 @@ function App() {
         const response = await apiFetch("/api/assets");
         const data = await response.json();
         setAssets(data);
-      } catch (fetchError) {
-        setError(`素材库读取失败：${fetchError.message}`);
+      } catch {
+        setAssets([]);
+        setStatus("素材库暂不可用，可继续编辑。");
       }
     }
 

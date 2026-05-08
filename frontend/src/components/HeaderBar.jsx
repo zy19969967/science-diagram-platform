@@ -1,19 +1,27 @@
+import { CircleDot, Image, Sparkles } from "lucide-react";
+import { WORKSPACE_COPY } from "../uiPresentation.js";
+
 function HeaderBar({ status, sourceImage, latestResult }) {
   return (
-    <header className="topbar">
+    <header className="topbar whiteboard-topbar">
       <div className="topbar-brand">
         <span className="brand-mark" aria-hidden="true">SD</span>
-        <div>
-          <p className="topbar-kicker">科研图像工作台</p>
-          <h1>科学示意图智能编辑平台</h1>
-          <p className="topbar-subtitle">从初图生成、局部标注到 SVG 导出的一体化编辑流程</p>
-        </div>
+        <h1>{WORKSPACE_COPY.appName}</h1>
       </div>
 
-      <div className="topbar-status">
-        <span className="topbar-state">{status}</span>
-        <span>{sourceImage ? "底图已就绪" : "等待图像"}</span>
-        <span>{latestResult ? "已有生成结果" : "等待生成"}</span>
+      <div className="topbar-status whiteboard-status-strip">
+        <span className="topbar-state status-chip">
+          <CircleDot size={14} aria-hidden="true" />
+          {status}
+        </span>
+        <span className="status-chip">
+          <Image size={14} aria-hidden="true" />
+          {sourceImage ? "画布就绪" : "待导入"}
+        </span>
+        <span className="status-chip">
+          <Sparkles size={14} aria-hidden="true" />
+          {latestResult ? "有结果" : "待生成"}
+        </span>
       </div>
     </header>
   );

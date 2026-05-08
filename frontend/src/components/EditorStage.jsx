@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, FabricImage, Textbox } from "fabric";
+import { ArrowDown, ArrowUp, Eye, EyeOff, ImageOff, Layers, Lock, MousePointer2, Trash2, Unlock, ZoomIn } from "lucide-react";
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -13,9 +14,9 @@ function isLayerActive(layer, activeLayerId) {
 
 function LayerPanel({ layers, activeLayerId, setActiveLayerId, patchEditorLayer, moveEditorLayer }) {
   return (
-    <div className="layer-panel">
+    <div className="layer-panel whiteboard-layer-panel">
       <div className="layer-panel-header">
-        <span className="section-label">图层</span>
+        <span className="section-label">Layers</span>
         <strong>{layers.length} 层</strong>
       </div>
       <div className="layer-list">
@@ -33,7 +34,7 @@ function LayerPanel({ layers, activeLayerId, setActiveLayerId, patchEditorLayer,
                 disabled={layer.id === "base-image"}
                 title={layer.visible ? "隐藏图层" : "显示图层"}
               >
-                {layer.visible ? "显" : "隐"}
+                {layer.visible ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
               </button>
               <button
                 type="button"
@@ -42,7 +43,7 @@ function LayerPanel({ layers, activeLayerId, setActiveLayerId, patchEditorLayer,
                 disabled={layer.id === "base-image"}
                 title={layer.locked ? "解锁图层" : "锁定图层"}
               >
-                {layer.locked ? "锁" : "开"}
+                {layer.locked ? <Lock size={14} aria-hidden="true" /> : <Unlock size={14} aria-hidden="true" />}
               </button>
               <button
                 type="button"
@@ -51,7 +52,7 @@ function LayerPanel({ layers, activeLayerId, setActiveLayerId, patchEditorLayer,
                 disabled={!layer.reorderable}
                 title="上移图层"
               >
-                上
+                <ArrowUp size={14} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -60,7 +61,7 @@ function LayerPanel({ layers, activeLayerId, setActiveLayerId, patchEditorLayer,
                 disabled={!layer.reorderable}
                 title="下移图层"
               >
-                下
+                <ArrowDown size={14} aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -346,39 +347,44 @@ function EditorStage({
   const canUseMaskCanvas = isPointMode ? !regionOverride.locked : drawMode !== "layer" && !maskOverride.locked;
 
   return (
-    <section className="editor-column">
-      <div className="editor-stage-shell">
-        <div className="canvas-toolbar">
+    <section className="editor-column whiteboard-workbench-column">
+      <div className="editor-stage-shell whiteboard-stage-shell">
+        <div className="canvas-toolbar whiteboard-canvas-toolbar">
           <div className="canvas-toolbar-title">
-            <p className="panel-eyebrow">主画布</p>
-            <h2>交互画布</h2>
+            <h2>白板工作区</h2>
           </div>
-          <label className="scale-control">
-            <span>显示比例</span>
-            <input
-              type="range"
-              min="0.5"
-              max="1.8"
-              step="0.05"
-              value={displayScale}
-              onChange={(event) => setDisplayScale(Number(event.target.value))}
-            />
-            <strong>{Math.round(displayScale * 100)}%</strong>
-          </label>
-          <div className="toolbar-actions">
-            <button type="button" className="ghost-button" onClick={clearMask}>
-              清空选区
-            </button>
-            <button type="button" className="ghost-button" onClick={clearCanvas}>
-              清除画布
-            </button>
-            <button type="button" className="ghost-button" onClick={removeAsset}>
-              移除素材
-            </button>
+          <div className="canvas-quick-tools">
+            <label className="scale-control">
+              <ZoomIn size={14} aria-hidden="true" />
+              <span>缩放</span>
+              <input
+                type="range"
+                min="0.5"
+                max="1.8"
+                step="0.05"
+                value={displayScale}
+                onChange={(event) => setDisplayScale(Number(event.target.value))}
+              />
+              <strong>{Math.round(displayScale * 100)}%</strong>
+            </label>
+            <div className="toolbar-actions">
+              <button type="button" className="ghost-button icon-button-label" onClick={clearMask}>
+                <MousePointer2 size={14} aria-hidden="true" />
+                清选区
+              </button>
+              <button type="button" className="ghost-button icon-button-label" onClick={clearCanvas}>
+                <Trash2 size={14} aria-hidden="true" />
+                清画布
+              </button>
+              <button type="button" className="ghost-button icon-button-label" onClick={removeAsset}>
+                <ImageOff size={14} aria-hidden="true" />
+                移素材
+              </button>
+            </div>
           </div>
         </div>
-        <div className="canvas-stage-layout">
-          <div className="canvas-stage">
+        <div className="canvas-stage-layout whiteboard-stage-layout">
+          <div className="canvas-stage whiteboard-canvas-stage">
             {sourceImage ? (
               <div className="canvas-stack" style={scaledWidth ? { width: `${scaledWidth}px` } : undefined}>
                 <img
@@ -440,9 +446,9 @@ function EditorStage({
                 )}
               </div>
             ) : (
-              <div className="empty-stage">
-                <strong>等待图像输入</strong>
-                <p>上传科研示意图后，即可开始局部标注、素材摆放与结果生成。</p>
+              <div className="empty-stage whiteboard-empty-stage">
+                <Layers size={28} aria-hidden="true" />
+                <strong>空白画布</strong>
               </div>
             )}
           </div>
