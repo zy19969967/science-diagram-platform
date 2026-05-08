@@ -56,6 +56,15 @@ class QwenImageProviderTest(unittest.IsolatedAsyncioTestCase):
 
         async def fake_post_json(url: str, payload: dict) -> dict:
             calls.append((url, payload))
+            if url.endswith("/plan"):
+                return {
+                    "task": "text-guided",
+                    "task_prompt": "A laboratory conical flask with a narrow neck and wide base.",
+                    "negative_prompt": "",
+                    "mask_strategy": "user-mask",
+                    "reasoning": "planner service response",
+                    "warnings": [],
+                }
             return {"result_image": _image_data_url("#ddeeff")}
 
         request = GenerateRequest(
@@ -126,8 +135,45 @@ class QwenImageProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("glass rod", provider_prompt)
         self.assertIn("parallel", provider_prompt)
         self.assertIn("Keep every unmasked part", provider_prompt)
+        self.assertIn("fully replace the original masked object", provider_prompt)
+        self.assertNotIn("including the support stand, glass rod, funnel, beaker", provider_prompt)
         self.assertEqual(calls[0][1]["negative_prompt"], " ")
         self.assertEqual(result.quality_report.prompt.parameters["provider_prompt"], provider_prompt)
+        self.assertEqual(result.quality_report.prompt.parameters["provider_negative_prompt"], " ")
+
+    async def test_qwen_provider_uses_light_negative_prompt_when_gateway_replans(self) -> None:
+        calls: list[tuple[str, dict]] = []
+
+        async def fake_post_json(url: str, payload: dict) -> dict:
+            calls.append((url, payload))
+            return {"result_image": _image_data_url("#ddeeff")}
+
+        request = GenerateRequest(
+            source_image=_image_data_url("white"),
+            instruction="把烧杯换成一个倾斜的锥形瓶",
+            task="text-guided",
+            mask_image=_mask_data_url(),
+            plan=PlanResponse(
+                task="text-guided",
+                task_prompt="A laboratory conical flask with a narrow neck and wide base.",
+                negative_prompt="",
+                reasoning="planner service response",
+            ),
+            generation_provider="qwen-image",
+            negative_prompt="low quality, blurry, distorted, broken edges, background changed, color bleeding, watermark, text corruption",
+            smart_metadata={"negative_prompt": "low quality, blurry, distorted, broken edges, background changed, color bleeding, watermark, text corruption"},
+            steps=12,
+            guidance_scale=4.0,
+            seed=123,
+        )
+
+        with patch.object(gateway_main, "post_json", fake_post_json), patch.object(
+            gateway_main, "QWEN_IMAGE_URL", "http://qwen-image-test:8005"
+        ):
+            result = await gateway_main.generate_pipeline(request, "http://testserver")
+
+        self.assertTrue(calls[0][0].endswith("/plan"))
+        self.assertEqual(calls[-1][1]["negative_prompt"], " ")
         self.assertEqual(result.quality_report.prompt.parameters["provider_negative_prompt"], " ")
 
     async def test_powerpaint_provider_still_dispatches_to_powerpaint_service(self) -> None:

@@ -298,6 +298,16 @@ QWEN_IMAGE_TERM_HINTS = (
     ("垂直", "perpendicular"),
 )
 
+QWEN_IMAGE_INTERNAL_NEGATIVE_MARKERS = (
+    "background changed",
+    "color bleeding",
+    "broken edges",
+    "text corruption",
+    "object remnants",
+    "ghost artifacts",
+    "mismatched texture",
+)
+
 
 def _first_nonempty(*values: str | None) -> str:
     for value in values:
@@ -319,16 +329,16 @@ def _qwen_image_edit_prompt(*, instruction: str, plan_prompt: str, task: str | N
     if task == "object-removal":
         action = "Remove the masked object and fill the masked region with clean white diagram background."
     else:
-        action = f"User edit instruction: {edit_target}."
+        action = f"User edit instruction: {edit_target}. The new content must fully replace the original masked object; do not keep or redraw the original object inside the mask."
         if planner_prompt and planner_prompt != user_instruction and user_instruction:
-            action = f"{action} Visual target from planner: {planner_prompt}."
+            action = f"{action} Additional visual target details: {planner_prompt}."
 
     parts = [
         "Edit only the masked region.",
         action,
-        "Keep every unmasked part of the source image unchanged, including the support stand, glass rod, funnel, beaker, liquid level, line thickness, and white background.",
+        "Keep every unmasked part of the source image unchanged, including all apparatus lines, labels, liquid levels, line thickness, and white background outside the mask.",
         QWEN_IMAGE_SCIENCE_STYLE_PROMPT,
-        "Make the replacement match the existing diagram perspective, scale, geometry, and line weight.",
+        "Make the replacement fit entirely inside the painted mask and match the existing diagram perspective, scale, geometry, and line weight.",
     ]
     hints = _qwen_term_hints(user_instruction)
     if hints:
@@ -336,6 +346,13 @@ def _qwen_image_edit_prompt(*, instruction: str, plan_prompt: str, task: str | N
     if "平行" in user_instruction:
         parts.append("If parallel alignment is requested, align the replacement object's main axis parallel to the referenced object.")
     return " ".join(parts)
+
+
+def _is_internal_negative_prompt(value: str) -> bool:
+    normalized = value.strip().lower()
+    if not normalized:
+        return True
+    return any(marker in normalized for marker in QWEN_IMAGE_INTERNAL_NEGATIVE_MARKERS)
 
 
 def _provider_edit_prompts(
@@ -349,7 +366,11 @@ def _provider_edit_prompts(
 ) -> tuple[str, str]:
     if provider == "qwen-image":
         negative_prompt = request_negative_prompt.strip()
-        if not negative_prompt or negative_prompt == plan_negative_prompt.strip():
+        if (
+            not negative_prompt
+            or negative_prompt == plan_negative_prompt.strip()
+            or _is_internal_negative_prompt(negative_prompt)
+        ):
             negative_prompt = QWEN_IMAGE_DEFAULT_NEGATIVE_PROMPT
         return _qwen_image_edit_prompt(instruction=instruction, plan_prompt=plan_prompt, task=task), negative_prompt
     return _first_nonempty(plan_prompt, instruction), _first_nonempty(request_negative_prompt, plan_negative_prompt)
