@@ -5,6 +5,9 @@ function ControlPanel({
   taskOverride,
   smartTaskOptions,
   setTaskOverride,
+  generationProvider,
+  generationProviderOptions,
+  setGenerationProvider,
   brushSize,
   setBrushSize,
   drawMode,
@@ -124,6 +127,21 @@ function ControlPanel({
                 type="button"
                 className={taskOverride === option.value ? "segment active" : "segment"}
                 onClick={() => setTaskOverride(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="field-group compact">
+          <label>生成 Provider</label>
+          <div className="segmented-grid">
+            {generationProviderOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={generationProvider === option.value ? "segment active" : "segment"}
+                onClick={() => setGenerationProvider(option.value)}
               >
                 {option.label}
               </button>

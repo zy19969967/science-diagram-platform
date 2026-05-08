@@ -68,6 +68,17 @@ install_flux() {
   run_conda run -n "${CONDA_ENV_FLUX}" python -m pip install -r "${PROJECT_ROOT}/backend/flux_service/requirements.txt"
 }
 
+install_qwen_image() {
+  create_env "${CONDA_ENV_QWEN_IMAGE}"
+  run_conda run -n "${CONDA_ENV_QWEN_IMAGE}" python -m pip install --upgrade pip
+  install_cuda_torch "${CONDA_ENV_QWEN_IMAGE}"
+  if [[ -f "${PROJECT_ROOT}/backend/qwen_image_service/requirements.txt" ]]; then
+    run_conda run -n "${CONDA_ENV_QWEN_IMAGE}" python -m pip install -r "${PROJECT_ROOT}/backend/qwen_image_service/requirements.txt"
+  else
+    echo "backend/qwen_image_service/requirements.txt not found; skipping Qwen-Image service dependencies for now." >&2
+  fi
+}
+
 install_frontend() {
   if ! command -v npm >/dev/null 2>&1; then
     echo "npm not found; skipping frontend dependency installation." >&2
@@ -82,6 +93,7 @@ install_planner
 install_segmenter
 install_powerpaint
 install_flux
+install_qwen_image
 install_frontend
 
 cat <<EOF
@@ -96,6 +108,7 @@ Next steps:
    ${CONDA_ENV_SEGMENTER}
    ${CONDA_ENV_POWERPAINT}
    ${CONDA_ENV_FLUX}
+   ${CONDA_ENV_QWEN_IMAGE}
 4. If you are using PowerPaint 2.1 with git download, prefetch the weights with:
    bash scripts/fetch_powerpaint_model.sh
 5. Start services with:
@@ -103,6 +116,7 @@ Next steps:
    bash scripts/run_segmenter.sh
    bash scripts/run_powerpaint.sh
    bash scripts/run_flux.sh
+   bash scripts/run_qwen_image.sh
    bash scripts/run_gateway.sh
 6. Build the frontend with:
    bash scripts/build_frontend.sh

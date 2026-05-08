@@ -10,6 +10,7 @@
 - `segmenter`：优先调用 `facebook/sam2.1-hiera-base-plus`
 - `powerpaint_service`：调用官方 `PowerPaint`
 - `flux`：本地 diffusers FLUX-compatible 初图服务，默认 `black-forest-labs/FLUX.2-klein-4B`
+- `qwen-image`：本地 Qwen-Image 图像编辑服务，Docker 内部端口 `8005`
 - 当真实模型不可用时，会自动回退到仓库内规则逻辑，保证平台还能用于调试和演示
 - Gateway 还包含异步任务、项目版本、benchmark ledger、readiness 检查和可选单 token 保护
 
@@ -18,8 +19,8 @@
 可以部署，但请按下面边界理解：
 
 - 当前推荐部署版本是 `main`；不要再拉旧的 `codex/report-alignment-phase1` 分支。
-- 推荐优先使用 Docker Compose，因为它会同时编排 `frontend`、`gateway`、`planner`、`segmenter`、`powerpaint` 和本地 `flux` 服务。
-- 服务器必须能访问或已经缓存 Qwen3.5、SAM2.1、PowerPaint 2.1 和 FLUX 权重；仓库不会把这些大模型权重提交进 Git。
+- 推荐优先使用 Docker Compose，因为它会编排 `frontend`、`gateway`、`planner`、`segmenter`、`powerpaint` 和本地 `flux` 服务；`qwen-image` 是可选 profile，需要独占 80GB GPU 时再启用。
+- 服务器必须能访问或已经缓存 Qwen3.5、SAM2.1、PowerPaint 2.1、FLUX 和 Qwen-Image 权重；仓库不会把这些大模型权重提交进 Git。
 - 这是单节点、单用户、文件持久化优先的部署，适合毕业设计演示、内网测试和受控服务器环境；不是公网多租户生产系统。
 - 如果 Docker 不可用，可以改用 [无 Docker / Conda 服务器部署 README](server-conda-deploy.md)。
 
@@ -32,15 +33,15 @@
 - Docker Compose v2
 - NVIDIA 驱动
 - NVIDIA Container Toolkit
-- 建议至少 4 张可用 GPU；资源紧张时可以让服务共享 GPU，但需要自己评估显存占用
+- 推荐目标为 2 张 H20-NVLink 96GB；Qwen-Image 独占 GPU 0，其余模型服务共享 GPU 1
 - 足够的磁盘空间保存 Docker 镜像和模型缓存
 
-如果你使用的正是当前这台 8 x RTX 3090 服务器，当前模板示例按 4 卡方式部署：
+当前模板默认按 2 张 H20-NVLink 96GB 部署：
 
-- GPU 4：`powerpaint_service`
-- GPU 5：`planner`
-- GPU 6：`segmenter`
-- GPU 7：`flux`
+- GPU 0：`qwen-image`
+- GPU 1：`powerpaint_service`、`planner`、`segmenter`、`flux`
+
+如果服务器上的 H20 编号不是 0 和 1，只需要改 `.env` 里的 `PROJECT_GPU_POOL` 与各个 `*_CUDA_VISIBLE_DEVICES`。不建议把 Qwen-Image 和 FLUX/PowerPaint 放在同一张卡上长期演示。
 
 ## 2. 推荐部署目录
 
@@ -92,10 +93,12 @@ GATEWAY_PUBLIC_PORT=19080
 GATEWAY_API_TOKEN=
 VITE_API_TOKEN=
 
-POWERPAINT_CUDA_VISIBLE_DEVICES=4
-PLANNER_CUDA_VISIBLE_DEVICES=5
-SEGMENTER_CUDA_VISIBLE_DEVICES=6
-FLUX_CUDA_VISIBLE_DEVICES=7
+PROJECT_GPU_POOL=0,1
+QWEN_IMAGE_CUDA_VISIBLE_DEVICES=0
+POWERPAINT_CUDA_VISIBLE_DEVICES=1
+PLANNER_CUDA_VISIBLE_DEVICES=1
+SEGMENTER_CUDA_VISIBLE_DEVICES=1
+FLUX_CUDA_VISIBLE_DEVICES=1
 HF_ENDPOINT=https://hf-mirror.com
 TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
 TORCH_VERSION=2.5.1
@@ -119,6 +122,15 @@ FLUX_NUM_INFERENCE_STEPS=4
 FLUX_GUIDANCE_SCALE=1.0
 FLUX_MAX_SEQUENCE_LENGTH=512
 FLUX_LOCAL_FILES_ONLY=false
+
+# Gateway defaults to the Compose-local qwen-image service if this stays empty.
+QWEN_IMAGE_URL=
+QWEN_IMAGE_MODEL_REPO=Qwen/Qwen-Image-Edit
+QWEN_IMAGE_MODEL_DTYPE=bfloat16
+QWEN_IMAGE_NUM_INFERENCE_STEPS=50
+QWEN_IMAGE_TRUE_CFG_SCALE=4.0
+QWEN_IMAGE_STRENGTH=1.0
+QWEN_IMAGE_LOCAL_FILES_ONLY=false
 ```
 
 几个关键说明：
@@ -134,6 +146,9 @@ FLUX_LOCAL_FILES_ONLY=false
 - 默认 FLUX 模型是 Apache 2.0 开源的 `black-forest-labs/FLUX.2-klein-4B`，通常需要约 13GB VRAM
 - 初图生成阶段不会调用外部 FLUX API；只有首次下载或更新模型权重时可能访问 Hugging Face
 - `FLUX_MODEL_REPO` 可以是 Hugging Face repo，也可以是服务器上的本地模型目录；如果已提前准备权重，可以设置 `FLUX_LOCAL_FILES_ONLY=true`
+- `qwen-image` 是本地 Qwen-Image 编辑服务，Compose 内部默认把 `QWEN_IMAGE_URL` 设置为 `http://qwen-image:8005`；该服务在 `qwen-image` profile 下启动，未启用 profile 时 gateway 不会等待它
+- Qwen-Image 第一版默认使用 `Qwen/Qwen-Image-Edit`，第一版不默认使用 Qwen-Image-Edit-2511；如需换用 2511，需要后续单独评估显存、依赖和效果
+- Qwen-Image 按 80GB 独占 GPU 规划；2 张 H20-NVLink 96GB 部署中默认使用 GPU 0，PowerPaint、planner、segmenter 和 FLUX 默认共享 GPU 1
 - Compose 会把 `RUNS_DIR`、`PROJECTS_DIR`、`JOBS_DIR` 和 `BENCHMARKS_DIR` 挂到项目 `data/` 目录下，便于重启后读取生成产物、项目版本、异步任务和实验记录
 
 如果你已经提前下载过模型，也可以开启纯本地模式：
@@ -142,6 +157,7 @@ FLUX_LOCAL_FILES_ONLY=false
 PLANNER_LOCAL_FILES_ONLY=true
 SEGMENTER_LOCAL_FILES_ONLY=true
 POWERPAINT_LOCAL_FILES_ONLY=true
+QWEN_IMAGE_LOCAL_FILES_ONLY=true
 ```
 
 注意：开启本地模式后，如果缓存目录里没有对应权重，服务会直接报错，而不是联网下载。
@@ -164,6 +180,12 @@ sudo docker compose --env-file .env build
 ## 7. 启动服务
 
 ```bash
+sudo docker compose --env-file .env --profile qwen-image up -d --build
+```
+
+如果只想先启动 PowerPaint legacy 链路、不启动 Qwen-Image，可以去掉 profile：
+
+```bash
 sudo docker compose --env-file .env up -d
 ```
 
@@ -182,6 +204,7 @@ sudo docker compose logs -f planner
 sudo docker compose logs -f segmenter
 sudo docker compose logs -f powerpaint
 sudo docker compose logs -f flux
+sudo docker compose logs -f qwen-image
 ```
 
 ## 8. 健康检查与访问地址
@@ -302,6 +325,12 @@ git pull origin main
 sudo docker compose --env-file .env up -d --build
 ```
 
+启用 Qwen-Image 的部署请把上面的命令替换为：
+
+```bash
+sudo docker compose --env-file .env --profile qwen-image up -d --build
+```
+
 本次合并后建议额外执行：
 
 ```bash
@@ -386,7 +415,7 @@ sudo docker compose --env-file .env up -d --build
 - `sudo docker compose logs -f flux`
 - `FLUX_MODEL_REPO` 是否是可访问的 Hugging Face repo 或服务器本地模型目录
 - 如果设置了 `FLUX_LOCAL_FILES_ONLY=true`，`models/huggingface` 或本地模型目录里是否已经有完整权重
-- GPU 7 是否空闲，或者把 `FLUX_CUDA_VISIBLE_DEVICES` 改成空闲卡
+- GPU 1 是否空闲，或者把 `FLUX_CUDA_VISIBLE_DEVICES` 改成实际空闲的 H20 编号
 - 如果只是 FLUX 服务不可用，旧的 `auto` 初图生成仍可能回退到确定性 fallback；新的 `/api/generation/jobs` 文生图默认会明确失败，或只返回带 `is_diagnostic_result=true` 标记的诊断结果，不能当作正式生成质量
 
 ### 12.8 Where PowerPaint 2.1 Weights Come From

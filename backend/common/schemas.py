@@ -18,9 +18,11 @@ SmartPipeline = Literal[
     "powerpaint_inpaint",
     "powerpaint_variation",
     "powerpaint_outpaint",
+    "qwen_image_inpaint",
     "svg_structure",
     "needs_user_input",
 ]
+GenerationProvider = Literal["qwen-image", "powerpaint"]
 SmartJobStatus = Literal["queued", "planning", "generating", "completed", "failed", "cancelled"]
 InitMode = Literal["create_from_text"]
 InitGenerationProvider = Literal["auto", "deterministic-fallback", "flux-local", "flux-remote"]
@@ -109,10 +111,13 @@ class PlanResponse(BaseModel):
 class SmartGenerationOptions(BaseModel):
     num_outputs: int = Field(default=2, ge=1, le=4)
     task_override: SmartTaskType | None = None
+    generation_provider: GenerationProvider = "qwen-image"
     quality: Literal["draft", "standard", "high"] = "standard"
     seed: int = Field(default=42, ge=0, le=2147483647)
     steps: int = Field(default=25, ge=1, le=100)
     guidance_scale: float = Field(default=5.0, ge=0.1, le=30.0)
+    true_cfg_scale: float | None = Field(default=None, ge=0.0, le=30.0)
+    strength: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 class SmartGenerationRequest(BaseModel):
@@ -491,6 +496,7 @@ class GenerateRequest(BaseModel):
     source_image: str
     instruction: str = ""
     task: TaskType | None = None
+    generation_provider: GenerationProvider = "powerpaint"
     mask_image: str | None = None
     point_prompts: list[SegmentPoint] = Field(default_factory=list, max_length=32)
     selected_asset_id: str | None = None
@@ -498,6 +504,8 @@ class GenerateRequest(BaseModel):
     plan: PlanResponse | None = None
     steps: int = Field(default=25, ge=1, le=100)
     guidance_scale: float = Field(default=5.0, ge=0.1, le=30.0)
+    true_cfg_scale: float | None = Field(default=None, ge=0.0, le=30.0)
+    strength: float = Field(default=1.0, ge=0.0, le=1.0)
     fitting_degree: float = Field(default=0.9, ge=0.0, le=1.0)
     seed: int = Field(default=42, ge=0, le=2147483647)
     negative_prompt: str = ""
@@ -521,6 +529,18 @@ class PowerPaintGenerateRequest(BaseModel):
     local_files_only: bool = False
     horizontal_expansion_ratio: float = Field(default=1.0, ge=1.0, le=4.0)
     vertical_expansion_ratio: float = Field(default=1.0, ge=1.0, le=4.0)
+
+
+class QwenImageEditRequest(BaseModel):
+    image: str
+    mask_image: str
+    prompt: str
+    negative_prompt: str = ""
+    num_inference_steps: int = Field(default=50, ge=1, le=100)
+    true_cfg_scale: float = Field(default=4.0, ge=0.0, le=30.0)
+    strength: float = Field(default=1.0, ge=0.0, le=1.0)
+    seed: int = Field(default=42, ge=0, le=2147483647)
+    local_files_only: bool = False
 
 
 class GenerateResponse(BaseModel):

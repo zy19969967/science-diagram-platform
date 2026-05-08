@@ -39,8 +39,11 @@ def build_prompt_trace(
         seed=payload.seed,
         planner_source=planner_source,
         parameters={
+            "provider": payload.generation_provider,
             "steps": payload.steps,
             "guidance_scale": payload.guidance_scale,
+            "true_cfg_scale": payload.true_cfg_scale,
+            "strength": payload.strength,
             "fitting_degree": payload.fitting_degree,
             "local_files_only": payload.local_files_only,
             "horizontal_expansion_ratio": payload.horizontal_expansion_ratio,

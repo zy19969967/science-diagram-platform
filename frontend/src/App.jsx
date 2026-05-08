@@ -31,6 +31,7 @@ import { buildBenchmarkRecordPayload } from "./benchmarkState.js";
 import { apiFetch } from "./apiClient.js";
 import {
   buildSmartGenerationPayload,
+  GENERATION_PROVIDER_OPTIONS,
   primaryActionLabel,
   summarizeSmartGenerationStatus,
 } from "./smartGeneration.js";
@@ -98,6 +99,7 @@ function App() {
   const [instruction, setInstruction] = useState("");
   const [task, setTask] = useState("text-guided");
   const [taskOverride, setTaskOverride] = useState("");
+  const [generationProvider, setGenerationProvider] = useState("qwen-image");
   const [brushSize, setBrushSize] = useState(24);
   const [drawMode, setDrawMode] = useState("brush");
   const [steps, setSteps] = useState(25);
@@ -759,6 +761,7 @@ function App() {
       plan,
       steps,
       guidance_scale: guidanceScale,
+      generation_provider: generationProvider,
       fitting_degree: fittingDegree,
       seed,
       horizontal_expansion_ratio: horizontalExpansionRatio,
@@ -1100,6 +1103,7 @@ function App() {
         sourceImage,
         maskPayload,
         taskOverride,
+        generationProvider,
         seed,
         steps,
         guidanceScale,
@@ -1283,19 +1287,26 @@ function App() {
   }
 
   async function cancelGenerateJob() {
-    if (!jobSnapshot?.job_id) {
+    const activeSmartJob = smartJobSnapshot?.job_id ? smartJobSnapshot : null;
+    const activeLegacyJob = jobSnapshot?.job_id ? jobSnapshot : null;
+    if (!activeSmartJob && !activeLegacyJob) {
       return;
     }
-    const jobId = jobSnapshot.job_id;
+    const isSmartJob = Boolean(activeSmartJob);
+    const jobId = isSmartJob ? activeSmartJob.job_id : activeLegacyJob.job_id;
     invalidateJobPolling();
     setIsJobGenerating(false);
     setError("");
     try {
-      const response = await apiFetch(`/api/jobs/${jobId}/cancel`, {
+      const response = await apiFetch(isSmartJob ? `/api/generation/jobs/${jobId}/cancel` : `/api/jobs/${jobId}/cancel`, {
         method: "POST",
       });
       const snapshot = await readJsonResponse(response, "任务取消失败");
-      setJobSnapshot(snapshot);
+      if (isSmartJob) {
+        setSmartJobSnapshot(snapshot);
+      } else {
+        setJobSnapshot(snapshot);
+      }
       setStatus(`任务已取消：${snapshot.job_id}`);
     } catch (cancelError) {
       setIsJobGenerating(false);
@@ -1376,6 +1387,9 @@ function App() {
           taskOverride={taskOverride}
           smartTaskOptions={SMART_TASK_OPTIONS}
           setTaskOverride={setTaskOverride}
+          generationProvider={generationProvider}
+          generationProviderOptions={GENERATION_PROVIDER_OPTIONS}
+          setGenerationProvider={setGenerationProvider}
           brushSize={brushSize}
           setBrushSize={setBrushSize}
           drawMode={drawMode}

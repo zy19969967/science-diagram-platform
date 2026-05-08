@@ -16,6 +16,10 @@
 
 当前已经补入无图文本入口的 API 合同和确定性 fallback 初图候选，便于前端先进入“文本初图 -> 后续局部编辑”的闭环。Phase 11 新增了 `FLUX_INIT_URL` 可配置 FLUX-compatible provider、`auto`/`flux-local`/`flux-remote`/`deterministic-fallback` provider 选择、候选评分重排和前端 provider/score 展示。当前分支又补入了仓库内 `backend/flux_service`、Docker Compose `flux` 服务和 Conda/tmux 启动脚本，使默认部署路径改为本地 FLUX.2-klein-4B 服务。仍未完成的是在本仓库内捆绑 FLUX.2-klein-4B 权重、低清预览/高清异步二阶段生成和长期候选 artifact 存储；默认权重为 Apache 2.0 开源模型，通常需要约 13GB VRAM，首次运行或更新时仍可能需要从 Hugging Face 下载。fallback 画面中的文字仍是位图提示，第三阶段新增的文本层只覆盖前端轻量标签元数据。
 
+### 0.1 Qwen-Image 本地编辑服务
+
+当前已经接入本地 Qwen-Image masked edit provider：Docker 内部服务名为 `qwen-image`、端口 `8005`，服务在 `qwen-image` profile 下启动；Conda/tmux 默认 `QWEN_IMAGE_PORT=19086`，Gateway 通过 `QWEN_IMAGE_URL` 访问。模型第一版默认是 `Qwen/Qwen-Image-Edit`，默认 `bfloat16`、50 steps、`true_cfg_scale=4.0`、`strength=1.0`，第一版不默认使用 Qwen-Image-Edit-2511。剩余风险是真实 80GB GPU 烟测和效果评估仍需在服务器完成；默认部署目标为 2 张 H20-NVLink 96GB，GPU 0 给 Qwen-Image，GPU 1 给 PowerPaint、planner、segmenter 和 FLUX。
+
 ### 1. 认证与权限控制
 
 当前平台默认面向内网或受控环境。Phase 13 新增了可选的 `GATEWAY_API_TOKEN` 单 token 网关保护；配置后，非豁免 `/api/*` 路由需要 `Authorization: Bearer <token>` 或 `X-API-Token`，前端也可以通过 `VITE_API_TOKEN` 透传同一 token。它仍不是完整账号系统：没有多用户登录、角色权限、token 轮换、审计日志或生产级 secret 管理。`VITE_API_TOKEN` 会进入静态前端 bundle，只适合受控演示或内网边界，不应当视为公网多租户安全方案。

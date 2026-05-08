@@ -1,5 +1,6 @@
 import { candidateScoreSummary, summarizeInitGeneration } from "../initCandidates.js";
 import { formatBenchmarkScore, summarizeBenchmarkSummary } from "../benchmarkState.js";
+import { canCancelGenerationSnapshot, extractGenerationProviderMetadata } from "../smartGeneration.js";
 
 const formatRatio = (value) => {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -49,7 +50,11 @@ function ResultPanel({
   const latestProjectVersionId = currentProject?.latest_version_id ?? "none";
   const activeJobSnapshot = smartJobSnapshot || jobSnapshot;
   const activeJobStatus = activeJobSnapshot?.status ?? "";
-  const canCancelJob = jobSnapshot && !["DONE", "FAILED", "CANCELLED"].includes(jobSnapshot.status);
+  const generationMetadata = extractGenerationProviderMetadata({ latestResult, smartJobSnapshot });
+  const hasGenerationMetadata = Boolean(
+    generationMetadata.provider || generationMetadata.pipeline || generationMetadata.model,
+  );
+  const canCancelJob = canCancelGenerationSnapshot(activeJobSnapshot);
   const exportWarnings = Array.from(new Set([...(textValidationReport?.warnings ?? []), ...(svgExport?.warnings ?? [])]));
   const initSummary = summarizeInitGeneration(initGeneration);
   const benchmarkDashboard = summarizeBenchmarkSummary(benchmarkSummary);
@@ -137,6 +142,12 @@ function ResultPanel({
             </div>
             <progress value={activeJobSnapshot.progress ?? 0} max="1" />
             <p>{activeJobSnapshot.error || activeJobSnapshot.message}</p>
+            {hasGenerationMetadata && (
+              <p>
+                Provider {generationMetadata.provider || "n/a"} | Pipeline {generationMetadata.pipeline || "n/a"} |
+                Model {generationMetadata.model || "n/a"}
+              </p>
+            )}
             {(smartJobSnapshot?.metadata?.fallback_used || smartJobSnapshot?.metadata?.is_diagnostic_result) && (
               <p className="warning-text">当前结果是诊断占位，不代表正式模型生成效果。</p>
             )}
@@ -348,6 +359,15 @@ function ResultPanel({
                     {qualityPrompt.planner_source ?? "unknown"} | seed {qualityPrompt.seed ?? "n/a"}
                   </p>
                 </div>
+                {hasGenerationMetadata && (
+                  <div className="metric-card">
+                    <span>生成 Provider</span>
+                    <strong>{generationMetadata.provider || "n/a"}</strong>
+                    <p>
+                      pipeline {generationMetadata.pipeline || "n/a"} | model {generationMetadata.model || "n/a"}
+                    </p>
+                  </div>
+                )}
               </>
             )}
             <div className="metric-card">

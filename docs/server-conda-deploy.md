@@ -11,6 +11,7 @@
 - `segmenter` 一个 Conda 环境
 - `powerpaint_service` 一个 Conda 环境
 - `flux` 一个 Conda 环境
+- `qwen_image_service` 一个 Conda 环境
 - 前端单独构建为静态文件
 
 这些服务之间通过 `127.0.0.1:端口` 的 HTTP API 通信，不依赖 Docker 才能互相连接。
@@ -73,15 +74,18 @@ CONDA_ENV_PLANNER=sci-planner
 CONDA_ENV_SEGMENTER=sci-segmenter
 CONDA_ENV_POWERPAINT=sci-powerpaint
 CONDA_ENV_FLUX=sci-flux
+CONDA_ENV_QWEN_IMAGE=sci-qwen-image
 HF_ENDPOINT=https://hf-mirror.com
 TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121
 TORCH_VERSION=2.5.1
 TORCHVISION_VERSION=0.20.1
 
-POWERPAINT_CUDA_VISIBLE_DEVICES=4
-PLANNER_CUDA_VISIBLE_DEVICES=5
-SEGMENTER_CUDA_VISIBLE_DEVICES=6
-FLUX_CUDA_VISIBLE_DEVICES=7
+PROJECT_GPU_POOL=0,1
+QWEN_IMAGE_CUDA_VISIBLE_DEVICES=0
+POWERPAINT_CUDA_VISIBLE_DEVICES=1
+PLANNER_CUDA_VISIBLE_DEVICES=1
+SEGMENTER_CUDA_VISIBLE_DEVICES=1
+FLUX_CUDA_VISIBLE_DEVICES=1
 
 POWERPAINT_MODEL_REPO=JunhaoZhuang/PowerPaint-v2-1
 POWERPAINT_MODEL_GIT_URL=https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1
@@ -99,6 +103,16 @@ FLUX_NUM_INFERENCE_STEPS=4
 FLUX_GUIDANCE_SCALE=1.0
 FLUX_MAX_SEQUENCE_LENGTH=512
 FLUX_LOCAL_FILES_ONLY=false
+
+QWEN_IMAGE_HOST=127.0.0.1
+QWEN_IMAGE_PORT=19086
+QWEN_IMAGE_URL=http://127.0.0.1:19086
+QWEN_IMAGE_MODEL_REPO=Qwen/Qwen-Image-Edit
+QWEN_IMAGE_MODEL_DTYPE=bfloat16
+QWEN_IMAGE_NUM_INFERENCE_STEPS=50
+QWEN_IMAGE_TRUE_CFG_SCALE=4.0
+QWEN_IMAGE_STRENGTH=1.0
+QWEN_IMAGE_LOCAL_FILES_ONLY=false
 
 GATEWAY_PORT=19080
 PLANNER_PORT=19081
@@ -125,6 +139,9 @@ BENCHMARKS_DIR=/home/common/yzhu_2025/science-diagram-platform/data/benchmarks
 - 默认 FLUX 模型是 Apache 2.0 开源的 `black-forest-labs/FLUX.2-klein-4B`，通常需要约 13GB VRAM
 - 初图生成不会调用外部 FLUX API；Gateway 只访问本机 `flux` 服务，只有下载或更新权重时可能访问 Hugging Face
 - `FLUX_MODEL_REPO` 可以是 Hugging Face repo，也可以是服务器上的本地模型目录；提前准备好权重时可设置 `FLUX_LOCAL_FILES_ONLY=true`
+- `QWEN_IMAGE_PORT=19086` 是本地 Qwen-Image 服务端口，Gateway 通过 `QWEN_IMAGE_URL=http://127.0.0.1:19086` 访问它
+- Qwen-Image 第一版默认使用 `Qwen/Qwen-Image-Edit`，第一版不默认使用 Qwen-Image-Edit-2511；切换 2511 前需要单独验证依赖、显存和效果
+- Qwen-Image 按独占 80GB GPU 设计；2 张 H20-NVLink 96GB 部署中默认让 Qwen-Image 使用 GPU 0，PowerPaint、planner、segmenter 和 FLUX 共享 GPU 1
 - `GATEWAY_API_TOKEN` 为空时保持开放内网行为；非空时，除 `/api/health` 等豁免路由外，`/api/*` 需要 token
 - 如果设置了 `GATEWAY_API_TOKEN`，前端构建时也要设置相同的 `VITE_API_TOKEN`
 - `VITE_API_TOKEN` 会进入前端静态 bundle，只适合受控演示或内网边界
@@ -149,6 +166,7 @@ bash scripts/setup_conda_envs.sh
 - 安装前端依赖
 - 自动克隆 PowerPaint 仓库
 - 安装本地 `flux` 服务依赖；FLUX 权重仍通过 Hugging Face 缓存或本地模型目录提供
+- 创建 `sci-qwen-image` 环境并在 `backend/qwen_image_service/requirements.txt` 存在时安装本地 Qwen-Image 服务依赖
 
 如果服务器访问 Hugging Face API 不稳定，再执行：
 
@@ -191,6 +209,7 @@ bash scripts/run_planner.sh
 bash scripts/run_segmenter.sh
 bash scripts/run_powerpaint.sh
 bash scripts/run_flux.sh
+bash scripts/run_qwen_image.sh
 bash scripts/run_gateway.sh
 ```
 
@@ -200,6 +219,7 @@ bash scripts/run_gateway.sh
 - `segmenter`: `127.0.0.1:19083`
 - `powerpaint`: `127.0.0.1:19082`
 - `flux`: `127.0.0.1:19085`
+- `qwen-image`: `127.0.0.1:19086`
 - `gateway`: `127.0.0.1:19080`
 
 ## 7. 构建并提供前端
@@ -242,7 +262,7 @@ bash scripts/setup_conda_envs.sh
 bash scripts/check_services.sh
 ```
 
-如果 5 个接口都返回 JSON，说明链路已经连通。
+如果 6 个接口都返回 JSON，说明链路已经连通。
 
 还可以检查 Gateway 部署 readiness：
 
@@ -256,7 +276,7 @@ curl http://127.0.0.1:19080/api/deployment/readiness
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/readiness
 ```
 
-这个 readiness 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档，不会主动调用 Qwen3.5、SAM2.1、PowerPaint 或本地 FLUX 模型。
+这个 readiness 只检查本地目录、auth 配置、服务 URL 格式、assets 目录和 traceability 文档，不会主动调用 Qwen3.5、SAM2.1、PowerPaint、本地 FLUX 或 Qwen-Image 模型。
 
 ### 8.1 合并本次 smart generation 后的接口检查
 
@@ -267,7 +287,7 @@ POST /api/generation/jobs
 GET /api/generation/jobs/{job_id}
 ```
 
-服务器更新并重启 `gateway`、`flux`、`powerpaint` 后，先用一个不带图片的请求确认新接口可用：
+服务器更新并重启 `gateway`、`flux`、`powerpaint` 和 `qwen-image` 后，先用一个不带图片的请求确认新接口可用：
 
 ```bash
 curl -sS -X POST http://127.0.0.1:19080/api/generation/jobs \
@@ -309,7 +329,7 @@ curl http://127.0.0.1:19080/api/deployment/readiness
 
 ## 10. 预热所有模型
 
-`planner`、`segmenter` 和 `flux` 默认采用惰性加载；服务进程启动成功不代表模型已经进入显存。演示前建议顺序预热一次所有模型：
+`planner`、`segmenter`、`flux` 和 `qwen-image` 默认采用惰性加载；服务进程启动成功不代表模型已经进入显存。演示前建议顺序预热一次所有模型：
 
 ```bash
 bash scripts/prewarm_models.sh
@@ -321,6 +341,7 @@ bash scripts/prewarm_models.sh
 - `segmenter` 的 `/segment`
 - `powerpaint` 的 `/generate`
 - `flux` 的 `/generate`
+- `qwen-image` 的 `/generate`
 - 最后执行 `bash scripts/check_services.sh`
 
 建议另开一个终端观察显存：
@@ -336,6 +357,7 @@ tail -n 200 logs/planner.log
 tail -n 200 logs/segmenter.log
 tail -n 200 logs/powerpaint.log
 tail -n 200 logs/flux.log
+tail -n 200 logs/qwen-image.log
 ```
 
 如果 FLUX 权重已经提前下载到本地目录，推荐配置：
@@ -352,7 +374,7 @@ FLUX_INIT_URL=http://127.0.0.1:19085
 PREWARM_CURL_MAX_TIME=3600 bash scripts/prewarm_models.sh
 ```
 
-不要并发预热多个模型；如果预热时出现 CUDA OOM，需要重新分配 `.env.nodocker` 里的 `POWERPAINT_CUDA_VISIBLE_DEVICES`、`PLANNER_CUDA_VISIBLE_DEVICES`、`SEGMENTER_CUDA_VISIBLE_DEVICES` 和 `FLUX_CUDA_VISIBLE_DEVICES`，确保每个服务指向真实且有足够空闲显存的 GPU。
+不要并发预热多个模型；如果预热时出现 CUDA OOM，需要重新分配 `.env.nodocker` 里的 `QWEN_IMAGE_CUDA_VISIBLE_DEVICES`、`POWERPAINT_CUDA_VISIBLE_DEVICES`、`PLANNER_CUDA_VISIBLE_DEVICES`、`SEGMENTER_CUDA_VISIBLE_DEVICES` 和 `FLUX_CUDA_VISIBLE_DEVICES`，确保 GPU 0/1 指向真实 H20，并优先保持 Qwen-Image 独占一张 96GB 卡。
 
 ## 11. 首次运行为什么会慢
 
@@ -362,6 +384,7 @@ PREWARM_CURL_MAX_TIME=3600 bash scripts/prewarm_models.sh
 - SAM-2 权重
 - PowerPaint 2.1 权重
 - FLUX 初图模型权重
+- Qwen-Image 编辑模型权重
 
 因此第一次调用 `/api/plan`、`/api/segment`、`/api/generate` 明显偏慢是正常的。
 第一次调用 `/api/init-generate` 且命中本地 FLUX 时也会加载 FLUX 模型，建议先用小尺寸请求预热。
@@ -404,7 +427,7 @@ PREWARM_CURL_MAX_TIME=3600 bash scripts/prewarm_models.sh
 - `curl http://127.0.0.1:19085/health` 是否返回 JSON
 - `FLUX_MODEL_REPO` 是否是可访问的 Hugging Face repo 或服务器本地模型目录
 - 如果设置了 `FLUX_LOCAL_FILES_ONLY=true`，模型权重是否已经在本地缓存或模型目录中
-- `FLUX_CUDA_VISIBLE_DEVICES` 指向的 GPU 是否空闲
+- `FLUX_CUDA_VISIBLE_DEVICES` 指向的 GPU 1 是否空闲，或是否已经按实际 H20 编号调整
 
 旧的 `auto` 初图请求在本地 FLUX 不可用时仍可能回退到确定性 fallback；新的 `/api/generation/jobs` 文生图默认会明确失败，或只返回带 `is_diagnostic_result=true` 标记的诊断结果，不能当作正式生成质量。
 

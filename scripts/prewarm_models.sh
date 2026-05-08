@@ -115,6 +115,16 @@ payloads = {
         "seed": 123,
         "provider": "flux-local",
     },
+    "qwen-image.json": {
+        "image": image,
+        "prompt": "clean scientific beaker diagram with crisp edges",
+        "negative_prompt": "photorealistic, watermark, blurry text",
+        "num_inference_steps": 1,
+        "true_cfg_scale": 4.0,
+        "strength": 1.0,
+        "seed": 123,
+        "local_files_only": bool_from_env("QWEN_IMAGE_LOCAL_FILES_ONLY"),
+    },
 }
 
 for filename, payload in payloads.items():
@@ -165,6 +175,9 @@ show_health "powerpaint" "http://${POWERPAINT_HOST}:${POWERPAINT_PORT}/health"
 
 post_json "flux" "http://${FLUX_HOST}:${FLUX_PORT}/generate" "${TMP_DIR}/flux.json"
 show_health "flux" "http://${FLUX_HOST}:${FLUX_PORT}/health"
+
+post_json "qwen-image" "http://${QWEN_IMAGE_HOST}:${QWEN_IMAGE_PORT}/generate" "${TMP_DIR}/qwen-image.json"
+show_health "qwen-image" "http://${QWEN_IMAGE_HOST}:${QWEN_IMAGE_PORT}/health"
 
 echo "== All service health =="
 bash "${SCRIPT_DIR}/check_services.sh"

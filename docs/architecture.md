@@ -12,6 +12,7 @@
    - `segmenter /segment`：SAM2.1 优先，几何 mask fallback。
    - `powerpaint /generate`：PowerPaint 局部生成服务。
    - `flux /generate`：本地 FLUX-compatible 初图服务；未配置或失败时 `auto` 模式使用确定性 fallback。
+   - `qwen-image /generate`：本地 Qwen-Image 编辑服务，供 masked local edit provider 使用。
 5. Gateway 将生成产物写入 `RUNS_DIR`，并把项目、异步任务和 benchmark 记录分别写入对应目录。
 6. 前端把结果图、mask、质量报告、项目版本、图层状态和实验指标回流到工作区，支持下一轮编辑。
 
@@ -64,6 +65,13 @@
 - 返回与 `/api/init-generate` 相同形状的 `InitGenerateResponse`，provider 标记为 `flux-local`。
 - 不把 FLUX 权重提交进仓库；FLUX.2-klein-4B 为 Apache 2.0 开源权重，约需 13GB VRAM，部署时通过 Hugging Face 缓存、`models/` 挂载或服务器本地路径提供权重，首次运行或更新时可能需要下载。
 
+### Qwen-Image Service
+
+- 本地 FastAPI 服务提供 `GET /health` 和 `POST /generate`，Docker 内部服务名为 `qwen-image`，内部端口为 `8005`；Conda/tmux 默认 `QWEN_IMAGE_PORT=19086`。
+- 默认模型为 `Qwen/Qwen-Image-Edit`，默认参数为 `bfloat16`、`QWEN_IMAGE_NUM_INFERENCE_STEPS=50`、`QWEN_IMAGE_TRUE_CFG_SCALE=4.0`、`QWEN_IMAGE_STRENGTH=1.0`。
+- 第一版不默认使用 Qwen-Image-Edit-2511；如果后续切换，需要重新验证依赖版本、显存和生成质量。
+- Qwen-Image 按独占 80GB GPU 设计；默认部署目标为 2 张 H20-NVLink 96GB，GPU 0 给 Qwen-Image，GPU 1 给 PowerPaint、planner、segmenter 和 FLUX。
+
 ## 数据目录
 
 Docker Compose 默认把这些目录挂到项目 `data/` 下：
@@ -84,6 +92,7 @@ models/            Hugging Face 与 PowerPaint 权重缓存
 - 编辑规划：`POST /api/plan`
 - 分割：`POST /api/segment`
 - 同步生成：`POST /api/generate`
+- Qwen-Image 编辑：masked local edit 会通过 `QWEN_IMAGE_URL` 调用本地 `qwen-image` 服务；PowerPaint 仍保留为可选 provider
 - 异步任务：`POST /api/jobs`、`GET /api/jobs/{job_id}`、`POST /api/jobs/{job_id}/cancel`
 - 项目版本：`GET/POST /api/projects`、`GET /api/projects/{project_id}`、`POST /api/projects/{project_id}/versions`
 - 文本与导出：`POST /api/canvas/validate-text`、`POST /api/canvas/export-svg`
@@ -93,7 +102,7 @@ models/            Hugging Face 与 PowerPaint 权重缓存
 ## 为什么这样拆
 
 - 让前端只依赖 Gateway，降低浏览器跨服务访问复杂度。
-- 让 Qwen3.5、SAM2.1 和 PowerPaint 可以分开部署、分配 GPU 和独立回退。
+- 让 Qwen3.5、SAM2.1、PowerPaint、FLUX 和 Qwen-Image 可以分开部署、分配 GPU 和独立回退。
 - 让同步生成、异步任务、项目版本和 benchmark 共享同一套 schema 与 artifact 路径。
 - 贴合技术报告中的“输入层 -> 规划层 -> 分割层 -> 执行层 -> 反馈层”，但用可测试、可部署的轻量实现逐步落地。
 
@@ -104,4 +113,5 @@ models/            Hugging Face 与 PowerPaint 权重缓存
 - 项目、job 和 benchmark 都是 JSON 文件持久化，不是数据库。
 - Readiness 只检查本地目录、配置、服务 URL 格式和 traceability 文件，不调用真实模型或浏览器 E2E。
 - 本地 FLUX 服务已经纳入 Docker/Conda 部署，但权重下载、显存占用、模型许可和高分辨率二阶段生成仍由部署方处理。
+- Qwen-Image 服务已经纳入部署脚本、Docker profile 和 gateway provider dispatch；真实模型烟测建议在 2 张 H20-NVLink 96GB 上按 GPU 0/1 默认分配执行。
 - 技术报告中的生产级能力和未完成项统一记录在 `docs/known-issues.md` 与 `docs/report-traceability.md`。

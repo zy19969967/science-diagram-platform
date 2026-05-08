@@ -38,6 +38,7 @@ from common.schemas import (
     ProjectCreateRequest,
     ProjectSnapshot,
     ProjectVersionCreateRequest,
+    QwenImageEditRequest,
     ScenePlanRequest,
     ScenePlanResponse,
     SegmentRequest,
@@ -65,6 +66,7 @@ from .security import GatewayAuthConfig, request_is_authorized
 PLANNER_URL = os.getenv("PLANNER_URL", "http://127.0.0.1:19081")
 SEGMENTER_URL = os.getenv("SEGMENTER_URL", "http://127.0.0.1:19083")
 POWERPAINT_URL = os.getenv("POWERPAINT_URL", "http://127.0.0.1:19082")
+QWEN_IMAGE_URL = os.getenv("QWEN_IMAGE_URL", "http://127.0.0.1:19086")
 RUNS_DIR = Path(os.getenv("RUNS_DIR", "/app/data/runs"))
 PROJECTS_DIR = Path(os.getenv("PROJECTS_DIR", str(RUNS_DIR.parent / "projects")))
 JOBS_DIR = Path(os.getenv("JOBS_DIR", str(RUNS_DIR.parent / "jobs")))
@@ -134,6 +136,7 @@ def deployment_readiness() -> DeploymentReadinessResponse:
             "planner_url": PLANNER_URL,
             "segmenter_url": SEGMENTER_URL,
             "powerpaint_url": POWERPAINT_URL,
+            "qwen_image_url": QWEN_IMAGE_URL,
             "flux_init_url": FLUX_INIT_URL,
         },
         assets_dir=ASSETS_DIR,
@@ -248,6 +251,14 @@ def _legacy_task_for_decision(decision: SmartPlannerDecision) -> str:
     return "text-guided"
 
 
+def _provider_for_smart_decision(payload: SmartGenerationRequest, decision: SmartPlannerDecision) -> str:
+    if decision.task_type == "text_to_image":
+        return "flux-local"
+    if decision.task_type == "local_inpaint" and decision.pipeline == "qwen_image_inpaint":
+        return payload.options.generation_provider
+    return "powerpaint"
+
+
 def _fitting_for_task(task: str | None) -> float:
     if task == "object-removal":
         return 0.75
@@ -284,6 +295,7 @@ def _generate_request_from_smart(payload: SmartGenerationRequest, decision: Smar
         source_image=payload.source_image,
         instruction=payload.prompt,
         task=_legacy_task_for_decision(decision),
+        generation_provider=payload.options.generation_provider if decision.pipeline == "qwen_image_inpaint" else "powerpaint",
         mask_image=mask_image,
         plan=PlanResponse(
             task=_legacy_task_for_decision(decision),
@@ -295,12 +307,14 @@ def _generate_request_from_smart(payload: SmartGenerationRequest, decision: Smar
         ),
         steps=payload.options.steps,
         guidance_scale=payload.options.guidance_scale,
+        true_cfg_scale=payload.options.true_cfg_scale,
+        strength=payload.options.strength,
         seed=payload.options.seed,
         negative_prompt=decision.negative_prompt,
         smart_metadata=smart_metadata(
             request=payload,
             decision=decision,
-            provider="powerpaint",
+            provider=_provider_for_smart_decision(payload, decision),
             fallback_used=False,
             is_diagnostic_result=False,
         ),
@@ -317,7 +331,7 @@ async def create_generation_job(
     base_metadata = smart_metadata(
         request=payload,
         decision=decision,
-        provider="powerpaint" if decision.task_type != "text_to_image" else "flux-local",
+        provider=_provider_for_smart_decision(payload, decision),
         fallback_used=False,
         is_diagnostic_result=False,
     )
@@ -594,9 +608,17 @@ async def generate_pipeline(
     task_scale = _scale_for_task(task_name)
     effective_fitting = payload.fitting_degree if payload.fitting_degree != 0.9 else task_fitting
     effective_scale = payload.guidance_scale if payload.guidance_scale != 5.0 else task_scale
+    provider_name = payload.generation_provider
+    provider_pipeline = "qwen_image_inpaint" if provider_name == "qwen-image" else "powerpaint_inpaint"
+    provider_model = "Qwen/Qwen-Image-Edit" if provider_name == "qwen-image" else "PowerPaint"
+    provider_model_dtype = (
+        os.getenv("QWEN_IMAGE_MODEL_DTYPE", "bfloat16")
+        if provider_name == "qwen-image"
+        else os.getenv("POWERPAINT_WEIGHT_DTYPE", "float16")
+    )
 
     # For white-background scientific diagrams, skip generative AI for removal
-    if task_name == "object-removal" and _is_diagram(source_image):
+    if provider_name == "powerpaint" and task_name == "object-removal" and _is_diagram(source_image):
         if progress:
             progress("EXECUTING", 0.65, "Filling diagram background")
         result_image = _diagram_removal_fill(source_image, raw_mask)
@@ -639,7 +661,23 @@ async def generate_pipeline(
         quality_report.prompt.parameters["sam2_refinement_requested"] = use_sam2
         quality_report.prompt.parameters["effective_fitting_degree"] = effective_fitting
         quality_report.prompt.parameters["planner_source"] = planner_source
-        for key in ("task_type", "subtask_type", "planner_confidence", "fallback_used", "is_diagnostic_result", "resize_strategy", "postprocess_blending"):
+        quality_report.prompt.parameters["provider"] = provider_name
+        quality_report.prompt.parameters["pipeline"] = provider_pipeline
+        quality_report.prompt.parameters["model"] = provider_model
+        quality_report.prompt.parameters["model_dtype"] = provider_model_dtype
+        for key in (
+            "task_type",
+            "subtask_type",
+            "planner_confidence",
+            "provider",
+            "pipeline",
+            "model",
+            "model_dtype",
+            "fallback_used",
+            "is_diagnostic_result",
+            "resize_strategy",
+            "postprocess_blending",
+        ):
             if key in payload.smart_metadata:
                 quality_report.prompt.parameters[f"smart_{key}"] = payload.smart_metadata[key]
         metadata["quality_report"] = quality_report.model_dump()
@@ -651,69 +689,90 @@ async def generate_pipeline(
             quality_report=quality_report,
         )
 
-    # Pre-fill mask area with border average color to avoid BrushNet black-hole issue
-    if mask_arr.any():
-        dilated = np.asarray(raw_mask.filter(ImageFilter.MaxFilter(9))) > 32
-        border_ring = dilated & ~mask_arr
-        if border_ring.any():
-            src_arr = np.asarray(source_image)
-            avg_color = src_arr[border_ring].mean(axis=0).astype(np.uint8)
-            filled = src_arr.copy()
-            filled[mask_arr] = avg_color
-            # Soften the fill boundary: blur a narrow inner ring to smooth the transition
-            inner_ring = mask_arr & ~(np.asarray(raw_mask.filter(ImageFilter.MinFilter(3))) > 32)
-            if inner_ring.any():
-                filled_blurred = np.asarray(Image.fromarray(filled, mode="RGB").filter(ImageFilter.GaussianBlur(radius=2)))
-                filled[inner_ring] = filled_blurred[inner_ring]
-            inpaint_image = encode_image_to_data_url(Image.fromarray(filled, mode="RGB"))
+    if provider_name == "qwen-image":
+        if progress:
+            progress("EXECUTING", 0.65, "Qwen-Image generation is running")
+        qwen_request = QwenImageEditRequest(
+            image=payload.source_image,
+            mask_image=normalized_mask.mask_image,
+            prompt=plan_payload.task_prompt,
+            negative_prompt=payload.negative_prompt or plan_payload.negative_prompt,
+            num_inference_steps=payload.steps,
+            true_cfg_scale=payload.true_cfg_scale if payload.true_cfg_scale is not None else payload.guidance_scale,
+            strength=payload.strength,
+            seed=payload.seed,
+            local_files_only=payload.local_files_only,
+        )
+        try:
+            provider_data = await post_json(f"{QWEN_IMAGE_URL}/generate", qwen_request.model_dump())
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail=f"Qwen-Image service is unavailable: {exc}") from exc
+    else:
+        # Pre-fill mask area with border average color to avoid BrushNet black-hole issue.
+        if mask_arr.any():
+            dilated = np.asarray(raw_mask.filter(ImageFilter.MaxFilter(9))) > 32
+            border_ring = dilated & ~mask_arr
+            if border_ring.any():
+                src_arr = np.asarray(source_image)
+                avg_color = src_arr[border_ring].mean(axis=0).astype(np.uint8)
+                filled = src_arr.copy()
+                filled[mask_arr] = avg_color
+                inner_ring = mask_arr & ~(np.asarray(raw_mask.filter(ImageFilter.MinFilter(3))) > 32)
+                if inner_ring.any():
+                    filled_blurred = np.asarray(Image.fromarray(filled, mode="RGB").filter(ImageFilter.GaussianBlur(radius=2)))
+                    filled[inner_ring] = filled_blurred[inner_ring]
+                inpaint_image = encode_image_to_data_url(Image.fromarray(filled, mode="RGB"))
+            else:
+                inpaint_image = payload.source_image
         else:
             inpaint_image = payload.source_image
-    else:
-        inpaint_image = payload.source_image
 
-    if progress:
-        progress("EXECUTING", 0.65, "PowerPaint generation is running")
-    powerpaint_request = PowerPaintGenerateRequest(
-        image=inpaint_image,
-        mask_image=normalized_mask.mask_image,
-        task=task_name,
-        prompt=plan_payload.task_prompt,
-        negative_prompt=payload.negative_prompt or plan_payload.negative_prompt,
-        steps=payload.steps,
-        guidance_scale=effective_scale,
-        fitting_degree=effective_fitting,
-        seed=payload.seed,
-        local_files_only=payload.local_files_only,
-        horizontal_expansion_ratio=payload.horizontal_expansion_ratio,
-        vertical_expansion_ratio=payload.vertical_expansion_ratio,
-    )
+        if progress:
+            progress("EXECUTING", 0.65, "PowerPaint generation is running")
+        powerpaint_request = PowerPaintGenerateRequest(
+            image=inpaint_image,
+            mask_image=normalized_mask.mask_image,
+            task=task_name,
+            prompt=plan_payload.task_prompt,
+            negative_prompt=payload.negative_prompt or plan_payload.negative_prompt,
+            steps=payload.steps,
+            guidance_scale=effective_scale,
+            fitting_degree=effective_fitting,
+            seed=payload.seed,
+            local_files_only=payload.local_files_only,
+            horizontal_expansion_ratio=payload.horizontal_expansion_ratio,
+            vertical_expansion_ratio=payload.vertical_expansion_ratio,
+        )
 
-    try:
-        powerpaint_data = await post_json(f"{POWERPAINT_URL}/generate", powerpaint_request.model_dump())
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"PowerPaint service is unavailable: {exc}") from exc
+        try:
+            provider_data = await post_json(f"{POWERPAINT_URL}/generate", powerpaint_request.model_dump())
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail=f"PowerPaint service is unavailable: {exc}") from exc
 
     if progress:
         progress("EVALUATING", 0.9, "Evaluating result and saving artifacts")
-    result_image = decode_data_url_to_image(powerpaint_data["result_image"], mode="RGB")
+    result_image = decode_data_url_to_image(provider_data["result_image"], mode="RGB")
 
-    # Post-process: blend mask boundary to remove BrushNet dark edge artifacts
+    # Post-process with provider-specific masks: PowerPaint gets a wider edge blend;
+    # Qwen-Image gets full outside-mask protection.
     if mask_arr.any():
-        boundary_ring = dilate_mask(raw_mask, radius=5)
-        boundary_ring = Image.fromarray(
-            (np.asarray(boundary_ring, dtype=np.int16) - np.asarray(raw_mask, dtype=np.int16)).clip(0, 255).astype(np.uint8),
-            mode="L",
-        )
-        boundary_blurred = blur_mask(boundary_ring, radius=3)
-        # Final mask = original mask (interior) + blurred boundary ring (transition zone)
-        blended_mask = Image.fromarray(
-            (np.asarray(raw_mask, dtype=np.int16) + np.asarray(boundary_blurred, dtype=np.int16)).clip(0, 255).astype(np.uint8),
-            mode="L",
-        )
+        if provider_name == "qwen-image":
+            blended_mask = blur_mask(dilate_mask(raw_mask, radius=2), radius=2)
+        else:
+            boundary_ring = dilate_mask(raw_mask, radius=5)
+            boundary_ring = Image.fromarray(
+                (np.asarray(boundary_ring, dtype=np.int16) - np.asarray(raw_mask, dtype=np.int16)).clip(0, 255).astype(np.uint8),
+                mode="L",
+            )
+            boundary_blurred = blur_mask(boundary_ring, radius=3)
+            blended_mask = Image.fromarray(
+                (np.asarray(raw_mask, dtype=np.int16) + np.asarray(boundary_blurred, dtype=np.int16)).clip(0, 255).astype(np.uint8),
+                mode="L",
+            )
         result_image = blend_with_mask(source_image, result_image, blended_mask)
         result_image_data = encode_image_to_data_url(result_image)
     else:
-        result_image_data = powerpaint_data["result_image"]
+        result_image_data = provider_data["result_image"]
 
     mask_image = raw_mask
     evaluation = evaluate_edit(source_image, result_image, mask_image)
@@ -756,10 +815,18 @@ async def generate_pipeline(
     quality_report.prompt.parameters["sam2_refinement_requested"] = use_sam2
     quality_report.prompt.parameters["effective_fitting_degree"] = effective_fitting
     quality_report.prompt.parameters["planner_source"] = planner_source
+    quality_report.prompt.parameters["provider"] = provider_name
+    quality_report.prompt.parameters["pipeline"] = provider_pipeline
+    quality_report.prompt.parameters["model"] = provider_model
+    quality_report.prompt.parameters["model_dtype"] = provider_model_dtype
     for key in (
         "task_type",
         "subtask_type",
         "planner_confidence",
+        "provider",
+        "pipeline",
+        "model",
+        "model_dtype",
         "fallback_used",
         "is_diagnostic_result",
         "resize_strategy",

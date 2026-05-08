@@ -15,5 +15,7 @@ curl -fsS "http://${POWERPAINT_HOST}:${POWERPAINT_PORT}/health"
 echo
 curl -fsS "http://${FLUX_HOST}:${FLUX_PORT}/health"
 echo
+curl -fsS "http://${QWEN_IMAGE_HOST}:${QWEN_IMAGE_PORT}/health"
+echo
 curl -fsS "http://${GATEWAY_HOST}:${GATEWAY_PORT}/api/health"
 echo

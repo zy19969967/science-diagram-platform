@@ -26,6 +26,7 @@ backend/
   common/               共享 schema、画布状态、质量评估、导出逻辑
   gateway/              API 网关、任务、项目、实验台账、部署 readiness
   flux_service/         本地 FLUX-compatible 初图服务
+  qwen_image_service/   Qwen-Image 本地图像编辑服务
   planner/              Qwen3.5 规划服务
   powerpaint_service/   PowerPaint 执行服务
   segmenter/            SAM-2 分割服务
@@ -46,6 +47,7 @@ docker-compose.yml      Docker Compose 编排
 - `segmenter`：优先调用 Hugging Face `facebook/sam2.1-hiera-base-plus`
 - `powerpaint_service`：调用官方 [PowerPaint](https://github.com/open-mmlab/PowerPaint)
 - `flux_service`：本地 diffusers FLUX-compatible 初图服务，默认模型为 `black-forest-labs/FLUX.2-klein-4B`，通过 `Flux2KleinPipeline` 加载；模型为 Apache 2.0 开源权重，约需 13GB VRAM，权重不提交进仓库，首次运行或更新时可能需要从 Hugging Face 下载
+- `qwen_image_service`：本地 Qwen-Image 编辑服务，Docker 内部服务名为 `qwen-image:8005`，Conda/tmux 默认端口为 `QWEN_IMAGE_PORT=19086`；第一版默认使用 `Qwen/Qwen-Image-Edit`，第一版不默认使用 Qwen-Image-Edit-2511
 - `init provider`：Gateway 默认通过 `FLUX_INIT_URL=http://flux:8004` 调用本地 `flux_service`；服务不可用时 `auto` 模式回退到确定性 fallback
 - 当真实模型不可用、GPU 不可用或模型输出异常时，会回退到仓库内规则逻辑
 
@@ -57,12 +59,12 @@ docker-compose.yml      Docker Compose 编排
 /home/common/yzhu_2025/science-diagram-platform
 ```
 
-当前模板示例的 4 卡分配：
+当前模板默认按 2 张 H20-NVLink 96GB 分配：
 
-- GPU 4：`powerpaint_service`
-- GPU 5：`planner`
-- GPU 6：`segmenter`
-- GPU 7：`flux`
+- GPU 0：`qwen-image`
+- GPU 1：`powerpaint_service`、`planner`、`segmenter`、`flux`
+
+Qwen-Image 按独占 80GB GPU 设计。H20-NVLink 96GB 的 GPU 0 留给 Qwen-Image，GPU 1 承载 PowerPaint、planner、segmenter 和 FLUX；如果实际机器编号不同，只改 `.env` 里的 `*_CUDA_VISIBLE_DEVICES` 即可。
 
 Docker 部署：
 
@@ -73,6 +75,12 @@ git clone https://github.com/zy19969967/science-diagram-platform.git
 cd science-diagram-platform
 cp .env.server.example .env
 sudo docker compose --env-file .env build
+sudo docker compose --env-file .env --profile qwen-image up -d
+```
+
+如果只想先启动 PowerPaint legacy 链路，不启动 Qwen-Image，可以去掉 profile：
+
+```bash
 sudo docker compose --env-file .env up -d
 ```
 
@@ -80,13 +88,13 @@ sudo docker compose --env-file .env up -d
 
 如果服务器不能使用 Docker、但可以使用 Conda，请看 [Conda Deployment README](docs/server-conda-deploy.md)，并使用 `scripts/setup_conda_envs.sh`、`scripts/start_all_tmux.sh`、`scripts/run_*.sh` 这组脚本。
 
-Conda 部署启动后，如果需要演示前提前把 Qwen3.5、SAM2、PowerPaint 和 FLUX 加载进显存，可以顺序运行：
+Conda 部署启动后，如果需要演示前提前把 Qwen3.5、SAM2、PowerPaint、FLUX 和 Qwen-Image 加载进显存，可以顺序运行：
 
 ```bash
 bash scripts/prewarm_models.sh
 ```
 
-脚本会生成一张小尺寸烧杯测试图并逐个触发 `planner`、`segmenter`、`powerpaint` 和 `flux`。不要并发预热；如果出现 CUDA OOM，请先调整 `.env.nodocker` 里的各服务 GPU 编号。
+脚本会生成一张小尺寸烧杯测试图并逐个触发 `planner`、`segmenter`、`powerpaint`、`flux` 和 `qwen-image`。不要并发预热；如果出现 CUDA OOM，请先调整 `.env.nodocker` 里的各服务 GPU 编号，尤其确认 Qwen-Image 是否有独占 80GB GPU。
 
 浏览器访问：
 

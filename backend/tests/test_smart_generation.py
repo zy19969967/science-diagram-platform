@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-import unittest
 import os
+import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from PIL import Image
 
+_ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault("ASSETS_DIR", str(Path(__file__).resolve().parents[1] / "assets"))
-os.environ.setdefault("RUNS_DIR", "/tmp/science-diagram-test-runs")
-os.environ.setdefault("PROJECTS_DIR", "/tmp/science-diagram-test-projects")
-os.environ.setdefault("JOBS_DIR", "/tmp/science-diagram-test-jobs")
-os.environ.setdefault("BENCHMARKS_DIR", "/tmp/science-diagram-test-benchmarks")
+os.environ.setdefault("RUNS_DIR", str(_ROOT / "data" / "test-smart-runs"))
+os.environ.setdefault("PROJECTS_DIR", str(_ROOT / "data" / "test-smart-projects"))
+os.environ.setdefault("JOBS_DIR", str(_ROOT / "data" / "test-smart-jobs"))
+os.environ.setdefault("BENCHMARKS_DIR", str(_ROOT / "data" / "test-smart-benchmarks"))
 
 from common.generation_logic import build_smart_generation_plan, smart_metadata
 from common.schemas import (
@@ -25,7 +27,6 @@ from common.utils.images import encode_image_to_data_url
 from gateway import main as gateway_main
 from gateway.init_provider import InitProviderError
 from gateway.jobs import JobStore
-from PIL import Image
 
 
 def sample_generate_response() -> GenerateResponse:
@@ -51,19 +52,17 @@ def sample_generate_response() -> GenerateResponse:
 
 class SmartGenerationPlannerTest(unittest.TestCase):
     def test_no_image_routes_to_text_to_image(self) -> None:
-        decision = build_smart_generation_plan(
-            SmartGenerationRequest(prompt="画一个细胞结构科普插图")
-        )
+        decision = build_smart_generation_plan(SmartGenerationRequest(prompt="draw a glowing cell"))
 
         self.assertEqual(decision.task_type, "text_to_image")
         self.assertEqual(decision.pipeline, "flux_text_to_image")
         self.assertFalse(decision.requires_mask)
         self.assertFalse(decision.need_user_clarification)
 
-    def test_image_with_mask_routes_to_local_inpaint(self) -> None:
+    def test_image_with_mask_routes_to_qwen_image_local_inpaint_by_default(self) -> None:
         decision = build_smart_generation_plan(
             SmartGenerationRequest(
-                prompt="把杯子换成白色花瓶",
+                prompt="replace the masked beaker with a white vase",
                 source_image="data:image/png;base64,source",
                 mask_image="data:image/png;base64,mask",
             )
@@ -71,14 +70,28 @@ class SmartGenerationPlannerTest(unittest.TestCase):
 
         self.assertEqual(decision.task_type, "local_inpaint")
         self.assertEqual(decision.subtask_type, "object_replacement")
+        self.assertEqual(decision.pipeline, "qwen_image_inpaint")
+        self.assertTrue(decision.requires_mask)
+        self.assertIn("white vase", decision.normalized_prompt)
+
+    def test_image_with_mask_can_route_to_powerpaint_provider(self) -> None:
+        decision = build_smart_generation_plan(
+            SmartGenerationRequest(
+                prompt="replace the masked beaker with a white vase",
+                source_image="data:image/png;base64,source",
+                mask_image="data:image/png;base64,mask",
+                options=SmartGenerationOptions(generation_provider="powerpaint"),
+            )
+        )
+
+        self.assertEqual(decision.task_type, "local_inpaint")
         self.assertEqual(decision.pipeline, "powerpaint_inpaint")
         self.assertTrue(decision.requires_mask)
-        self.assertIn("seamlessly blended", decision.normalized_prompt)
 
     def test_image_without_mask_style_prompt_routes_to_image_variation(self) -> None:
         decision = build_smart_generation_plan(
             SmartGenerationRequest(
-                prompt="让这张图更有电影感，增强质感",
+                prompt="make this image style more cinematic and textured",
                 source_image="data:image/png;base64,source",
             )
         )
@@ -90,7 +103,7 @@ class SmartGenerationPlannerTest(unittest.TestCase):
     def test_image_without_mask_local_object_needs_region(self) -> None:
         decision = build_smart_generation_plan(
             SmartGenerationRequest(
-                prompt="删除左边的人",
+                prompt="remove the person on the left",
                 source_image="data:image/png;base64,source",
             )
         )
@@ -103,7 +116,7 @@ class SmartGenerationPlannerTest(unittest.TestCase):
     def test_task_override_takes_precedence(self) -> None:
         decision = build_smart_generation_plan(
             SmartGenerationRequest(
-                prompt="把背景扩展到右侧",
+                prompt="extend the background to the right",
                 source_image="data:image/png;base64,source",
                 options=SmartGenerationOptions(task_override="outpainting"),
             )
@@ -113,29 +126,27 @@ class SmartGenerationPlannerTest(unittest.TestCase):
         self.assertEqual(decision.confidence, 1.0)
         self.assertEqual(decision.pipeline, "powerpaint_outpaint")
 
-    def test_metadata_records_fallback_and_mask_parameters(self) -> None:
-        decision = build_smart_generation_plan(
-            SmartGenerationRequest(
-                prompt="把杯子换成白色花瓶",
-                source_image="data:image/png;base64,source",
-                mask_image="data:image/png;base64,mask",
-            )
+    def test_metadata_records_provider_pipeline_and_mask_parameters(self) -> None:
+        request = SmartGenerationRequest(
+            prompt="replace the masked beaker with a white vase",
+            source_image="data:image/png;base64,source",
+            mask_image="data:image/png;base64,mask",
         )
+        decision = build_smart_generation_plan(request)
 
         metadata = smart_metadata(
-            request=SmartGenerationRequest(
-                prompt="把杯子换成白色花瓶",
-                source_image="data:image/png;base64,source",
-                mask_image="data:image/png;base64,mask",
-            ),
+            request=request,
             decision=decision,
             fallback_used=True,
             is_diagnostic_result=True,
-            provider="deterministic-fallback",
+            provider="qwen-image",
         )
 
         self.assertEqual(metadata["task_type"], "local_inpaint")
         self.assertEqual(metadata["planner_confidence"], decision.confidence)
+        self.assertEqual(metadata["provider"], "qwen-image")
+        self.assertEqual(metadata["pipeline"], "qwen_image_inpaint")
+        self.assertEqual(metadata["model"], "Qwen/Qwen-Image-Edit")
         self.assertTrue(metadata["fallback_used"])
         self.assertTrue(metadata["is_diagnostic_result"])
         self.assertEqual(metadata["has_mask"], True)
@@ -156,7 +167,7 @@ class SmartGenerationApiTest(unittest.TestCase):
         with patch.object(gateway_main, "generate_initial_candidates", unavailable):
             response = client.post(
                 "/api/generation/jobs",
-                json={"prompt": "画一个细胞结构科普插图"},
+                json={"prompt": "draw a glowing cell"},
             )
 
         self.assertEqual(response.status_code, 200)
@@ -168,7 +179,7 @@ class SmartGenerationApiTest(unittest.TestCase):
         self.assertTrue(body["metadata"]["provider_unavailable"])
         self.assertFalse(body["metadata"]["fallback_used"])
 
-    def test_image_with_mask_creates_unified_generation_job(self) -> None:
+    def test_image_with_mask_creates_unified_generation_job_with_qwen_metadata(self) -> None:
         client = TestClient(gateway_main.app)
 
         async def fake_generate_pipeline(*args, **kwargs):
@@ -178,7 +189,7 @@ class SmartGenerationApiTest(unittest.TestCase):
             response = client.post(
                 "/api/generation/jobs",
                 json={
-                    "prompt": "把杯子换成白色花瓶",
+                    "prompt": "replace the masked beaker with a white vase",
                     "source_image": "data:image/png;base64,source",
                     "mask_image": "data:image/png;base64,mask",
                 },
@@ -188,7 +199,8 @@ class SmartGenerationApiTest(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["status"], "queued")
         self.assertEqual(body["task_type"], "local_inpaint")
-        self.assertEqual(body["metadata"]["provider"], "powerpaint")
+        self.assertEqual(body["metadata"]["provider"], "qwen-image")
+        self.assertEqual(body["metadata"]["pipeline"], "qwen_image_inpaint")
         self.assertEqual(body["metadata"]["fallback_used"], False)
 
         job_response = client.get(f"/api/generation/jobs/{body['job_id']}")
@@ -199,31 +211,26 @@ class SmartGenerationApiTest(unittest.TestCase):
         self.assertFalse(completed["results"][0]["is_diagnostic_result"])
 
     def test_smart_generate_request_carries_metadata_for_run_artifacts(self) -> None:
-        decision = build_smart_generation_plan(
-            SmartGenerationRequest(
-                prompt="把杯子换成白色花瓶",
-                source_image="data:image/png;base64,source",
-                mask_image="data:image/png;base64,mask",
-            )
+        smart_request = SmartGenerationRequest(
+            prompt="replace the masked beaker with a white vase",
+            source_image="data:image/png;base64,source",
+            mask_image="data:image/png;base64,mask",
         )
+        decision = build_smart_generation_plan(smart_request)
 
-        generate_request = gateway_main._generate_request_from_smart(
-            SmartGenerationRequest(
-                prompt="把杯子换成白色花瓶",
-                source_image="data:image/png;base64,source",
-                mask_image="data:image/png;base64,mask",
-            ),
-            decision,
-        )
+        generate_request = gateway_main._generate_request_from_smart(smart_request, decision)
 
+        self.assertEqual(generate_request.generation_provider, "qwen-image")
         self.assertEqual(generate_request.smart_metadata["task_type"], "local_inpaint")
         self.assertEqual(generate_request.smart_metadata["normalized_prompt"], decision.normalized_prompt)
+        self.assertEqual(generate_request.smart_metadata["provider"], "qwen-image")
+        self.assertEqual(generate_request.smart_metadata["pipeline"], "qwen_image_inpaint")
         self.assertEqual(generate_request.smart_metadata["postprocess_blending"], "soft_mask_blend")
 
-    def test_image_variation_without_user_mask_uses_full_image_mask(self) -> None:
+    def test_image_variation_without_user_mask_uses_full_image_mask_and_powerpaint_provider(self) -> None:
         source_image = encode_image_to_data_url(Image.new("RGB", (8, 6), "white"))
         smart_request = SmartGenerationRequest(
-            prompt="让这张图更有电影感",
+            prompt="make this image style more cinematic",
             source_image=source_image,
         )
         decision = build_smart_generation_plan(smart_request)
@@ -231,6 +238,7 @@ class SmartGenerationApiTest(unittest.TestCase):
         generate_request = gateway_main._generate_request_from_smart(smart_request, decision)
 
         self.assertEqual(decision.task_type, "image_variation")
+        self.assertEqual(generate_request.generation_provider, "powerpaint")
         self.assertTrue(generate_request.mask_image.startswith("data:image/png;base64,"))
         self.assertEqual(generate_request.smart_metadata["resize_strategy"], "provider_default")
 

@@ -29,6 +29,7 @@ services:
       SEGMENTER_URL: http://segmenter:8003
       POWERPAINT_URL: http://powerpaint:8002
       FLUX_INIT_URL: ${FLUX_INIT_URL:-http://flux:8004}
+      QWEN_IMAGE_URL: ${QWEN_IMAGE_URL:-http://qwen-image:8005}
       GATEWAY_API_TOKEN: ${GATEWAY_API_TOKEN:-}
       RUNS_DIR: /app/data/runs
       PROJECTS_DIR: /app/data/projects
@@ -70,8 +71,8 @@ services:
       PLANNER_MAX_NEW_TOKENS: ${PLANNER_MAX_NEW_TOKENS:-320}
       PLANNER_ATTN_IMPL: ${PLANNER_ATTN_IMPL:-sdpa}
       PLANNER_LOCAL_FILES_ONLY: ${PLANNER_LOCAL_FILES_ONLY:-false}
-      CUDA_VISIBLE_DEVICES: ${PLANNER_CUDA_VISIBLE_DEVICES:-3}
-      NVIDIA_VISIBLE_DEVICES: ${PLANNER_CUDA_VISIBLE_DEVICES:-3}
+      CUDA_VISIBLE_DEVICES: ${PLANNER_CUDA_VISIBLE_DEVICES:-1}
+      NVIDIA_VISIBLE_DEVICES: ${PLANNER_CUDA_VISIBLE_DEVICES:-1}
       HF_HOME: /models/huggingface
       HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
@@ -97,8 +98,8 @@ services:
       SEGMENTER_BOX_PADDING_RATIO: ${SEGMENTER_BOX_PADDING_RATIO:-0.18}
       SEGMENTER_MASK_THRESHOLD: ${SEGMENTER_MASK_THRESHOLD:-0.0}
       SEGMENTER_USE_PLACEMENT_BOX: ${SEGMENTER_USE_PLACEMENT_BOX:-false}
-      CUDA_VISIBLE_DEVICES: ${SEGMENTER_CUDA_VISIBLE_DEVICES:-6}
-      NVIDIA_VISIBLE_DEVICES: ${SEGMENTER_CUDA_VISIBLE_DEVICES:-6}
+      CUDA_VISIBLE_DEVICES: ${SEGMENTER_CUDA_VISIBLE_DEVICES:-1}
+      NVIDIA_VISIBLE_DEVICES: ${SEGMENTER_CUDA_VISIBLE_DEVICES:-1}
       HF_HOME: /models/huggingface
       HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
@@ -128,8 +129,8 @@ services:
       POWERPAINT_CHECKPOINT_DIR: /models/powerpaint/${POWERPAINT_MODEL_DIR_NAME:-ppt-v2-1}
       POWERPAINT_WEIGHT_DTYPE: ${POWERPAINT_WEIGHT_DTYPE:-float16}
       POWERPAINT_LOCAL_FILES_ONLY: ${POWERPAINT_LOCAL_FILES_ONLY:-false}
-      CUDA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-2}
-      NVIDIA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-2}
+      CUDA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-1}
+      NVIDIA_VISIBLE_DEVICES: ${POWERPAINT_CUDA_VISIBLE_DEVICES:-1}
       HF_HOME: /models/huggingface
       HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
@@ -159,8 +160,8 @@ services:
       FLUX_GUIDANCE_SCALE: ${FLUX_GUIDANCE_SCALE:-1.0}
       FLUX_MAX_SEQUENCE_LENGTH: ${FLUX_MAX_SEQUENCE_LENGTH:-512}
       FLUX_LOCAL_FILES_ONLY: ${FLUX_LOCAL_FILES_ONLY:-false}
-      CUDA_VISIBLE_DEVICES: ${FLUX_CUDA_VISIBLE_DEVICES:-7}
-      NVIDIA_VISIBLE_DEVICES: ${FLUX_CUDA_VISIBLE_DEVICES:-7}
+      CUDA_VISIBLE_DEVICES: ${FLUX_CUDA_VISIBLE_DEVICES:-1}
+      NVIDIA_VISIBLE_DEVICES: ${FLUX_CUDA_VISIBLE_DEVICES:-1}
       HF_HOME: /models/huggingface
       HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
@@ -172,3 +173,34 @@ services:
       timeout: 15s
       retries: 10
       start_period: 30s
+
+  qwen-image:
+    profiles: ["qwen-image"]
+    build:
+      context: .
+      dockerfile: backend/qwen_image_service/Dockerfile
+      args:
+        TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu121}
+        TORCH_VERSION: ${TORCH_VERSION:-2.5.1}
+        TORCHVISION_VERSION: ${TORCHVISION_VERSION:-0.20.1}
+    restart: unless-stopped
+    environment:
+      QWEN_IMAGE_MODEL_REPO: ${QWEN_IMAGE_MODEL_REPO:-Qwen/Qwen-Image-Edit}
+      QWEN_IMAGE_MODEL_DTYPE: ${QWEN_IMAGE_MODEL_DTYPE:-bfloat16}
+      QWEN_IMAGE_NUM_INFERENCE_STEPS: ${QWEN_IMAGE_NUM_INFERENCE_STEPS:-50}
+      QWEN_IMAGE_TRUE_CFG_SCALE: ${QWEN_IMAGE_TRUE_CFG_SCALE:-4.0}
+      QWEN_IMAGE_STRENGTH: ${QWEN_IMAGE_STRENGTH:-1.0}
+      QWEN_IMAGE_LOCAL_FILES_ONLY: ${QWEN_IMAGE_LOCAL_FILES_ONLY:-false}
+      CUDA_VISIBLE_DEVICES: ${QWEN_IMAGE_CUDA_VISIBLE_DEVICES:-0}
+      NVIDIA_VISIBLE_DEVICES: ${QWEN_IMAGE_CUDA_VISIBLE_DEVICES:-0}
+      HF_HOME: /models/huggingface
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+    volumes:
+      - ./models:/models
+    gpus: all
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health').read()"]
+      interval: 60s
+      timeout: 15s
+      retries: 10
+      start_period: 300s

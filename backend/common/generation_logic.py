@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .schemas import SmartGenerationRequest, SmartPipeline, SmartPlannerDecision, SmartTaskType
+from .schemas import GenerationProvider, SmartGenerationRequest, SmartPipeline, SmartPlannerDecision, SmartTaskType
 
 
 STRUCTURE_KEYWORDS = (
@@ -71,7 +71,12 @@ def _subtask_for(prompt: str) -> str:
     return "attribute_edit"
 
 
-def _pipeline_for_task(task_type: SmartTaskType, *, has_mask: bool) -> SmartPipeline:
+def _pipeline_for_task(
+    task_type: SmartTaskType,
+    *,
+    has_mask: bool,
+    generation_provider: GenerationProvider = "powerpaint",
+) -> SmartPipeline:
     if task_type == "text_to_image":
         return "flux_text_to_image"
     if task_type == "image_variation":
@@ -81,7 +86,7 @@ def _pipeline_for_task(task_type: SmartTaskType, *, has_mask: bool) -> SmartPipe
     if task_type == "svg_or_structure_generation":
         return "svg_structure"
     if task_type == "local_inpaint" and has_mask:
-        return "powerpaint_inpaint"
+        return "qwen_image_inpaint" if generation_provider == "qwen-image" else "powerpaint_inpaint"
     return "needs_user_input"
 
 
@@ -134,7 +139,11 @@ def _decision(
     warnings: list[str] | None = None,
 ) -> SmartPlannerDecision:
     has_mask = bool(request.mask_image)
-    pipeline = _pipeline_for_task(task_type, has_mask=has_mask)
+    pipeline = _pipeline_for_task(
+        task_type,
+        has_mask=has_mask,
+        generation_provider=request.options.generation_provider,
+    )
     if need_user_clarification:
         pipeline = "needs_user_input"
     return SmartPlannerDecision(
@@ -260,11 +269,23 @@ def smart_metadata(
         "normalized_prompt": decision.normalized_prompt,
         "negative_prompt": decision.negative_prompt,
         "provider": provider,
+        "generation_provider": request.options.generation_provider,
+        "pipeline": decision.pipeline,
+        "model": (
+            "Qwen/Qwen-Image-Edit"
+            if provider == "qwen-image"
+            else "PowerPaint"
+            if provider == "powerpaint"
+            else provider
+        ),
+        "model_dtype": "bfloat16" if provider == "qwen-image" else None,
         "fallback_used": fallback_used,
         "is_diagnostic_result": is_diagnostic_result,
         "seed": request.options.seed,
         "steps": request.options.steps,
         "guidance_scale": request.options.guidance_scale,
+        "true_cfg_scale": request.options.true_cfg_scale,
+        "strength": request.options.strength,
         "scheduler": None,
         "resize_strategy": "crop_based" if decision.task_type == "local_inpaint" else "provider_default",
         "has_mask": bool(request.mask_image or request.mask_id),
