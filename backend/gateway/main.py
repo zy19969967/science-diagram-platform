@@ -40,6 +40,8 @@ from common.schemas import (
     ProjectCreateRequest,
     ProjectSnapshot,
     ProjectVersionCreateRequest,
+    QwenEditPromptRequest,
+    QwenEditPromptResponse,
     QwenImageEditRequest,
     ScenePlanRequest,
     ScenePlanResponse,
@@ -281,23 +283,21 @@ def _scale_for_task(task: str | None) -> float:
 
 QWEN_IMAGE_DEFAULT_NEGATIVE_PROMPT = " "
 
-QWEN_IMAGE_SCIENCE_STYLE_PROMPT = (
-    "Preserve the clean scientific diagram style: white background, flat vector-like drawing, "
-    "crisp thin gray or black outlines, simple translucent cyan liquid when present, no shadows, "
-    "no photographic texture."
-)
+QWEN_IMAGE_SCIENCE_STYLE_PROMPT = "保持科学线稿风格，白底、轮廓清晰。"
+
+QWEN_IMAGE_PHOTO_STYLE_PROMPT = "保持照片风格，光照、透视和材质与原图一致。"
+
+QWEN_IMAGE_DIAGRAM_PRESERVATION_PROMPT = "未选区保持原图不变。"
+
+QWEN_IMAGE_PHOTO_PRESERVATION_PROMPT = "未选区保持原图不变。"
 
 QWEN_IMAGE_TERM_HINTS = (
-    ("锥形瓶", "Erlenmeyer flask / conical flask"),
-    ("烧杯", "beaker"),
-    ("玻璃棒", "glass rod"),
-    ("漏斗", "funnel"),
-    ("试管", "test tube"),
-    ("支架", "lab stand"),
-    ("铁架台", "lab stand"),
-    ("倾斜", "tilted"),
-    ("平行", "parallel"),
-    ("垂直", "perpendicular"),
+    ("锥形瓶", "锥形瓶（窄颈、宽底）"),
+    ("conical flask", "锥形瓶（窄颈、宽底）"),
+    ("erlenmeyer", "锥形瓶（窄颈、宽底）"),
+    ("glass cup", "玻璃杯"),
+    ("cup", "杯子"),
+    ("beaker", "烧杯"),
 )
 
 QWEN_IMAGE_INTERNAL_NEGATIVE_MARKERS = (
@@ -310,10 +310,6 @@ QWEN_IMAGE_INTERNAL_NEGATIVE_MARKERS = (
     "mismatched texture",
 )
 
-QWEN_IMAGE_EDIT_CROP_LONG_SIDE = 768
-QWEN_IMAGE_EXECUTION_MASK_OBJECT_RATIO = 0.08
-QWEN_IMAGE_EXECUTION_MASK_MAX_IMAGE_RATIO = 0.04
-QWEN_IMAGE_EXECUTION_MASK_MIN_RADIUS = 3
 QWEN_IMAGE_PLANNER_LOCATION_PATTERNS = (
     r"\s*,?\s*(?:positioned|placed|located|sitting|standing)\b[^.]*",
     r"\s*,?\s*in the (?:lower|upper|left|right|center|centre)\b[^.]*",
@@ -351,38 +347,150 @@ def _sanitize_qwen_planner_prompt(value: str) -> str:
     return sanitized.strip(" ,")
 
 
-def _qwen_term_hints(text: str) -> str:
-    hints = [f"{source}: {target}" for source, target in QWEN_IMAGE_TERM_HINTS if source in text]
-    return ", ".join(hints)
+def _contains_cjk(text: str) -> bool:
+    return any("\u4e00" <= char <= "\u9fff" for char in text)
 
 
-def _qwen_image_edit_prompt(*, instruction: str, plan_prompt: str, task: str | None) -> str:
+def _qwen_prompt_enhancer_enabled() -> bool:
+    value = os.getenv("QWEN_IMAGE_PROMPT_ENHANCER_ENABLED", "false")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _qwen_prompt_is_chinese_enough(prompt: str) -> bool:
+    return _contains_cjk(prompt)
+
+
+def _qwen_lookup_known_term(text: str) -> str | None:
+    normalized = text.lower()
+    for source, target in QWEN_IMAGE_TERM_HINTS:
+        if source in normalized or source in text:
+            return target
+    return None
+
+
+def _qwen_normalize_known_terms(text: str) -> str:
+    normalized = text
+    if "锥形瓶" in normalized and "窄颈" not in normalized and "宽底" not in normalized:
+        normalized = normalized.replace("锥形瓶", "锥形瓶（窄颈、宽底）", 1)
+    return normalized
+
+
+def _qwen_english_instruction_to_chinese(instruction: str, planner_prompt: str, task: str | None) -> str:
+    text = instruction.strip()
+    combined = f"{instruction} {planner_prompt}"
+    lower = combined.lower()
+    if task == "object-removal" or "remove" in lower or "delete" in lower:
+        return "删除选区内容"
+
+    replacement_patterns = (
+        r"\b(?:replace|change|turn|convert)\b.+?\b(?:with|to|into)\b\s+(.+)$",
+        r"\b(?:replace with|change to|turn into|convert to)\b\s+(.+)$",
+    )
+    for pattern in replacement_patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            target = _qwen_lookup_known_term(match.group(1)) or _qwen_lookup_known_term(combined) or "用户要求的内容"
+            return f"把选区内容改成：{target}"
+
+    known_target = _qwen_lookup_known_term(combined)
+    if known_target:
+        return f"把选区内容改成：{known_target}"
+    return "按用户要求编辑选区内容"
+
+
+def _qwen_direct_instruction(instruction: str, planner_prompt: str, task: str | None) -> str:
     user_instruction = instruction.strip()
-    planner_prompt = _sanitize_qwen_planner_prompt(plan_prompt)
-    edit_target = _first_nonempty(user_instruction, planner_prompt, "edit the masked object")
+    if user_instruction and _contains_cjk(user_instruction):
+        return _qwen_normalize_known_terms(user_instruction)
+    if user_instruction:
+        return _qwen_english_instruction_to_chinese(user_instruction, planner_prompt, task)
 
-    if task == "object-removal":
-        action = "Remove the masked object and fill the masked region with clean white diagram background."
-    else:
-        action = f"User edit instruction: {edit_target}. The new content must fully replace the original masked object; do not keep or redraw the original object inside the mask."
-        if planner_prompt and planner_prompt != user_instruction and user_instruction:
-            action = f"{action} Additional appearance details from planner: {planner_prompt}."
+    planner_instruction = _sanitize_qwen_planner_prompt(planner_prompt)
+    if planner_instruction and _contains_cjk(planner_instruction):
+        return _qwen_normalize_known_terms(planner_instruction)
+    if planner_instruction:
+        return _qwen_english_instruction_to_chinese(planner_instruction, planner_prompt, task)
+    return "按用户要求编辑选区内容"
+
+
+def _qwen_prompt_has_bad_lab_geometry(prompt: str, context: str) -> bool:
+    combined = f"{prompt} {context}".lower()
+    if "锥形瓶" not in combined and "conical flask" not in combined and "erlenmeyer" not in combined:
+        return False
+    return "wide mouth" in combined or "narrow base" in combined
+
+
+def _qwen_chinese_transform_parts(instruction: str) -> tuple[str | None, str | None]:
+    match = re.search(r"(?:把|将).+?(?:替换为|替换成|换成|改成|变成|变为|转成)(.+)$", instruction)
+    source = None
+    if match:
+        source_match = re.search(r"(?:把|将)(.+?)(?:替换为|替换成|换成|改成|变成|变为|转成)", instruction)
+        if source_match:
+            source = source_match.group(1).strip(" 。.，,")
+    if not match:
+        match = re.search(r"(?:替换为|替换成|换成|改成|变成|变为|转成)(.+)$", instruction)
+    if not match:
+        return None, None
+    return source, match.group(1).strip(" 。.，,")
+
+
+def _qwen_target_after_transform_verb(prompt: str, targets: list[str]) -> bool:
+    for target in targets:
+        if not target:
+            continue
+        pattern = r"(?:替换为|替换成|换成|改成|变成|变为|转成)[:：]?[^\n。；;，,]*" + re.escape(target)
+        if re.search(pattern, prompt):
+            return True
+    return False
+
+
+def _qwen_prompt_preserves_chinese_action(instruction: str, prompt: str) -> bool:
+    if not _contains_cjk(instruction):
+        return True
+
+    transform_source, transform_target = _qwen_chinese_transform_parts(instruction)
+    if transform_target:
+        target_core = re.sub(r"^(一个|一只|一件|这个|这些|该|选区里的|选区内的)", "", transform_target).strip()
+        known_target = _qwen_lookup_known_term(transform_target)
+        target_candidates = [transform_target, target_core]
+        if known_target:
+            target_candidates.append(known_target.split("（", 1)[0])
+        if not _qwen_target_after_transform_verb(prompt, target_candidates):
+            return False
+        if transform_source:
+            source_core = re.sub(r"^(一个|一只|一件|这个|这些|该|选区里的|选区内的)", "", transform_source).strip()
+            source_candidates = [transform_source, source_core]
+            known_source = _qwen_lookup_known_term(transform_source)
+            if known_source:
+                source_candidates.append(known_source.split("（", 1)[0])
+            if _qwen_target_after_transform_verb(prompt, source_candidates):
+                return False
+        return True
+
+    if any(verb in instruction for verb in ("删除", "移除", "去掉", "删掉")):
+        return any(verb in prompt for verb in ("删除", "移除", "去掉", "删掉"))
+
+    return True
+
+
+def _qwen_image_edit_prompt(
+    *,
+    instruction: str,
+    plan_prompt: str,
+    task: str | None,
+    source_is_diagram: bool = True,
+) -> str:
+    edit_instruction = _qwen_direct_instruction(instruction, plan_prompt, task).rstrip("。.! ")
+    preserve_prompt = QWEN_IMAGE_DIAGRAM_PRESERVATION_PROMPT if source_is_diagram else QWEN_IMAGE_PHOTO_PRESERVATION_PROMPT
+    style_prompt = QWEN_IMAGE_SCIENCE_STYLE_PROMPT if source_is_diagram else QWEN_IMAGE_PHOTO_STYLE_PROMPT
 
     parts = [
-        "Edit only the masked region.",
-        action,
-        "The provided mask determines the edit location and may be expanded slightly to cover the full original object; use planner details only for object identity, geometry, material, and style.",
-        "The masked region should contain exactly the requested replacement object; do not draw an extra outer beaker, jar, duplicate container, or ghost outline from the original object.",
-        "Keep every unmasked part of the source image unchanged, including all apparatus lines, labels, liquid levels, line thickness, and white background outside the mask.",
-        QWEN_IMAGE_SCIENCE_STYLE_PROMPT,
-        "Make the replacement fit cleanly inside the editable region and match the existing diagram perspective, scale, geometry, and line weight.",
+        "只修改 mask 内区域。",
+        f"{edit_instruction}。",
+        preserve_prompt,
+        style_prompt,
     ]
-    hints = _qwen_term_hints(user_instruction)
-    if hints:
-        parts.insert(2, f"Recognize these requested lab objects and relations: {hints}.")
-    if "平行" in user_instruction:
-        parts.append("If parallel alignment is requested, align the replacement object's main axis parallel to the referenced object.")
-    return " ".join(parts)
+    return "".join(parts)
 
 
 def _is_internal_negative_prompt(value: str) -> bool:
@@ -400,6 +508,7 @@ def _provider_edit_prompts(
     request_negative_prompt: str,
     plan_negative_prompt: str,
     task: str | None,
+    source_is_diagram: bool = True,
 ) -> tuple[str, str]:
     if provider == "qwen-image":
         negative_prompt = request_negative_prompt.strip()
@@ -409,8 +518,59 @@ def _provider_edit_prompts(
             or _is_internal_negative_prompt(negative_prompt)
         ):
             negative_prompt = QWEN_IMAGE_DEFAULT_NEGATIVE_PROMPT
-        return _qwen_image_edit_prompt(instruction=instruction, plan_prompt=plan_prompt, task=task), negative_prompt
+        return (
+            _qwen_image_edit_prompt(
+                instruction=instruction,
+                plan_prompt=plan_prompt,
+                task=task,
+                source_is_diagram=source_is_diagram,
+            ),
+            negative_prompt,
+        )
     return _first_nonempty(plan_prompt, instruction), _first_nonempty(request_negative_prompt, plan_negative_prompt)
+
+
+async def _enhance_qwen_provider_prompt(
+    *,
+    instruction: str,
+    task: str | None,
+    plan_prompt: str,
+    source_is_diagram: bool,
+    fallback_prompt: str,
+    fallback_negative_prompt: str,
+) -> tuple[str, str, str, list[str]]:
+    source_style = "scientific_diagram" if source_is_diagram else "photographic"
+    request = QwenEditPromptRequest(
+        instruction=instruction,
+        task=task,
+        plan_prompt=plan_prompt,
+        source_style=source_style,
+        has_mask=True,
+        fallback_prompt=fallback_prompt,
+    )
+    try:
+        data = await post_json(f"{PLANNER_URL}/qwen-edit-prompt", request.model_dump())
+        response = QwenEditPromptResponse.model_validate(data)
+    except Exception:
+        return fallback_prompt, fallback_negative_prompt, "gateway-fallback", []
+
+    prompt = response.prompt.strip() or fallback_prompt
+    negative_prompt = response.negative_prompt.strip() or fallback_negative_prompt or QWEN_IMAGE_DEFAULT_NEGATIVE_PROMPT
+    if negative_prompt != QWEN_IMAGE_DEFAULT_NEGATIVE_PROMPT and _is_internal_negative_prompt(negative_prompt):
+        negative_prompt = QWEN_IMAGE_DEFAULT_NEGATIVE_PROMPT
+    if not _qwen_prompt_is_chinese_enough(prompt):
+        return fallback_prompt, fallback_negative_prompt, "gateway-fallback", [
+            "Qwen3.5 prompt was not Chinese; gateway fallback prompt was used."
+        ]
+    if _qwen_prompt_has_bad_lab_geometry(prompt, f"{instruction} {plan_prompt}"):
+        return fallback_prompt, fallback_negative_prompt, "gateway-fallback", [
+            "Qwen3.5 prompt contained incorrect lab-object geometry; gateway fallback prompt was used."
+        ]
+    if not _qwen_prompt_preserves_chinese_action(instruction, prompt):
+        return fallback_prompt, fallback_negative_prompt, "gateway-fallback", [
+            "Qwen3.5 prompt changed the Chinese edit action; gateway fallback prompt was used."
+        ]
+    return prompt, negative_prompt, response.source or "qwen3.5-enhancer", response.warnings
 
 
 def _mask_bbox(mask: Image.Image) -> tuple[int, int, int, int] | None:
@@ -429,99 +589,8 @@ def _mask_coverage_ratio(mask: Image.Image) -> float:
     return float((np.asarray(mask.convert("L")) > 32).mean())
 
 
-def _qwen_execution_mask(raw_mask: Image.Image) -> tuple[Image.Image, int]:
-    bbox = _mask_bbox(raw_mask)
-    if bbox is None:
-        return raw_mask.copy(), 0
-
-    width, height = raw_mask.size
-    x1, y1, x2, y2 = bbox
-    object_radius = int(round(max(x2 - x1, y2 - y1) * QWEN_IMAGE_EXECUTION_MASK_OBJECT_RATIO))
-    image_radius = int(round(max(width, height) * QWEN_IMAGE_EXECUTION_MASK_MAX_IMAGE_RATIO))
-    radius = max(1, min(max(QWEN_IMAGE_EXECUTION_MASK_MIN_RADIUS, object_radius), max(1, image_radius)))
-    return dilate_mask(raw_mask, radius=radius), radius
-
-
-def _expand_box(
-    box: tuple[int, int, int, int],
-    image_size: tuple[int, int],
-    *,
-    padding_ratio: float = 0.70,
-    min_padding: int = 16,
-) -> tuple[int, int, int, int]:
-    width, height = image_size
-    x1, y1, x2, y2 = box
-    pad = max(min_padding, int(round(max(x2 - x1, y2 - y1) * padding_ratio)))
-    return max(0, x1 - pad), max(0, y1 - pad), min(width, x2 + pad), min(height, y2 + pad)
-
-
-def _resize_to_long_side(
-    image: Image.Image,
-    target_long_side: int,
-    *,
-    resample: int,
-) -> Image.Image:
-    width, height = image.size
-    long_side = max(width, height)
-    if long_side >= target_long_side:
-        return image
-    scale = target_long_side / float(long_side)
-    new_width = max(8, int(round((width * scale) / 8.0)) * 8)
-    new_height = max(8, int(round((height * scale) / 8.0)) * 8)
-    return image.resize((new_width, new_height), resample=resample)
-
-
-def _prefill_mask_region(image: Image.Image, mask: Image.Image) -> Image.Image:
-    import numpy as np
-
-    rgb = np.asarray(image.convert("RGB"), dtype=np.uint8).copy()
-    mask_arr = np.asarray(mask.convert("L").resize(image.size)) > 32
-    if not mask_arr.any():
-        return image.convert("RGB")
-
-    dilated = np.asarray(mask.convert("L").resize(image.size).filter(ImageFilter.MaxFilter(9))) > 32
-    border = dilated & ~mask_arr
-    fill_color = rgb[border].mean(axis=0).astype(np.uint8) if border.any() else np.array([255, 255, 255], dtype=np.uint8)
-    rgb[mask_arr] = fill_color
-    return Image.fromarray(rgb, mode="RGB")
-
-
 def _prepare_qwen_edit_input(source_image: Image.Image, edit_mask: Image.Image) -> QwenEditInput:
     source_size = source_image.size
-    bbox = _mask_bbox(edit_mask)
-    if bbox is None:
-        return QwenEditInput(
-            request_image=source_image.convert("RGB"),
-            request_mask=edit_mask.convert("L"),
-            image_data_url=encode_image_to_data_url(source_image),
-            mask_data_url=encode_image_to_data_url(edit_mask),
-            source_size=source_size,
-            request_size=source_size,
-        )
-
-    crop_box = _expand_box(bbox, source_size)
-    full_box = (0, 0, source_size[0], source_size[1])
-    crop_area = (crop_box[2] - crop_box[0]) * (crop_box[3] - crop_box[1])
-    full_area = source_size[0] * source_size[1]
-    crop_enabled = crop_box != full_box and crop_area < full_area * 0.95
-
-    if crop_enabled:
-        crop = source_image.crop(crop_box)
-        mask_crop = edit_mask.crop(crop_box)
-        request_image = _resize_to_long_side(crop, QWEN_IMAGE_EDIT_CROP_LONG_SIDE, resample=Image.Resampling.LANCZOS)
-        request_mask = mask_crop.resize(request_image.size, resample=Image.Resampling.NEAREST)
-        return QwenEditInput(
-            request_image=request_image.convert("RGB"),
-            request_mask=request_mask.convert("L"),
-            image_data_url=encode_image_to_data_url(request_image),
-            mask_data_url=encode_image_to_data_url(request_mask),
-            source_size=source_size,
-            request_size=request_image.size,
-            crop_box=crop_box,
-            crop_size=crop.size,
-            prefill_enabled=False,
-        )
-
     return QwenEditInput(
         request_image=source_image.convert("RGB"),
         request_mask=edit_mask.convert("L"),
@@ -531,16 +600,6 @@ def _prepare_qwen_edit_input(source_image: Image.Image, edit_mask: Image.Image) 
         request_size=source_size,
         prefill_enabled=False,
     )
-
-
-def _restore_qwen_edit_result(source_image: Image.Image, result_image: Image.Image, edit_input: QwenEditInput) -> Image.Image:
-    if not edit_input.crop_box or not edit_input.crop_size:
-        return result_image.convert("RGB").resize(source_image.size)
-
-    crop_result = result_image.convert("RGB").resize(edit_input.crop_size, resample=Image.Resampling.LANCZOS)
-    restored = source_image.copy()
-    restored.paste(crop_result, edit_input.crop_box[:2])
-    return restored
 
 
 def _full_image_mask(source_image: str) -> str:
@@ -829,6 +888,7 @@ async def generate_pipeline(
         planner_source = "planner-service-or-fallback"
 
     source_image = decode_data_url_to_image(payload.source_image, mode="RGB")
+    source_is_diagram = _is_diagram(source_image)
 
     has_point_prompts = bool(payload.point_prompts)
     use_sam2 = plan_payload.mask_strategy == "sam2-refine" and has_point_prompts
@@ -875,6 +935,7 @@ async def generate_pipeline(
     effective_fitting = payload.fitting_degree if payload.fitting_degree != 0.9 else task_fitting
     effective_scale = payload.guidance_scale if payload.guidance_scale != 5.0 else task_scale
     provider_name = payload.generation_provider
+    provider_route_reason = ""
     provider_pipeline = "qwen_image_inpaint" if provider_name == "qwen-image" else "powerpaint_inpaint"
     provider_model = "Qwen/Qwen-Image-Edit" if provider_name == "qwen-image" else "PowerPaint"
     provider_model_dtype = (
@@ -889,7 +950,24 @@ async def generate_pipeline(
         request_negative_prompt=payload.negative_prompt,
         plan_negative_prompt=plan_payload.negative_prompt,
         task=task_name,
+        source_is_diagram=source_is_diagram,
     )
+    provider_prompt_source = "user-direct" if provider_name == "qwen-image" else "planner"
+    provider_prompt_warnings: list[str] = []
+    if provider_name == "qwen-image" and _qwen_prompt_enhancer_enabled():
+        (
+            provider_prompt,
+            provider_negative_prompt,
+            provider_prompt_source,
+            provider_prompt_warnings,
+        ) = await _enhance_qwen_provider_prompt(
+            instruction=payload.instruction,
+            task=task_name,
+            plan_prompt=plan_payload.task_prompt,
+            source_is_diagram=source_is_diagram,
+            fallback_prompt=provider_prompt,
+            fallback_negative_prompt=provider_negative_prompt,
+        )
     qwen_edit_input: QwenEditInput | None = None
     qwen_execution_mask: Image.Image | None = None
     qwen_execution_mask_dilation_radius = 0
@@ -897,8 +975,8 @@ async def generate_pipeline(
     qwen_restored_preblend: Image.Image | None = None
     qwen_final_blend_mask: Image.Image | None = None
 
-    # For white-background scientific diagrams, skip generative AI for removal
-    if provider_name == "powerpaint" and task_name == "object-removal" and _is_diagram(source_image):
+    # For white-background scientific diagrams, skip generative AI for removal.
+    if task_name == "object-removal" and source_is_diagram and provider_name == "powerpaint":
         if progress:
             progress("EXECUTING", 0.65, "Filling diagram background")
         result_image = _diagram_removal_fill(source_image, raw_mask)
@@ -941,12 +1019,14 @@ async def generate_pipeline(
         quality_report.prompt.parameters["sam2_refinement_requested"] = use_sam2
         quality_report.prompt.parameters["effective_fitting_degree"] = effective_fitting
         quality_report.prompt.parameters["planner_source"] = planner_source
-        quality_report.prompt.parameters["provider"] = provider_name
-        quality_report.prompt.parameters["pipeline"] = provider_pipeline
-        quality_report.prompt.parameters["model"] = provider_model
-        quality_report.prompt.parameters["model_dtype"] = provider_model_dtype
-        quality_report.prompt.parameters["provider_prompt"] = provider_prompt
-        quality_report.prompt.parameters["provider_negative_prompt"] = provider_negative_prompt
+        quality_report.prompt.parameters["provider"] = "deterministic-fill"
+        quality_report.prompt.parameters["pipeline"] = "diagram_removal_fill"
+        quality_report.prompt.parameters["model"] = "median-border-fill"
+        quality_report.prompt.parameters["model_dtype"] = "n/a"
+        quality_report.prompt.parameters["provider_prompt"] = "Remove the masked diagram object with deterministic white-background fill."
+        quality_report.prompt.parameters["provider_negative_prompt"] = ""
+        quality_report.prompt.parameters["source_style"] = "scientific_diagram" if source_is_diagram else "photographic"
+        quality_report.prompt.parameters["provider_route_reason"] = "scientific_diagram_removal_uses_deterministic_fill"
         for key in (
             "task_type",
             "subtask_type",
@@ -974,8 +1054,7 @@ async def generate_pipeline(
     if provider_name == "qwen-image":
         if progress:
             progress("EXECUTING", 0.65, "Qwen-Image generation is running")
-        qwen_execution_mask, qwen_execution_mask_dilation_radius = _qwen_execution_mask(raw_mask)
-        qwen_edit_input = _prepare_qwen_edit_input(source_image, qwen_execution_mask)
+        qwen_edit_input = _prepare_qwen_edit_input(source_image, raw_mask)
         qwen_request = QwenImageEditRequest(
             image=qwen_edit_input.image_data_url,
             mask_image=qwen_edit_input.mask_data_url,
@@ -993,9 +1072,10 @@ async def generate_pipeline(
             raise HTTPException(status_code=502, detail=f"Qwen-Image service is unavailable: {exc}") from exc
         provider_result = decode_data_url_to_image(provider_data["result_image"], mode="RGB")
         qwen_provider_raw = provider_result
-        qwen_restored_preblend = _restore_qwen_edit_result(source_image, provider_result, qwen_edit_input)
+        if provider_result.size != source_image.size:
+            provider_result = provider_result.resize(source_image.size, resample=Image.Resampling.LANCZOS)
         provider_data = {
-            "result_image": encode_image_to_data_url(qwen_restored_preblend)
+            "result_image": encode_image_to_data_url(provider_result)
         }
     else:
         # Pre-fill mask area with border average color to avoid BrushNet black-hole issue.
@@ -1047,8 +1127,7 @@ async def generate_pipeline(
     # Qwen-Image gets full outside-mask protection.
     if mask_arr.any():
         if provider_name == "qwen-image":
-            blend_source_mask = qwen_execution_mask or raw_mask
-            blended_mask = blur_mask(blend_source_mask, radius=2)
+            blended_mask = raw_mask
             qwen_final_blend_mask = blended_mask
         else:
             boundary_ring = dilate_mask(raw_mask, radius=5)
@@ -1130,6 +1209,12 @@ async def generate_pipeline(
     quality_report.prompt.parameters["model_dtype"] = provider_model_dtype
     quality_report.prompt.parameters["provider_prompt"] = provider_prompt
     quality_report.prompt.parameters["provider_negative_prompt"] = provider_negative_prompt
+    quality_report.prompt.parameters["source_style"] = "scientific_diagram" if source_is_diagram else "photographic"
+    quality_report.prompt.parameters["provider_prompt_source"] = provider_prompt_source
+    if provider_prompt_warnings:
+        quality_report.prompt.parameters["provider_prompt_warnings"] = provider_prompt_warnings
+    if provider_route_reason:
+        quality_report.prompt.parameters["provider_route_reason"] = provider_route_reason
     if qwen_edit_input:
         quality_report.prompt.parameters["qwen_edit_crop_enabled"] = qwen_edit_input.crop_box is not None
         quality_report.prompt.parameters["qwen_edit_crop_box"] = list(qwen_edit_input.crop_box) if qwen_edit_input.crop_box else None

@@ -259,6 +259,19 @@ def smart_metadata(
     provider: str,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if decision.task_type == "local_inpaint" and provider == "qwen-image":
+        resize_strategy = "full_image_raw_mask"
+        crop_enabled = False
+        postprocess_blending = "raw_mask_compose"
+    elif decision.task_type == "local_inpaint":
+        resize_strategy = "provider_default"
+        crop_enabled = False
+        postprocess_blending = "soft_mask_blend"
+    else:
+        resize_strategy = "provider_default"
+        crop_enabled = False
+        postprocess_blending = "provider_default"
+
     metadata: dict[str, Any] = {
         "task_type": decision.task_type,
         "subtask_type": decision.subtask_type,
@@ -287,16 +300,16 @@ def smart_metadata(
         "true_cfg_scale": request.options.true_cfg_scale,
         "strength": request.options.strength,
         "scheduler": None,
-        "resize_strategy": "crop_based" if decision.task_type == "local_inpaint" else "provider_default",
+        "resize_strategy": resize_strategy,
         "has_mask": bool(request.mask_image or request.mask_id),
         "mask_coverage": None,
         "mask_bbox": None,
         "mask_inverted": False,
         "mask_dilation": DEFAULT_MASK_DILATION,
         "mask_blur": DEFAULT_MASK_BLUR,
-        "crop_enabled": decision.task_type == "local_inpaint",
+        "crop_enabled": crop_enabled,
         "crop_bbox": None,
-        "postprocess_blending": "soft_mask_blend" if decision.task_type == "local_inpaint" else "provider_default",
+        "postprocess_blending": postprocess_blending,
     }
     if extra:
         metadata.update(extra)

@@ -544,6 +544,22 @@ class QwenImageEditRequest(BaseModel):
     local_files_only: bool = False
 
 
+class QwenEditPromptRequest(BaseModel):
+    instruction: str = ""
+    task: TaskType | None = None
+    plan_prompt: str = ""
+    source_style: Literal["scientific_diagram", "photographic"] = "scientific_diagram"
+    has_mask: bool = True
+    fallback_prompt: str = ""
+
+
+class QwenEditPromptResponse(BaseModel):
+    prompt: str
+    negative_prompt: str = " "
+    source: str = "qwen3.5-enhancer"
+    warnings: list[str] = Field(default_factory=list)
+
+
 class GenerateResponse(BaseModel):
     run_id: str
     plan: PlanResponse

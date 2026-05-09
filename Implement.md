@@ -1,68 +1,77 @@
 # Qwen-Image Mask Editing Implementation Tasks
 
-## Task 1: Backend Contracts
+## Implemented Changes
 
-- Add generation provider literals for `qwen-image` and `powerpaint`.
-- Add `qwen_image_inpaint` to smart pipeline literals.
-- Add `generation_provider` to smart generation options and generate requests.
-- Add `QwenImageEditRequest`.
-- Extend smart metadata and quality prompt parameters with provider and pipeline provenance.
+### Task 1: Raw Mask Qwen Path
 
-## Task 2: Qwen-Image Service
+- Qwen request preparation uses the full source image and the normalized user mask.
+- Qwen no longer creates or sends an expanded `qwen_execution_mask`.
+- Qwen no longer performs manual bbox crop, upscale, or paste-back.
+- Qwen final composition uses the raw mask directly, so pixels outside the mask are restored from the input image.
+- Crop/execution-mask metadata remains explicit and reports disabled behavior.
 
-- Add `backend/qwen_image_service`.
-- Implement `/health`.
-- Implement `/generate`.
-- Load `QwenImageEditInpaintPipeline` lazily from `Qwen/Qwen-Image-Edit`.
-- Support env configuration for model repo, dtype, local files, steps, true CFG, strength.
-- Use an execution lock around pipeline calls.
+### Task 2: Unified Chinese Qwen Prompt
 
-## Task 3: Gateway Provider Dispatch
+- Qwen prompt construction is independent from PowerPaint.
+- Qwen prompt construction is no longer split into delete and replacement templates.
+- Qwen fallback prompt is now:
 
-- Add `QWEN_IMAGE_URL`.
-- Reuse existing planning and mask normalization.
-- Dispatch local masked edits to Qwen-Image or PowerPaint based on `generation_provider`.
-- Save artifacts and quality reports through the existing shared path.
-- Preserve `/api/generate`, `/api/jobs`, and `/api/generation/jobs` response shapes.
+```text
+只修改 mask 内区域。{中文直接编辑指令}。未选区保持原图不变。{短风格提示}
+```
 
-## Task 4: Frontend Provider Selection
+- Chinese user instructions are preserved directly.
+- Common English fallback instructions are converted to concise Chinese when the enhancer is unavailable.
+- Known lab-object correction for `锥形瓶` keeps the intended narrow-neck, wide-base geometry.
+- Qwen negative prompt defaults to `" "`.
+- Automatic Qwen3.5 prompt enhancement is disabled by default; users provide the enhanced prompt themselves.
+- `QWEN_IMAGE_PROMPT_ENHANCER_ENABLED=true` can re-enable the old enhancer path for controlled comparison.
 
-- Add provider state with default `qwen-image`.
-- Add provider controls to the advanced panel.
-- Include `generation_provider` in smart and legacy generate payloads.
-- Display provider, pipeline, and model metadata in result/job panels.
+### Task 3: Qwen3.5 Prompt Enhancer
 
-## Task 5: Deployment And Docs
+- Added `QwenEditPromptRequest` and `QwenEditPromptResponse`.
+- Added planner endpoint `/qwen-edit-prompt`.
+- Added planner runtime method `enhance_qwen_edit_prompt`.
+- The enhancer now asks Qwen3.5 for short Chinese edit instructions.
+- The enhancer is instructed to preserve original meaning, action, and count, and not to add long constraints.
+- Gateway rejects enhancer output that is not Chinese, reverses the user's Chinese edit action, or contains known-wrong conical-flask geometry.
+- Quality reports record `provider_prompt_source`.
+- In normal operation, Qwen quality reports now record `provider_prompt_source = user-direct`.
 
-- Add Docker Compose `qwen-image` service.
-- Keep the Compose `qwen-image` service under an optional profile so gateway can still start without the extra 80GB GPU.
-- Add Conda/tmux scripts and env defaults.
-- Add prewarm and service health checks.
-- Document 80GB GPU requirement, model selection, and non-use of 2511 as primary path.
+### Task 4: Routing
 
-## Task 6: Verification
+- Qwen stays on Qwen when selected.
+- Scientific diagram deterministic fill remains limited to the PowerPaint provider path.
+- PowerPaint provider behavior is unchanged.
 
-- Run backend unit tests.
-- Run backend py_compile checks.
-- Run frontend helper tests.
-- Run frontend build.
-- Run whitespace checks.
-- Run real model smoke test on 80GB GPU when available.
+### Task 5: Tests
 
-## Review Fixes
+- `backend/tests/test_qwen_image_provider.py` now locks:
+  - unified Chinese Qwen prompt wording
+  - no separate delete/replacement prompt branch
+  - full-image/raw-mask Qwen request
+  - raw-mask-only final blending
+  - Qwen3.5 Chinese enhancer use
+  - enhancer disabled by default
+  - fallback when enhancer returns English or reverses the Chinese edit action
+  - Qwen provider retention for photographic edits
+  - PowerPaint provider compatibility
 
-- Qwen-Image runtime now honors request-level `local_files_only` on first load.
-- Frontend result panel can cancel both legacy `/api/jobs` and smart `/api/generation/jobs`.
-- Documentation now lists Qwen-Image manual Conda startup and the optional Docker profile.
+## Verification Status
 
-## H20 Deployment Defaults
+- Local syntax compile passed for:
+  - `backend/gateway/main.py`
+  - `backend/planner/runtime.py`
+  - `backend/tests/test_qwen_image_provider.py`
 
-- `.env.example`, `.env.server.example`, `.env.nodocker.example`, Docker Compose, and Conda defaults now target 2 x H20-NVLink 96GB.
-- Default GPU mapping is `qwen-image -> 0` and `powerpaint/planner/segmenter/flux -> 1`.
+Local dependency-based unit tests cannot run in the local `codex` environment because backend dependencies such as `pydantic` are missing. Run the server tests after syncing.
 
-## Prompt Routing Fixes
+## Server Verification
 
-- Qwen-Image provider prompts now follow the official prompt-enhancement guidance: keep the original user edit request, make the edit region explicit, and add scientific-diagram preservation constraints.
-- PowerPaint keeps the legacy planner/inpaint prompt instead of sharing the Qwen-Image prompt.
-- Qwen-Image default negative prompt is intentionally light unless the user supplies a custom negative prompt; PowerPaint keeps the stronger artifact-focused negative prompt.
-- Quality reports record `provider_prompt` and `provider_negative_prompt` for debugging generated results.
+```bash
+cd /root/autodl-tmp/yzhu/science-diagram-platform
+PYTHONPATH=backend /root/miniconda3/bin/conda run --no-capture-output -n sci-gateway python -m unittest backend.tests.test_qwen_image_provider
+PYTHONPATH=backend /root/miniconda3/bin/conda run --no-capture-output -n sci-gateway python -m py_compile backend/gateway/main.py backend/planner/runtime.py backend/tests/test_qwen_image_provider.py
+```
+
+After passing tests, restart planner and gateway so the updated prompt enhancer and gateway fallback are active.
