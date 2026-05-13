@@ -8,7 +8,7 @@
 - `POWERPAINT_LOCAL_FILES_ONLY=true` 时，如果本地权重不存在，会明确报错而不是静默尝试联网下载
 - 移除了 `docker-compose.yml` 中未接入业务链路的 `redis` 服务，减少无效依赖
 - 前端 Nginx 对 `/api` 的代理超时已经调大，降低冷启动时被反向代理提前断开的概率
-- Phase 1-13 已补齐报告对齐基础能力：文本初图、异步任务、画布状态、质量报告、CI、项目版本、持久化 job、Fabric 图层、SAM 点提示、OCR-ready SVG、FLUX-compatible provider、benchmark ledger、readiness 和单 token 网关保护
+- Phase 1-13 已补齐报告对齐基础能力：文本初图、异步任务、画布状态、质量报告、CI、项目版本、持久化 job、Fabric 图层、SAM 点提示、OCR-ready SVG、FLUX-compatible provider、实验台账、readiness 和单 token 网关保护
 
 ## 已实现模块的剩余缺口
 
@@ -42,7 +42,7 @@
 
 ### 6. 评估与实验管理
 
-当前生成结果会返回并落盘每轮 `quality_report`，包含 mask 覆盖、mask 内变化、局部化得分、保真得分和 prompt/provenance 元数据。Phase 10 已提供 OCR-ready 文本校验接口：如果调用方提供 OCR observations，后端可以和预期标签/vector text layer 做一致性比较；未提供 OCR 时会明确标记为 vector-text fallback。Phase 12 又新增了 file-backed benchmark ledger、`/api/benchmarks/runs`、`/api/benchmarks/summary` 和前端实验看板，可以显式记录当前 run 并查看总体均值、provider 对比、文本通过率和最近记录。剩余缺口是内置真实 OCR 模型、人工偏好评分、自动数据集 runner、模型版本调度、CSV/PDF 报告导出和多用户实验管理。
+当前生成结果会返回并落盘每轮 `quality_report`，包含 mask 覆盖、mask 内变化、局部化得分、保真得分和 prompt/provenance 元数据。Phase 10 已提供 OCR-ready 文本校验接口：如果调用方提供 OCR observations，后端可以和预期标签/vector text layer 做一致性比较；未提供 OCR 时会明确标记为 vector-text fallback。Phase 12 又新增了文件化实验台账、`/api/benchmarks/runs`、`/api/benchmarks/summary` 和前端实验看板，可以显式记录当前 run 并查看总体均值、provider 对比、文本通过率和最近记录。剩余缺口是内置真实 OCR 模型、人工偏好评分、自动数据集 runner、模型版本调度、CSV/PDF 报告导出和多用户实验管理。
 
 ## 当前主要风险
 
@@ -66,7 +66,7 @@ Qwen3.5 输出结构化 JSON 时如果结果不合法，服务会自动回退到
 - 真实 Qwen3.5 / SAM-2 / PowerPaint 接入能力
 - 前后端基本联通能力
 - 规则回退兜底能力
-- 可选单 token 网关保护、readiness 配置检查和报告 traceability matrix
+- 可选单 token 网关保护、readiness 配置检查和报告对齐追踪表
 
 但这些能力仍然以单节点、单用户、文件持久化和受控部署边界为前提。如果要进一步做成“更稳定的长期服务”，下一阶段最值得补的是：
 
@@ -75,50 +75,50 @@ Qwen3.5 输出结构化 JSON 时如果结果不合法，服务会自动回退到
 3. Redis/Celery 或独立 worker 级持久化异步任务队列
 4. 完整 Fabric scene 持久化、PPT 导出和高级编辑工具
 5. 扩展 CI、端到端测试、OCR 校验和自动数据集评估报表
-## Phase 6 Persistence Note
+## Phase 6 项目持久化说明
 
-The current branch now includes a lightweight single-user project persistence layer. It stores JSON project snapshots, parent-linked versions, selected initial-candidate metadata, run ids, canvas states, artifact URLs, and optional quality reports. This supersedes the earlier project-persistence part of the canvas-state gap; the remaining gap is full database-backed, multi-user, editor-level persistence.
+当前分支已经包含轻量的单用户项目持久化层，可以保存 JSON 项目快照、父版本关系、初图候选元数据、run id、画布状态、artifact URL 和可选质量报告。它补齐了早期“画布状态无法长期追踪”的主要缺口。
 
-Remaining persistence limitations: this is not a multi-user database, it has no auth or migration system, it does not replace the future Fabric.js editor, and initial-candidate data URL images are still treated as session data unless a later generated artifact URL exists.
+剩余限制：这不是多用户数据库，没有鉴权、迁移系统或编辑器级完整持久化；初图候选中的 data URL 图片在没有后续 artifact URL 前仍更接近会话数据。
 
-## Phase 7 Durable Job Note
+## Phase 7 持久化异步任务说明
 
-The current branch now includes durable file-backed async job snapshots under `JOBS_DIR`. Completed, failed, cancelled, and restart-interrupted jobs are readable after gateway restart, and the front end exposes a cancel action for the active async job.
+当前分支已经在 `JOBS_DIR` 下保存 file-backed 异步 job 快照。已完成、失败、取消和重启中断的任务都可以在 Gateway 重启后读取，前端也暴露了对当前异步任务的取消操作。
 
-Remaining async limitations: this is still not Redis/Celery, there is no separate worker service, no multi-worker scheduling or cross-instance coordination, and cancellation remains cooperative at gateway progress checkpoints rather than a hard interruption of an in-flight model call.
+剩余限制：这仍不是 Redis/Celery，没有独立 worker、多 worker 调度或跨实例协调；取消是 Gateway 进度检查点上的协作式取消，不能硬中断已经进入模型内部的调用。
 
-## Phase 8 Fabric Layer Note
+## Phase 8 Fabric 图层说明
 
-The current branch now includes a first Fabric.js-backed editor slice. It keeps the existing `canvas_state` contract, adds layer order and per-layer visibility/lock/opacity metadata, and lets users switch into layer mode to select and transform asset/text objects without losing the brush/erase mask workflow.
+当前分支已经包含第一个 Fabric.js 图层编辑切片。它保留既有 `canvas_state` 合同，增加图层顺序、可见性、锁定和透明度元数据，并允许用户在图层模式下选择、移动和缩放素材/文字对象。
 
-Remaining layer-editor limitations: Fabric scene JSON is not persisted as the source of truth yet, mask drawing still uses the native mask canvas, SVG export is limited to visible referenced image layers plus vector text layers, PPT export is not implemented, OCR reconciliation requires caller-supplied OCR observations for bitmap text, and advanced editor features such as grouping, snapping, alignment guides, and full vector export validation remain future phases.
+剩余限制：Fabric scene JSON 还不是后端唯一状态源；mask 绘制仍使用原生 mask canvas；SVG 导出主要覆盖可见图片层和 vector text layer；PPT 导出、OCR 内置校验、组合、吸附、对齐辅助线和完整矢量导出验证仍是后续工作。
 
-## Phase 9 SAM Point Prompt Note
+## Phase 9 SAM 点提示说明
 
-The current branch now includes normalized positive/negative point prompts across the gateway, segmenter, front end, and `canvas_state` provenance. SAM2.1 receives `input_points` and `input_labels` when available, while the existing mask, box, and asset-placement fallback path remains intact.
+当前分支已经在 Gateway、segmenter、前端和 `canvas_state` provenance 中统一了正/负点提示。SAM2.1 可在存在点提示时接收 `input_points` 和 `input_labels`，原有 mask、box 和素材 placement fallback 路径仍保留。
 
-Remaining SAM interaction limitations: there is no multi-mask candidate picker, no automatic text-to-region grounding, no instance segmentation list, and no advanced click refinement scoring UI yet.
+剩余限制：没有多 mask 候选选择器、自动文本到区域 grounding、实例分割列表或高级点击 refinement scoring UI。
 
-## Phase 10 OCR-Ready SVG Export Note
+## Phase 10 OCR-ready SVG 导出说明
 
-The current branch now includes `/api/canvas/validate-text` and `/api/canvas/export-svg`. These endpoints consume the existing `canvas_state`, reconcile visible vector text layers against expected labels and optional OCR observations, and return an SVG document where visible text layers remain editable SVG `<text>` nodes. The front end exposes text validation and SVG export actions from the current workspace state.
+当前分支已经包含 `/api/canvas/validate-text` 和 `/api/canvas/export-svg`。这些接口读取既有 `canvas_state`，将可见 vector text layer 与预期标签和可选 OCR observations 对齐，并返回保留可编辑 `<text>` 节点的 SVG。
 
-Remaining export limitations: there is no built-in OCR model yet, bitmap-only labels from fallback images or PowerPaint output cannot be verified without supplied OCR observations, SVG export warns instead of embedding unavailable data-url source images, and PPTX export remains future work.
+剩余限制：没有内置 OCR 模型；fallback 图像或 PowerPaint 输出里的位图文字必须依赖调用方提供 OCR observations；SVG 导出不会嵌入不可用的 data-url 源图；PPTX 导出仍未实现。
 
-## Phase 11 FLUX-Compatible Init Provider Note
+## Phase 11 FLUX-compatible 初图 provider 说明
 
-The current branch now includes a configurable FLUX-compatible initial-canvas provider path. `/api/init-generate` keeps the same endpoint shape, but `InitGenerateRequest.provider` can request `auto`, `deterministic-fallback`, `flux-local`, or `flux-remote`; the default Docker/Conda deployment points `FLUX_INIT_URL` at the local `flux` service and reranks returned candidates, while `auto` still falls back with explicit warnings when the provider is unavailable. The front end shows provider, fallback, rank, score, label coverage, and source metadata for each initial candidate.
+当前分支已经包含可配置的 FLUX-compatible 初图 provider。`/api/init-generate` 保持原有接口形状，但 `InitGenerateRequest.provider` 可以选择 `auto`、`deterministic-fallback`、`flux-local` 或 `flux-remote`；默认 Docker/Conda 部署会把 `FLUX_INIT_URL` 指向本地 `flux` 服务，并对候选结果重排。
 
-Remaining initial-canvas limitations: this repository still does not bundle FLUX weights, model quality depends on the configured local model/cache, high-resolution async regeneration is not implemented yet, and init candidates are still session data URLs rather than durable artifact files.
+剩余限制：仓库不捆绑 FLUX 权重；模型质量依赖实际配置的本地模型或缓存；高清异步再生成还未实现；初图候选仍是会话 data URL，而不是长期 artifact 文件。
 
-## Phase 12 Benchmark Ledger Note
+## Phase 12 实验台账说明
 
-The current branch now includes a lightweight file-backed benchmark ledger under `BENCHMARKS_DIR`. The gateway can record benchmark runs with `quality_report`, optional text validation reports, provider/model metadata, project/version ids, tags, and compact metadata; it can also return aggregate summary metrics and provider-level comparisons. The front end exposes an experiment ledger panel with explicit record and refresh actions.
+当前分支已经在 `BENCHMARKS_DIR` 下包含轻量文件化实验台账。Gateway 可以记录带 `quality_report`、可选文本校验报告、provider/model 元数据、项目/版本 id、标签和紧凑 metadata 的实验记录，也能返回聚合指标和 provider 对比。
 
-Remaining evaluation limitations: benchmark entries are recorded explicitly rather than produced by an automated dataset runner, there is no built-in OCR engine or human preference annotation workflow, model-version scheduling is not implemented, and dashboard export is still limited to the JSON API rather than CSV/PDF report files.
+剩余限制：benchmark 记录需要用户显式触发，不是自动数据集 runner；没有内置 OCR、人类偏好标注、模型版本调度，也没有 CSV/PDF 报告导出。
 
-## Phase 13 Deployment Hardening Note
+## Phase 13 部署加固说明
 
-The current branch now includes optional single-token gateway protection, a read-only `/api/deployment/readiness` endpoint, frontend `VITE_API_TOKEN` header support, and `docs/report-traceability.md` mapping report claims to code paths, tests, and limitations.
+当前分支已经包含可选单 token 网关保护、只读 `/api/deployment/readiness`、前端 `VITE_API_TOKEN` 透传，以及把报告声明映射到代码路径、测试和限制的 `docs/report-traceability.md`。
 
-Remaining deployment limitations: this is not multi-user authentication, RBAC, token rotation, production secret management, external uptime monitoring, Docker/GPU smoke testing, or a full observability stack. Static `/assets` and `/artifacts` routes remain intentionally exempt, so generated artifact URLs should still be treated as accessible within the deployment boundary.
+剩余限制：这不是多用户鉴权、RBAC、token 轮换、生产级 secret 管理、外部 uptime 监控、Docker/GPU smoke test 或完整 observability。静态 `/assets` 和 `/artifacts` 路由仍有意豁免，因此生成 artifact URL 仍应视为部署边界内可访问资源。

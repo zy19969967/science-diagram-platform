@@ -14,9 +14,9 @@
 - 图层编辑器：前端接入首个 Fabric.js 图层编辑切片，支持素材/文字层选择、移动、缩放、显示、锁定和排序。
 - 文本校验与导出：`/api/canvas/validate-text` 支持 OCR-ready 文本一致性合同，`/api/canvas/export-svg` 可导出包含可编辑 `<text>` 的 SVG。
 - 实验台账：`/api/benchmarks/runs` 和 `/api/benchmarks/summary` 记录质量指标、provider、文本校验和项目版本信息。
-- 部署加固：可选 `GATEWAY_API_TOKEN` 单 token 保护、前端 `VITE_API_TOKEN` 透传、`/api/deployment/readiness` 本地配置检查和 traceability matrix。
+- 部署加固：可选 `GATEWAY_API_TOKEN` 单 token 保护、前端 `VITE_API_TOKEN` 透传、`/api/deployment/readiness` 本地配置检查和对齐追踪表。
 
-这些能力仍然是单节点、单用户、文件持久化优先的实现，不等同于生产级多租户系统。完整限制见 [Known Issues](docs/known-issues.md) 和 [Technical Report Traceability Matrix](docs/report-traceability.md)。
+这些能力仍然是单节点、单用户、文件持久化优先的实现，不等同于生产级多租户系统。完整限制见 [已知问题与后续缺口](docs/known-issues.md) 和 [技术报告对齐追踪表](docs/report-traceability.md)。
 
 ## 服务组成
 
@@ -36,7 +36,7 @@ data/
   projects/             项目快照
   jobs/                 异步任务快照
   benchmarks/           实验台账
-docs/                   部署、架构、traceability 与已知限制
+docs/                   部署、架构、对齐追踪与已知限制
 scripts/                服务器辅助脚本
 docker-compose.yml      Docker Compose 编排
 ```
@@ -86,7 +86,7 @@ sudo docker compose --env-file .env up -d
 
 当前完整功能已经落在 `main`，服务器直接部署默认分支即可。
 
-如果服务器不能使用 Docker、但可以使用 Conda，请看 [Conda Deployment README](docs/server-conda-deploy.md)，并使用 `scripts/setup_conda_envs.sh`、`scripts/start_all_tmux.sh`、`scripts/run_*.sh` 这组脚本。
+如果服务器不能使用 Docker、但可以使用 Conda，请看 [服务器部署说明](docs/deployment.md)，并使用 `scripts/setup_conda_envs.sh`、`scripts/start_all_tmux.sh`、`scripts/run_*.sh` 这组脚本。
 
 Conda 部署启动后，如果需要演示前提前把 Qwen3.5、SAM2、PowerPaint、FLUX 和 Qwen-Image 加载进显存，可以顺序运行：
 
@@ -149,16 +149,14 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 
 公开仓库只保留面向部署、架构和项目验收的正式说明：
 
-- [Architecture](docs/architecture.md)：当前服务链路、数据目录、API 合同和对齐边界。
-- [Server Deployment Checklist](docs/server-deployment-checklist.md)：从零部署到验证的中文步骤清单。
-- [Docker Deployment README](docs/server-deploy.md)：Docker Compose 部署路径。
-- [Conda Deployment README](docs/server-conda-deploy.md)：无 Docker 部署路径、2 张 H20-NVLink 96GB 示例布局和执行步骤。
-- [Technical Report Traceability Matrix](docs/report-traceability.md)：Phase 1-13 对技术报告声明、代码路径、测试和限制的映射。
-- [Known Issues](docs/known-issues.md)：已完成能力之外的剩余缺口和生产化风险。
+- [架构说明](docs/architecture.md)：当前服务链路、数据目录、API 合同和对齐边界。
+- [服务器部署说明](docs/deployment.md)：Docker Compose 与 Conda/tmux 两种部署路径。
+- [技术报告对齐追踪表](docs/report-traceability.md)：Phase 1-13 对技术报告声明、代码路径、测试和限制的映射。
+- [已知问题与后续缺口](docs/known-issues.md)：已完成能力之外的剩余缺口和生产化风险。
 
-## PowerPaint Code And Weights
+## PowerPaint 代码与权重
 
-- Code repo: `https://github.com/zhuang2002/PowerPaint.git`
-- `PowerPaint 2.1` weights: `https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1`
+- 代码仓库：`https://github.com/zhuang2002/PowerPaint.git`
+- `PowerPaint 2.1` 权重：`https://huggingface.co/JunhaoZhuang/PowerPaint-v2-1`
 
-Cloning the GitHub repository only downloads the PowerPaint code. It does not include the `PowerPaint 2.1` checkpoints. The weights still need to be fetched through Hugging Face Git LFS, or copied to the server from another machine. By default, the server-side weight directory is `models/powerpaint/ppt-v2-1`.
+克隆 GitHub 仓库只会下载 PowerPaint 代码，不包含 `PowerPaint 2.1` checkpoint。权重仍需要通过 Hugging Face Git LFS 拉取，或从其他机器复制到服务器。默认服务器权重目录为 `models/powerpaint/ppt-v2-1`。

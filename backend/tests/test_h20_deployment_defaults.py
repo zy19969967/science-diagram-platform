@@ -47,9 +47,7 @@ class H20DeploymentDefaultsTest(unittest.TestCase):
             (ROOT / path).read_text(encoding="utf-8")
             for path in (
                 "README.md",
-                "docs/server-deploy.md",
-                "docs/server-conda-deploy.md",
-                "docs/server-deployment-checklist.md",
+                "docs/deployment.md",
                 "docs/architecture.md",
                 "docs/known-issues.md",
             )

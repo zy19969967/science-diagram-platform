@@ -17,7 +17,7 @@ class TraceabilityDocumentTest(unittest.TestCase):
         self.assertIn("/api/benchmarks/summary", text)
         self.assertIn("/api/deployment/readiness", text)
         self.assertIn("GATEWAY_API_TOKEN", text)
-        self.assertIn("Known limitations", text)
+        self.assertIn("已知限制", text)
         self.assertNotIn("TODO", text)
         self.assertNotIn("TBD", text)
 
