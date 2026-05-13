@@ -9,7 +9,7 @@
 
 可以部署，但要注意 5 个边界：
 
-1. 当前完整功能已经落在 `main`，服务器直接部署默认分支；不要再拉旧的 `codex/report-alignment-phase1` 分支。
+1. 当前完整功能已经落在 `main`，服务器直接部署默认分支即可。
 2. 推荐优先使用 Docker Compose。它会同时启动 `frontend`、`gateway`、`planner`、`segmenter`、`powerpaint` 和本地 `flux` 服务。
 3. 项目不会把 Qwen3.5、SAM2.1、PowerPaint 2.1、FLUX 权重提交进 Git。首次启动或首次请求时需要下载，或者你提前把模型放到服务器缓存目录。
 4. 当前部署是单节点、单用户、文件持久化方案，适合毕业设计演示、内网测试和受控服务器环境；不是公网多租户生产系统。

@@ -6,3 +6,12 @@ models
 __pycache__
 *.pyc
 data/runs
+.claude
+.idea
+output
+*.docx
+Documentation.md
+Implement.md
+Plan.md
+Prompt.md
+docs/superpowers

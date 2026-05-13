@@ -13,3 +13,16 @@ __pycache__/
 .env
 .env.nodocker
 logs/
+
+# Local IDE, agent, and generated workspace artifacts
+.claude/
+.idea/
+output/
+
+# Private reports and working notes kept outside the public GitHub docs
+/*.docx
+/Documentation.md
+/Implement.md
+/Plan.md
+/Prompt.md
+/docs/superpowers/

@@ -18,7 +18,7 @@
 
 可以部署，但请按下面边界理解：
 
-- 当前推荐部署版本是 `main`；不要再拉旧的 `codex/report-alignment-phase1` 分支。
+- 当前推荐部署版本是 `main`，服务器直接部署默认分支即可。
 - 推荐优先使用 Docker Compose，因为它会编排 `frontend`、`gateway`、`planner`、`segmenter`、`powerpaint` 和本地 `flux` 服务；`qwen-image` 是可选 profile，需要独占 80GB GPU 时再启用。
 - 服务器必须能访问或已经缓存 Qwen3.5、SAM2.1、PowerPaint 2.1、FLUX 和 Qwen-Image 权重；仓库不会把这些大模型权重提交进 Git。
 - 这是单节点、单用户、文件持久化优先的部署，适合毕业设计演示、内网测试和受控服务器环境；不是公网多租户生产系统。

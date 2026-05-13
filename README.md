@@ -1,6 +1,6 @@
 # 科学示意图交互式生成平台
 
-基于技术报告与 [PowerPaint](https://github.com/open-mmlab/PowerPaint) 搭建的交互式科学示意图生成系统。当前分支已经完成技术报告对齐的 13 个阶段：从文本初图、局部编辑、异步任务、画布状态、项目持久化、Fabric 图层编辑、SAM 点提示、OCR-ready SVG 导出、本地 FLUX-compatible 初图服务、实验台账，到部署 readiness 和单 token 网关保护。
+基于技术报告与 [PowerPaint](https://github.com/open-mmlab/PowerPaint) 搭建的交互式科学示意图生成系统。当前 `main` 分支已经完成技术报告对齐的 13 个阶段：从文本初图、局部编辑、异步任务、画布状态、项目持久化、Fabric 图层编辑、SAM 点提示、OCR-ready SVG 导出、本地 FLUX-compatible 初图服务、实验台账，到部署 readiness 和单 token 网关保护。
 
 仓库地址：<https://github.com/zy19969967/science-diagram-platform>
 
@@ -147,14 +147,14 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:19080/api/deployment/re
 
 ## 文档
 
+公开仓库只保留面向部署、架构和项目验收的正式说明：
+
 - [Architecture](docs/architecture.md)：当前服务链路、数据目录、API 合同和对齐边界。
 - [Server Deployment Checklist](docs/server-deployment-checklist.md)：从零部署到验证的中文步骤清单。
 - [Docker Deployment README](docs/server-deploy.md)：Docker Compose 部署路径。
-- [Conda Deployment README](docs/server-conda-deploy.md)：无 Docker 部署路径、4-GPU 示例布局和执行步骤。
+- [Conda Deployment README](docs/server-conda-deploy.md)：无 Docker 部署路径、2 张 H20-NVLink 96GB 示例布局和执行步骤。
 - [Technical Report Traceability Matrix](docs/report-traceability.md)：Phase 1-13 对技术报告声明、代码路径、测试和限制的映射。
 - [Known Issues](docs/known-issues.md)：已完成能力之外的剩余缺口和生产化风险。
-- [User Requirements Memory](docs/superpowers/requirements/2026-04-27-user-requirements.md)：用户长期需求记录。
-- [Staged Alignment Plan](docs/superpowers/plans/2026-04-27-tech-report-alignment.md)：分阶段开发与验证记录。
 
 ## PowerPaint Code And Weights
 
